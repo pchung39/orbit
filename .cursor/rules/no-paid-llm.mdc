@@ -1,0 +1,10 @@
+---
+description: Never call paid LLMs unless the user explicitly asks
+alwaysApply: true
+---
+
+# Paid LLM calls
+
+Do not run `python -m agent investigate` without `--provider rules`, and do not call Anthropic or OpenAI APIs, unless the user explicitly asks in that turn.
+
+`--provider rules`, simulator, ingest, and Postgres queries are fine. Embeddings must stay local/free unless the user opts into a paid API.

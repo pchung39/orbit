@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ORBIT — Aurora-1</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <a class="skip" href="#stage">Skip to case</a>
+
+    <header class="appbar">
+      <div class="brand">
+        <svg class="logo-orbit" viewBox="0 0 32 32" aria-hidden="true">
+          <ellipse cx="16" cy="16" rx="13" ry="6.2" fill="none" stroke="currentColor" stroke-width="1.4" transform="rotate(-28 16 16)" />
+          <circle cx="25.4" cy="11.2" r="2.3" fill="currentColor" />
+        </svg>
+        <p class="wordmark">ORBIT</p>
+      </div>
+      <span class="clock" id="focus-clock">--:--:--</span>
+    </header>
+
+    <div class="app">
+      <aside class="nav">
+        <p class="nav-label">Incidents</p>
+        <button type="button" class="btn-new" id="new-incident-btn">New incident</button>
+        <nav class="runs" id="incidents" aria-label="Incidents"></nav>
+      </aside>
+
+      <main class="stage" id="stage">
+        <div class="mission">
+          <div class="craft">
+            <svg class="logo-aurora" viewBox="0 0 48 48" aria-hidden="true">
+              <circle cx="24" cy="24" r="22.5" fill="#1c1b18" />
+              <circle cx="24" cy="24" r="20" fill="#f4efe3" />
+              <path d="M8 31c7-12 12-19 16-19s9 7 16 19" fill="none" stroke="#2a9d8f" stroke-width="2.4" stroke-linecap="round" />
+              <path d="M10 33c6.5-10 11-16 14-16s7.5 6 14 16" fill="none" stroke="#7b5ea7" stroke-width="2" stroke-linecap="round" />
+              <path d="M12 35c5.5-8 9-12 12-12s6.5 4 12 12" fill="none" stroke="#e9c46a" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M24 11l3.4 8H20.6L24 11z" fill="#1c1b18" />
+              <rect x="22.6" y="18.6" width="2.8" height="5.2" rx="0.5" fill="#1c1b18" />
+              <circle cx="24" cy="26.4" r="1.2" fill="#e76f51" />
+            </svg>
+            <div>
+              <p class="eyebrow">Spacecraft</p>
+              <p class="craft-name">Aurora-1</p>
+            </div>
+          </div>
+          <p class="link" id="store-status"><span class="pulse"></span> Connecting</p>
+        </div>
+
+        <header class="case-head" id="alarm">
+          <div>
+            <p class="eyebrow" id="alarm-kicker">Incident</p>
+            <h1 id="alarm-title">Select an incident</h1>
+            <p class="lede" id="alarm-lede">ORBIT assembles telemetry, commands, procedures, and prior incidents for a human decision.</p>
+            <p class="case-meta" id="case-meta"></p>
+          </div>
+          <div class="hero-readout">
+            <p class="hero-value"><span id="alarm-value">—</span><span class="unit" id="alarm-unit"></span></p>
+            <p class="hero-limit" id="alarm-limit"></p>
+          </div>
+        </header>
+
+        <section id="compare">
+          <h2>Loads at the warn</h2>
+          <p class="hint">Currents at the first voltage warn. The last command is not automatically the cause.</p>
+          <div class="compare" id="compare-grid"></div>
+        </section>
+
+        <section id="commands">
+          <h2>Commands</h2>
+          <p class="hint">Ten minutes before the first warn. Click a row to pin that time on the traces.</p>
+          <ol class="timeline" id="timeline"></ol>
+        </section>
+
+        <section id="traces">
+          <div class="row">
+            <div>
+              <h2>Telemetry</h2>
+              <p class="hint" id="trace-caption">Shared time axis. Dashed lines are commands and the first warn.</p>
+            </div>
+            <div class="seg" role="group" aria-label="Time window">
+              <button type="button" data-window="focus" class="is-on">Warn ± 8 min</button>
+              <button type="button" data-window="full">Full run</button>
+            </div>
+          </div>
+          <div class="mode-strip" id="mode-strip"></div>
+          <div class="traces" id="trace-stack"></div>
+          <p class="hover-read" id="hover-read"></p>
+        </section>
+
+        <section id="findings">
+          <div class="row">
+            <div>
+              <h2>Report</h2>
+              <p class="hint">Claims tagged OBSERVED, DERIVED, DOCUMENTED, or HYPOTHESIS.</p>
+            </div>
+            <button type="button" class="btn" id="assemble">Assemble report</button>
+          </div>
+          <div class="findings" id="findings-body">
+            <p class="empty">Assemble the EPS-17 report to stamp this case. Rules only — no paid model.</p>
+          </div>
+        </section>
+
+        <section id="action">
+          <p class="eyebrow">Suggested action</p>
+          <h2 id="decide-title">None yet</h2>
+          <p class="lede" id="decide-sub">Select a case to see a recommended next step.</p>
+          <p class="action-status" id="decide-meta"></p>
+        </section>
+
+        <section id="procedure">
+          <article class="procedure">
+            <p class="eyebrow">Original procedure</p>
+            <header class="proc-head">
+              <p class="proc-id">EPS-17</p>
+              <div>
+                <h2>EPS low-voltage response</h2>
+                <p class="proc-aka">Check recently activated nonessential loads</p>
+              </div>
+            </header>
+            <dl class="proc-meta">
+              <div>
+                <dt>Applies to</dt>
+                <dd>Aurora-1 Electrical Power System</dd>
+              </div>
+              <div>
+                <dt>Entry</dt>
+                <dd><code>EPS.bus_voltage</code> at or below warn (26.5 V)</dd>
+              </div>
+              <div>
+                <dt>Goal</dt>
+                <dd>Find the load that just came on. Do not guess the payload first.</dd>
+              </div>
+            </dl>
+            <p class="hint">Green on a step means this incident already has the evidence. It is not a sign-off. Step 6 is still a human command — ORBIT does not send it.</p>
+            <ol class="proc" id="proc"></ol>
+            <button type="button" class="text-btn" id="open-eps17">Open full procedure</button>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <div class="slip-wrap" id="slip" hidden>
+      <div class="slip" role="dialog" aria-modal="true" aria-labelledby="slip-title">
+        <aside class="slip-stub">
+          <div>
+            <p class="eyebrow" id="slip-title">Open</p>
+            <p class="slip-id" id="slip-id">INC-····</p>
+          </div>
+          <p class="slip-stub-note">You already have the alarm. ORBIT does not detect.</p>
+        </aside>
+        <form class="slip-body" id="new-incident">
+          <p class="pick-label">Entry alarm</p>
+          <input type="hidden" name="alarm" id="incident-alarm-value" value="" />
+          <input type="hidden" name="run_id" id="incident-run-value" value="" />
+          <div class="picks picks-alarms" id="incident-alarm"></div>
+          <p class="pick-label">Telemetry tape</p>
+          <div class="picks picks-row" id="incident-run"></div>
+          <div class="slip-foot">
+            <label class="slip-title-field">Working title
+              <input name="title" placeholder="Bus voltage warn" autocomplete="off" />
+            </label>
+            <div class="form-actions">
+              <button type="button" class="text-btn" id="cancel-incident">Cancel</button>
+              <button type="submit" class="btn">Open incident</button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="reader" id="reader" hidden>
+      <div class="reader-panel" role="dialog" aria-modal="true" aria-labelledby="reader-title">
+        <header>
+          <div>
+            <p class="eyebrow" id="reader-kind"></p>
+            <h2 id="reader-title"></h2>
+          </div>
+          <button type="button" class="icon-btn" id="reader-close" aria-label="Close document">×</button>
+        </header>
+        <div class="reader-body md" id="reader-body"></div>
+      </div>
+    </div>
+
+    <script src="/static/app.js" type="module"></script>
+  </body>
+</html>

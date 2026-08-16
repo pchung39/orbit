@@ -1,0 +1,319 @@
+# ORBIT — Aurora-1 canonical mission model
+# Week-1 deliverable. Every downstream artifact (simulator, procedures,
+# historical incidents, eval harness) derives from this spec. Nothing else
+# starts until this is stable.
+#
+# version: 0.1.0
+# status: draft — review against JPL-informed plausibility before building the simulator
+
+mission:
+  name: Aurora-1
+  type: simulation-generated small spacecraft
+  description: >
+    Fictional but internally coherent small spacecraft used as ORBIT's
+    primary demonstration environment for the MVP.
+
+constants:
+  baseline_avionics_load_a: 1.15
+  baseline_comms_load_a: 0.35
+  orbital_period_min: 96
+  eclipse_fraction: 0.35
+  default_sample_interval_s: 5
+  battery_internal_resistance_ohm_nominal: 0.08
+  heater_b_nominal_resistance_ohm: 24.0
+
+subsystems:
+  EPS:
+    name: Electrical Power System
+    components: [battery, solar_array, bus, avionics_load, comms_load]
+  THM:
+    name: Thermal Control
+    components: [heater_b, battery_thermal_zone]
+  PAY:
+    name: Payload
+    components: [payload_unit]
+
+# ---------------------------------------------------------------------------
+# CHANNEL DICTIONARY — 11 channels
+# ---------------------------------------------------------------------------
+
+channels:
+
+  EPS.bus_voltage:
+    subsystem: EPS
+    unit: V
+    physical_meaning: Main power bus voltage, regulated output of the power control unit
+    nominal_range: [27.0, 29.5]
+    warn_limit: 26.5
+    critical_limit: 25.0
+    limit_direction: below
+    sample_interval_s: 5
+    depends_on: [EPS.battery_voltage, EPS.bus_current]
+    derivation: battery_voltage minus a small IR drop proportional to bus_current
+    noise_stddev: 0.05
+
+  EPS.bus_current:
+    subsystem: EPS
+    unit: A
+    physical_meaning: Total current drawn from the bus by all loads
+    nominal_range: [2.0, 4.5]
+    warn_limit: 6.0
+    critical_limit: 7.5
+    limit_direction: above
+    sample_interval_s: 5
+    depends_on: [PAY.payload_current, THM.heater_b_current]
+    derivation: baseline_avionics_load_a + baseline_comms_load_a + PAY.payload_current + THM.heater_b_current
+    noise_stddev: 0.08
+
+  EPS.battery_voltage:
+    subsystem: EPS
+    unit: V
+    physical_meaning: Terminal voltage of the battery pack
+    nominal_range: [26.5, 29.0]
+    warn_limit: 25.5
+    critical_limit: 24.5
+    limit_direction: below
+    sample_interval_s: 5
+    depends_on: [EPS.battery_current]
+    derivation: open_circuit_voltage(state_of_charge) - battery_current * effective_internal_resistance_ohm
+    noise_stddev: 0.04
+
+  EPS.battery_current:
+    subsystem: EPS
+    unit: A
+    physical_meaning: Net current into the battery (positive charge, negative discharge)
+    nominal_range: [-2.0, 3.0]
+    warn_limit: 4.0
+    critical_limit: 5.5
+    limit_direction: above_absolute_value
+    sample_interval_s: 5
+    depends_on: [EPS.solar_array_current, EPS.bus_current]
+    derivation: EPS.solar_array_current - EPS.bus_current
+    noise_stddev: 0.05
+
+  EPS.solar_array_current:
+    subsystem: EPS
+    unit: A
+    physical_meaning: Current output of the solar array
+    nominal_range: [0.0, 5.5]
+    warn_limit: null
+    critical_limit: null
+    limit_direction: not_applicable
+    sample_interval_s: 5
+    depends_on: [orbital_phase]
+    derivation: array_capacity_a * illumination_fraction(orbital_phase) * degradation_factor
+    noise_stddev: 0.10
+    notes: 0A in eclipse, 4.0-5.5A in full sun, ramps smoothly across the terminator
+
+  THM.battery_temperature:
+    subsystem: THM
+    unit: degC
+    physical_meaning: Temperature of the battery pack thermal zone
+    nominal_range: [5, 25]
+    warn_limit: 30
+    critical_limit: 35
+    limit_direction: above
+    sample_interval_s: 10
+    depends_on: [EPS.battery_current, THM.heater_b_current]
+    derivation: first_order_lag(heat_input, thermal_time_constant_s=600)
+    noise_stddev: 0.15
+
+  THM.heater_b_temperature:
+    subsystem: THM
+    unit: degC
+    physical_meaning: Local temperature at the Heater B mounting zone
+    nominal_range: [10, 20]
+    warn_limit: 40
+    critical_limit: 50
+    limit_direction: above
+    sample_interval_s: 10
+    depends_on: [THM.heater_b_current]
+    derivation: first_order_lag(heater_b_current^2 * heater_b_nominal_resistance_ohm, thermal_time_constant_s=300)
+    noise_stddev: 0.20
+
+  THM.heater_b_current:
+    subsystem: THM
+    unit: A
+    physical_meaning: Current drawn by Heater B when commanded on
+    nominal_range: [0.8, 1.2]
+    warn_limit: 2.0
+    critical_limit: 3.0
+    limit_direction: above
+    sample_interval_s: 5
+    depends_on: [command_state.HEATER_B]
+    derivation: 0 if OFF else nominal_draw_a * active_fault_multiplier
+    noise_stddev: 0.03
+
+  PAY.power_draw:
+    subsystem: PAY
+    unit: W
+    physical_meaning: Total electrical power drawn by the payload
+    nominal_range: [0, 25]
+    warn_limit: 30
+    critical_limit: 35
+    limit_direction: above
+    sample_interval_s: 5
+    depends_on: [PAY.payload_current, EPS.bus_voltage]
+    derivation: PAY.payload_current * EPS.bus_voltage
+    noise_stddev: 0.30
+
+  PAY.payload_current:
+    subsystem: PAY
+    unit: A
+    physical_meaning: Current drawn by the payload unit
+    nominal_range: [0, 0.9]
+    warn_limit: 1.1
+    critical_limit: 1.3
+    limit_direction: above
+    sample_interval_s: 5
+    depends_on: [PAY.mode]
+    derivation: mode-dependent baseline * active_fault_multiplier
+    noise_stddev: 0.02
+
+  PAY.mode:
+    subsystem: PAY
+    unit: enum
+    physical_meaning: Current operating mode of the payload unit
+    values: [STANDBY, SCIENCE_MODE]
+    sample_interval_s: 5
+    depends_on: [command_state.PAYLOAD_MODE]
+
+# ---------------------------------------------------------------------------
+# MODES
+# ---------------------------------------------------------------------------
+
+modes:
+  SAFE:
+    description: Minimal power draw. Payload off. Entered by default or after fault detection.
+    expected:
+      PAY.mode: STANDBY
+      THM.heater_b_current: thermostatically controlled, low duty cycle
+
+  NOMINAL:
+    description: Standard operations. Payload idle. Heaters thermostatically controlled.
+    expected:
+      PAY.mode: STANDBY
+
+  SCIENCE_MODE:
+    description: Payload actively collecting data. Elevated bus load.
+    expected:
+      PAY.mode: SCIENCE_MODE
+      EPS.bus_current: elevated relative to NOMINAL
+
+# ---------------------------------------------------------------------------
+# FAULT LIBRARY — fault #1 fully specced (needed now); #2 and #3 stubbed
+# (needed for the eval's multi-fault recall test, not for the simulator
+# or the EPS-204 demo — flesh out when the harness gets built)
+# ---------------------------------------------------------------------------
+
+fault_library:
+
+  HEATER_B_OVERCURRENT:
+    id: FAULT-001
+    hidden_root_cause: >
+      Partial short in Heater B's resistive element increases its effective
+      current draw for a given commanded duty cycle.
+    onset: injected at a configurable timestamp during a HEATER_B_ENABLE command
+    trigger: HEATER_B_ENABLE command while the fault is active
+    fault_multiplier_on_heater_current: 3.2
+    direct_effect: THM.heater_b_current rises to roughly 3.2x nominal when commanded on
+    downstream_effects:
+      - channel: EPS.bus_current
+        effect: rises, since heater_b_current feeds directly into the bus current sum
+      - channel: EPS.bus_voltage
+        effect: sags below warn then critical threshold under sustained elevated draw
+      - channel: THM.heater_b_temperature
+        effect: rises faster and to a higher steady-state than nominal
+      - channel: THM.battery_temperature
+        effect: rises slowly afterward, from increased battery discharge current
+    expected_timeline:
+      t0: HEATER_B_ENABLE command
+      t0_plus_5s: heater_b_current visibly elevated
+      t0_plus_15_to_40s: bus_voltage crosses warn then critical threshold
+      t0_plus_90s: heater_b_temperature and battery_temperature trending up
+    relevant_procedure: EPS-17
+    confounding_evidence: >
+      PAY.mode may independently transition to SCIENCE_MODE in the same
+      window (as in the EPS-204 demo scenario below), which also raises
+      bus current and can mislead investigation toward the payload.
+    diagnostic_evidence: >
+      heater_b_current magnitude (3x+ nominal) is disproportionate to a
+      mode transition alone. compare_behavior() against past
+      HEATER_B_ENABLE events isolates the anomaly to the heater.
+
+  PAYLOAD_POWER_SPIKE:
+    id: FAULT-002
+    status: deferred — flesh out in the eval-harness phase
+    hidden_root_cause_sketch: payload subsystem draws transient excess current on SCIENCE_MODE entry
+
+  BATTERY_RESISTANCE_DEGRADATION:
+    id: FAULT-003
+    status: deferred — flesh out in the eval-harness phase
+    hidden_root_cause_sketch: battery internal resistance degrades gradually, so voltage sags more than expected under discharge
+
+# ---------------------------------------------------------------------------
+# PROCEDURES — referenced here, authored as separate markdown docs
+# ---------------------------------------------------------------------------
+
+procedures_referenced:
+  EPS-17:
+    title: EPS low-voltage response — check recently activated nonessential loads
+    status: authored
+    path: procedures/EPS-17.md
+  # EPS-09 (battery degradation checkout) and PAY-04 (payload power spike
+  # safing) get added when faults #2 and #3 are fleshed out. Brief's
+  # 5-procedure MVP target is a later checkpoint, not a week-1 requirement.
+
+# ---------------------------------------------------------------------------
+# HISTORICAL INCIDENTS — to author once the simulator produces fault #1's
+# telemetry, each generated from a real run of that fault
+# ---------------------------------------------------------------------------
+
+historical_incidents_to_author:
+  - id: INC-0187
+    based_on: HEATER_B_OVERCURRENT
+    path: incidents/INC-0187.md
+    source_run: runs/inc0187.csv
+    note: primary similar-incident reference for the EPS-204 demo scenario
+  # more incidents (per fault #2/#3, a second heater variant, a
+  # non-anomalous control) get added toward the brief's 5-8 target once
+  # those faults exist — not needed to prove the pipeline works end to end
+
+# ---------------------------------------------------------------------------
+# DEMO SCENARIO — EPS-204, the canonical incident referenced throughout the brief
+# ---------------------------------------------------------------------------
+
+demo_scenario_EPS204:
+  description: >
+    HEATER_B_OVERCURRENT with a confounding SCIENCE_MODE entry — this is
+    the fully polished investigation the MVP demo is built around.
+  script:
+    - t: "14:29:44"
+      event: command
+      channel: THM.heater_b_current
+      action: HEATER_B_ENABLE
+    - t: "14:31:52"
+      event: mode_change
+      channel: PAY.mode
+      action: SCIENCE_MODE
+    - t: "14:32:18"
+      event: threshold_breach
+      channel: EPS.bus_voltage
+      note: crosses warn_limit
+    - t: "14:32:21"
+      event: threshold_breach
+      channel: EPS.bus_current
+      note: rises concurrently
+    - t: "14:33:48"
+      event: trend_start
+      channel: THM.battery_temperature
+      note: begins increasing
+
+# ---------------------------------------------------------------------------
+# NEXT STEP
+# ---------------------------------------------------------------------------
+# Once this spec is reviewed: build the ~300-500 line Python simulator that
+# produces nominal telemetry plus fault #1 (HEATER_B_OVERCURRENT) and
+# replays the EPS-204 demo script. Then hand-author EPS-17 and INC-0187.
+# Faults #2/#3 and their procedures/incidents come later, in the
+# eval-harness phase — not before.
