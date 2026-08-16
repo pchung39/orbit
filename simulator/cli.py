@@ -5,7 +5,16 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from simulator.scenarios import report_eps204, run_eps204, run_inc0187
+from simulator.scenarios import (
+    report_eps204,
+    run_batt003,
+    run_eps204,
+    run_inc0162,
+    run_inc0187,
+    run_inc0191,
+    run_nominal_slice,
+    run_pay002,
+)
 from simulator.simulate import load_and_validate, run_simulation, summarize
 
 
@@ -13,9 +22,18 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Aurora-1 telemetry simulator")
     parser.add_argument(
         "--scenario",
-        choices=("nominal", "eps204", "fault1", "inc0187"),
+        choices=(
+            "nominal",
+            "eps204",
+            "fault1",
+            "inc0187",
+            "pay002",
+            "inc0191",
+            "batt003",
+            "inc0162",
+        ),
         default=None,
-        help="nominal | eps204 | fault1 (heater only) | inc0187 (prior-day source run)",
+        help="named tape, or --days N for a long nominal run",
     )
     parser.add_argument("--days", type=float, default=0.0, help="nominal run length in days")
     parser.add_argument("--out", type=Path, default=None, help="CSV output path")
@@ -32,7 +50,7 @@ def main() -> None:
         print(f"channels: {len(spec['channels'])}")
         print("spec ok")
         if not args.validate_only:
-            print("pass --scenario nominal|eps204|fault1|inc0187 (and --days N for nominal)")
+            print("pass --scenario <name> (and --days N for a long nominal run)")
         return
 
     if scenario == "eps204":
@@ -49,6 +67,26 @@ def main() -> None:
         df = run_inc0187(spec)
         print(summarize(df, spec))
         out = args.out or Path("runs") / "inc0187.csv"
+    elif scenario == "pay002":
+        df = run_pay002(spec)
+        print(summarize(df, spec))
+        out = args.out or Path("runs") / "pay002.csv"
+    elif scenario == "inc0191":
+        df = run_inc0191(spec)
+        print(summarize(df, spec))
+        out = args.out or Path("runs") / "inc0191.csv"
+    elif scenario == "batt003":
+        df = run_batt003(spec)
+        print(summarize(df, spec))
+        out = args.out or Path("runs") / "batt003.csv"
+    elif scenario == "inc0162":
+        df = run_inc0162(spec)
+        print(summarize(df, spec))
+        out = args.out or Path("runs") / "inc0162.csv"
+    elif scenario == "nominal":
+        df = run_nominal_slice(spec)
+        print(summarize(df, spec))
+        out = args.out or Path("runs") / "nominal.csv"
     else:
         duration_s = args.days * 86400.0 if args.days > 0 else 3 * 86400.0
         df = run_simulation(spec, duration_s=duration_s)

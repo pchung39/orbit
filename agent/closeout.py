@@ -1,0 +1,44 @@
+"""Turn a rules investigation into a filed library close-out.
+
+ORBIT still does not command the spacecraft. Filing records the decision.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+
+def build_closeout(incident: dict[str, Any], report: str, note: str | None = None) -> str:
+    body = report.split("\n## Tool log")[0].rstrip()
+    title = incident.get("title") or incident["id"]
+    remark = (note or "").strip()
+    proc = "EPS-17"
+    for line in report.splitlines():
+        if "**Procedure:**" in line:
+            proc = line.split("**Procedure:**", 1)[-1].strip()
+            break
+    lines = [
+        f"# {incident['id']} — {title}",
+        "",
+        "| | |",
+        "|---|---|",
+        f"| ID | {incident['id']} |",
+        "| Mission | Aurora-1 |",
+        "| Status | filed — recommended action not sent |",
+        f"| Entry | `{incident['alarm']}` |",
+        f"| Tape | `{incident['run_id']}` |",
+        f"| Procedure used | {proc} |",
+        "",
+        "This is a library close-out. ORBIT recommended a human decision and stopped. "
+        "It did not uplink a command.",
+        "",
+    ]
+    if remark:
+        lines += [
+            "## Operator remark",
+            "",
+            f"{remark} **[OBSERVED — operator]**",
+            "",
+        ]
+    lines += [body, ""]
+    return "\n".join(lines)

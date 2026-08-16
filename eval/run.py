@@ -82,7 +82,7 @@ def _print(results: list[CaseResult]) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Score ORBIT investigations against the EPS-17 close")
+    parser = argparse.ArgumentParser(description="Score ORBIT investigations against the matching close")
     parser.add_argument("--case", choices=[c.id for c in CASES], default=None)
     parser.add_argument(
         "--provider",

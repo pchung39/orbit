@@ -201,9 +201,9 @@ modes:
       EPS.bus_current: elevated relative to NOMINAL
 
 # ---------------------------------------------------------------------------
-# FAULT LIBRARY — fault #1 fully specced (needed now); #2 and #3 stubbed
-# (needed for the eval's multi-fault recall test, not for the simulator
-# or the EPS-204 demo — flesh out when the harness gets built)
+# FAULT LIBRARY — three closed families. FAULT-001 is the EPS-204 demo.
+# FAULT-002 is the contrast: payload actually guilty. FAULT-003 is pack IR,
+# not a load. Rules that always inhibit Heater B fail 002 and 003.
 # ---------------------------------------------------------------------------
 
 fault_library:
@@ -243,13 +243,56 @@ fault_library:
 
   PAYLOAD_POWER_SPIKE:
     id: FAULT-002
-    status: deferred — flesh out in the eval-harness phase
-    hidden_root_cause_sketch: payload subsystem draws transient excess current on SCIENCE_MODE entry
+    hidden_root_cause: >
+      Payload power converter latches into an overcurrent state on
+      SCIENCE_MODE entry. Draw is ~3× the healthy science baseline.
+    onset: injected at SCIENCE_MODE command
+    trigger: SCIENCE_MODE while the fault is active
+    fault_multiplier_on_payload_current: 3.0
+    direct_effect: PAY.payload_current rises to roughly 2.7 A instead of ~0.9 A
+    downstream_effects:
+      - channel: PAY.power_draw
+        effect: scales with current; typically crosses the 30 W warn
+      - channel: EPS.bus_current
+        effect: rises by the extra ~1.8 A; may stay under the 6.0 A bus warn
+      - channel: EPS.bus_voltage
+        effect: modest sag; this family is caught on payload current, not bus voltage
+    expected_timeline:
+      t0: SCIENCE_MODE command
+      t0_plus_5s: payload_current above 1.1 A warn
+    relevant_procedure: PAY-04
+    confounding_evidence: >
+      SCIENCE_MODE is supposed to raise payload current. The tell is
+      magnitude: healthy science is ~0.9 A, not ~2.7 A. Heater B is off
+      or healthy — do not inhibit it.
+    diagnostic_evidence: >
+      PAY.payload_current ≥2× the 0.9 A science baseline while
+      THM.heater_b_current is not ≥2× its healthy ON draw.
 
   BATTERY_RESISTANCE_DEGRADATION:
     id: FAULT-003
-    status: deferred — flesh out in the eval-harness phase
-    hidden_root_cause_sketch: battery internal resistance degrades gradually, so voltage sags more than expected under discharge
+    hidden_root_cause: >
+      Pack internal resistance has grown. Terminal voltage sags under
+      ordinary discharge even though every load current is healthy.
+    onset: already present at the start of the window (not a load command)
+    trigger: discharge current (eclipse + any enabled load)
+    fault_multiplier_on_internal_resistance: 16.0
+    direct_effect: EPS.battery_voltage sags below 25.5 V warn under a few amps of discharge
+    downstream_effects:
+      - channel: EPS.bus_voltage
+        effect: follows the pack down (bus IR drop on top of the sag)
+      - channel: THM.battery_temperature
+        effect: extra I²R heating in the pack, slow
+    expected_timeline:
+      t0: eclipse and/or HEATER_B_ENABLE (healthy ~1.2 A)
+      t0_plus_seconds: battery_voltage crosses 25.5 V; heater and payload currents stay nominal
+    relevant_procedure: EPS-09
+    confounding_evidence: >
+      A heater enable in the same window looks like EPS-204 until you
+      read heater current. It is ~1.2 A, not ~3.7 A.
+    diagnostic_evidence: >
+      Voltage sag with healthy load currents. Do not inhibit a healthy
+      heater or payload; continue battery checkout.
 
 # ---------------------------------------------------------------------------
 # PROCEDURES — referenced here, authored as separate markdown docs
@@ -260,13 +303,17 @@ procedures_referenced:
     title: EPS low-voltage response — check recently activated nonessential loads
     status: authored
     path: procedures/EPS-17.md
-  # EPS-09 (battery degradation checkout) and PAY-04 (payload power spike
-  # safing) get added when faults #2 and #3 are fleshed out. Brief's
-  # 5-procedure MVP target is a later checkpoint, not a week-1 requirement.
+  PAY-04:
+    title: Payload power spike — safe SCIENCE_MODE if draw is ≥2× healthy
+    status: authored
+    path: procedures/PAY-04.md
+  EPS-09:
+    title: Battery voltage sag — checkout pack IR before inhibiting loads
+    status: authored
+    path: procedures/EPS-09.md
 
 # ---------------------------------------------------------------------------
-# HISTORICAL INCIDENTS — to author once the simulator produces fault #1's
-# telemetry, each generated from a real run of that fault
+# HISTORICAL INCIDENTS — each generated from a real run of that fault
 # ---------------------------------------------------------------------------
 
 historical_incidents_to_author:
@@ -275,9 +322,16 @@ historical_incidents_to_author:
     path: incidents/INC-0187.md
     source_run: runs/inc0187.csv
     note: primary similar-incident reference for the EPS-204 demo scenario
-  # more incidents (per fault #2/#3, a second heater variant, a
-  # non-anomalous control) get added toward the brief's 5-8 target once
-  # those faults exist — not needed to prove the pipeline works end to end
+  - id: INC-0191
+    based_on: PAYLOAD_POWER_SPIKE
+    path: incidents/INC-0191.md
+    source_run: runs/inc0191.csv
+    note: similar-incident reference when the payload is actually guilty
+  - id: INC-0162
+    based_on: BATTERY_RESISTANCE_DEGRADATION
+    path: incidents/INC-0162.md
+    source_run: runs/inc0162.csv
+    note: similar-incident reference for pack IR sag with healthy loads
 
 # ---------------------------------------------------------------------------
 # DEMO SCENARIO — EPS-204, the canonical incident referenced throughout the brief
@@ -310,10 +364,33 @@ demo_scenario_EPS204:
       note: begins increasing
 
 # ---------------------------------------------------------------------------
-# NEXT STEP
+# CONTRAST SCENARIOS (v0.2)
 # ---------------------------------------------------------------------------
-# Once this spec is reviewed: build the ~300-500 line Python simulator that
-# produces nominal telemetry plus fault #1 (HEATER_B_OVERCURRENT) and
-# replays the EPS-204 demo script. Then hand-author EPS-17 and INC-0187.
-# Faults #2/#3 and their procedures/incidents come later, in the
-# eval-harness phase — not before.
+
+demo_scenario_PAY002:
+  description: >
+    PAYLOAD_POWER_SPIKE on SCIENCE_MODE entry. Heater stays off. Entry
+    alarm is PAY.payload_current, not bus voltage.
+  script:
+    - t: "10:12:00"
+      event: mode_change
+      channel: PAY.mode
+      action: SCIENCE_MODE
+    - t: "10:12:05"
+      event: threshold_breach
+      channel: PAY.payload_current
+      note: crosses 1.1 A warn
+
+demo_scenario_BATT003:
+  description: >
+    BATTERY_RESISTANCE_DEGRADATION in eclipse. Heater B is enabled and
+    healthy. Entry alarm is EPS.battery_voltage.
+  script:
+    - t: "00:10:00"
+      event: command
+      channel: THM.heater_b_current
+      action: HEATER_B_ENABLE
+    - t: "00:10:05"
+      event: threshold_breach
+      channel: EPS.battery_voltage
+      note: crosses 25.5 V warn

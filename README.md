@@ -26,6 +26,7 @@ That confounder is the whole point. Last command is not automatically the cause.
 2. See loads at the first warn, commands in the prior 10 minutes, and traces pinned to that clock.
 3. Walk **EPS-17** (low-voltage response). Evidence already on the page is marked Satisfied. Step 6 stays **Not sent**.
 4. Assemble a tagged report. Every claim is **OBSERVED**, **DERIVED**, **DOCUMENTED**, or **HYPOTHESIS**.
+5. File a close-out into the library. Status becomes **filed**. The recommended inhibit is still **not sent**.
 
 The UI uses a deterministic rules path. No paid model in the browser.
 
@@ -44,7 +45,7 @@ python -m storage ingest
 uvicorn api.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). Seed incident is **INC-0204**.
+Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). Seed incidents: **INC-0204** (heater + confounder), **INC-0205** (heater only), **INC-0210** (payload guilty), **INC-0211** (pack IR).
 
 Local DB is `orbit` / `orbit` in `docker-compose.yml` — not a production secret. `.env` is for optional CLI keys only; do not commit it.
 
@@ -55,11 +56,11 @@ The spec is canonical: [`spec/aurora1_mission_model.yaml`](spec/aurora1_mission_
 | Piece | Role |
 |---|---|
 | Spec | Channels, limits, faults, the story the rest of the stack must tell |
-| Simulator | Nominal + EPS-204 (heater + SCIENCE_MODE) + fault1 (heater only) + INC-0187 |
+| Simulator | Nominal + EPS-204 + fault1 + INC-0187 + PAY-002 + INC-0191 + BATT-003 + INC-0162 |
 | Store | Postgres / pgvector — runs, telemetry, events, procedures, open incidents |
 | Agent | Tools over the store; `--provider rules` in the UI; Claude/OpenAI CLI-only |
 | Console | FastAPI + a light ops UI at `/` |
-| Eval | 2 cases × 9 checks against the EPS-17 close |
+| Eval | 4 cases against the matching close (heater, payload, battery) |
 
 ```
 spec/aurora1_mission_model.yaml
@@ -68,20 +69,20 @@ storage/            ingest, query, local embeddings
 agent/              investigate (rules | claude | openai)
 api/                HTTP + static console
 ui/                 incidents, traces, procedure, report
-procedures/EPS-17.md
-incidents/INC-0187.md
+procedures/         EPS-17, PAY-04, EPS-09
+incidents/          INC-0187, INC-0191, INC-0162
 eval/
 ```
 
 ## Eval
 
-Scores a finished report: cite the heater current, treat SCIENCE_MODE as a confounder on EPS-204 (and do not invent it on fault1), recommend inhibit Heater B, stop without commanding, tag every claim.
+Scores a finished report against the matching close. Heater cases still require inhibit Heater B and (on EPS-204) SCIENCE_MODE as a confounder. Payload and battery cases fail any rules path that always blames the heater.
 
 ```bash
 python -m eval
 ```
 
-Default is `--provider rules` (no paid LLM). Green on this harness is the MVP bar.
+Default is `--provider rules` (no paid LLM). Green on this harness is the v0.2 bar: 4 cases.
 
 ## Optional: simulator and LLM CLI
 
@@ -90,7 +91,8 @@ Regenerate tapes:
 ```bash
 python -m simulator --validate-only
 python -m simulator --scenario eps204 --out runs/eps204.csv
-python -m simulator --scenario fault1 --out runs/fault1.csv
+python -m simulator --scenario pay002 --out runs/pay002.csv
+python -m simulator --scenario batt003 --out runs/batt003.csv
 ```
 
 Paid models are CLI-only. Copy `.env.example` to `.env` if you want them.
@@ -106,7 +108,5 @@ The HTTP investigate route always uses rules. It will not call Anthropic or Open
 
 - Anomaly detection or live vehicle
 - Command uplink
-- Filing an open incident back into the library (next)
-- A contrast case where the payload *is* guilty (next)
 
-ORBIT starts after detection and stops at a human decision.
+ORBIT starts after detection and stops at a human decision. Filing records the close; it still does not send the command.

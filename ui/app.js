@@ -1,25 +1,76 @@
 const ALARM = "EPS.bus_voltage";
-const TRACE_ORDER = [
-  { id: "EPS.bus_voltage", title: "Bus voltage", color: "var(--bus)", primary: true },
+const TRACE_CATALOG = [
+  { id: "EPS.bus_voltage", title: "Bus voltage", color: "var(--bus)" },
+  { id: "EPS.battery_voltage", title: "Battery voltage", color: "var(--accent)" },
   { id: "THM.heater_b_current", title: "Heater B current", color: "var(--heater)" },
   { id: "PAY.payload_current", title: "Payload current", color: "var(--payload)" },
   { id: "EPS.bus_current", title: "Bus current", color: "var(--ink)" },
+  { id: "EPS.solar_array_current", title: "Solar array current", color: "var(--mute)" },
 ];
 
 const RUN_COPY = {
   eps204: { kicker: "Canonical incident", title: "EPS-204", note: "Heater overcurrent + SCIENCE_MODE confounder" },
   fault1: { kicker: "Control", title: "Heater only", note: "Same fault, payload stays STANDBY" },
-  inc0187: { kicker: "Prior day", title: "INC-0187 source", note: "Historical match for the search" },
+  inc0187: { kicker: "Prior day", title: "INC-0187 source", note: "Historical match for the heater search" },
+  pay002: { kicker: "Contrast", title: "Payload spike", note: "FAULT-002 — payload is actually guilty" },
+  inc0191: { kicker: "Prior day", title: "INC-0191 source", note: "Historical match for the payload search" },
+  batt003: { kicker: "Contrast", title: "Pack IR sag", note: "FAULT-003 — heater current is healthy" },
+  inc0162: { kicker: "Prior day", title: "INC-0162 source", note: "Historical match for the battery search" },
+  nominal: { kicker: "Control", title: "Healthy science", note: "SCIENCE_MODE at ~0.9 A, no warn" },
 };
 
-const PROC_STEPS = [
-  { id: "confirm", n: "1", label: "Confirm the alarm on EPS.bus_voltage. Note UTC." },
-  { id: "commands", n: "2", label: "List commands and mode changes in the 10 minutes before the first warn." },
-  { id: "currents", n: "3", label: "For each load enabled in that window, read current vs last healthy enable." },
-  { id: "ratio", n: "4", label: "If a load is ≥2× its healthy draw, that load is the prime suspect." },
-  { id: "payload", n: "5", label: "SCIENCE_MODE raises bus current but cannot explain a several-amp heater step. Check the heater before closing on the payload." },
-  { id: "inhibit", n: "6", label: "Command the suspect load OFF and watch EPS.bus_voltage recover.", human: true },
-];
+const PROC_BOOK = {
+  "EPS-17": {
+    title: "EPS low-voltage response",
+    aka: "Check recently activated nonessential loads",
+    applies: "Aurora-1 Electrical Power System",
+    entry: "<code>EPS.bus_voltage</code> at or below warn (26.5 V)",
+    goal: "Find the load that just came on. Do not guess the payload first.",
+    steps: [
+      { id: "confirm", n: "1", label: "Confirm the alarm on EPS.bus_voltage. Note UTC." },
+      { id: "commands", n: "2", label: "List commands and mode changes in the 10 minutes before the first warn." },
+      { id: "currents", n: "3", label: "For each load enabled in that window, read current vs last healthy enable." },
+      { id: "ratio", n: "4", label: "If a load is ≥2× its healthy draw, that load is the prime suspect." },
+      { id: "payload", n: "5", label: "SCIENCE_MODE raises bus current but cannot explain a several-amp heater step. Check the heater before closing on the payload." },
+      { id: "action", n: "6", label: "Command the suspect load OFF and watch EPS.bus_voltage recover.", human: true },
+    ],
+  },
+  "PAY-04": {
+    title: "Payload power spike",
+    aka: "Safe SCIENCE_MODE if draw is ≥2× healthy",
+    applies: "Aurora-1 payload",
+    entry: "<code>PAY.payload_current</code> at or above warn (1.1 A)",
+    goal: "Confirm the payload itself is overcurrent. Do not inhibit a healthy heater.",
+    steps: [
+      { id: "confirm", n: "1", label: "Confirm the alarm on PAY.payload_current. Note UTC." },
+      { id: "commands", n: "2", label: "Confirm PAY.mode is SCIENCE_MODE and note when it entered." },
+      { id: "currents", n: "3", label: "Read payload current vs the healthy science baseline (~0.9 A)." },
+      { id: "ratio", n: "4", label: "If payload current is ≥2× the 0.9 A baseline, the payload is the prime suspect." },
+      { id: "payload", n: "5", label: "Read heater current. If it is not ≥2× healthy ON, do not inhibit Heater B." },
+      { id: "action", n: "6", label: "Command the payload back to STANDBY and watch PAY.payload_current fall.", human: true },
+    ],
+  },
+  "EPS-09": {
+    title: "Battery voltage sag",
+    aka: "Checkout pack IR before inhibiting loads",
+    applies: "Aurora-1 Electrical Power System — battery pack",
+    entry: "<code>EPS.battery_voltage</code> at or below warn (25.5 V)",
+    goal: "Decide whether the pack is sagging under a healthy load. Do not inhibit that load.",
+    steps: [
+      { id: "confirm", n: "1", label: "Confirm the alarm on EPS.battery_voltage. Note UTC." },
+      { id: "commands", n: "2", label: "List commands in the 10 minutes before the first warn." },
+      { id: "currents", n: "3", label: "Read heater and payload current at the warn." },
+      { id: "ratio", n: "4", label: "If a load is ≥2× healthy, stop and go to EPS-17 or PAY-04." },
+      { id: "payload", n: "5", label: "If both currents are healthy, do not inhibit them. The sag is on the pack." },
+      { id: "action", n: "6", label: "Continue battery checkout offline. ORBIT does not send a command.", human: true },
+    ],
+  },
+};
+
+function tracesToDraw() {
+  const alarm = alarmChannel();
+  return TRACE_CATALOG.map((ch) => ({ ...ch, primary: ch.id === alarm }));
+}
 
 const state = {
   runs: [],
@@ -34,6 +85,7 @@ const state = {
   hoverT: null,
   report: null,
   investigating: false,
+  filing: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -98,12 +150,22 @@ function analysis() {
   const healthyMax = heaterMeta.nominal_range?.[1] ?? 1.2;
   const heaterA = heater?.value_num;
   const ratio = heaterA != null ? heaterA / healthyMax : null;
+  const payloadMeta = meta("PAY.payload_current");
+  const payloadHealthy = payloadMeta.nominal_range?.[1] ?? 0.9;
+  const payloadA = payload?.value_num;
+  const payloadRatio = payloadA != null ? payloadA / payloadHealthy : null;
   const events = (ws.events || []).slice().sort((a, b) => a.time_s - b.time_s);
   const windowEvents = t == null
     ? events
     : events.filter((e) => e.time_s >= t - 600 && e.time_s <= t);
   const heaterCmd = events.find((e) => e.detail === "HEATER_B_ENABLE");
   const science = events.find((e) => e.detail === "SCIENCE_MODE");
+  const suspect = ratio != null && ratio >= 2;
+  const payloadSuspect = !suspect && payloadRatio != null && payloadRatio >= 2;
+  const battRows = series("EPS.battery_voltage");
+  const battMeta = meta("EPS.battery_voltage");
+  const battWarn = firstCrossing(battRows, battMeta.warn_limit, battMeta.limit_direction);
+  const batterySuspect = !suspect && !payloadSuspect && (alarm === "EPS.battery_voltage" || Boolean(battWarn));
   return {
     warn,
     t,
@@ -114,11 +176,17 @@ function analysis() {
     heaterA,
     ratio,
     healthyMax,
+    payloadA,
+    payloadRatio,
+    payloadHealthy,
     events,
     windowEvents,
     heaterCmd,
     science,
-    suspect: ratio != null && ratio >= 2,
+    suspect,
+    payloadSuspect,
+    batterySuspect,
+    battWarn,
   };
 }
 
@@ -134,6 +202,13 @@ function domain() {
 
 function inDomain(rows, [t0, t1]) {
   return rows.filter((r) => r.time_s >= t0 && r.time_s <= t1);
+}
+
+function procedureId(a) {
+  if (a?.suspect) return "EPS-17";
+  if (a?.payloadSuspect) return "PAY-04";
+  if (a?.batterySuspect) return "EPS-09";
+  return "EPS-17";
 }
 
 function escapeHtml(s) {
@@ -466,13 +541,13 @@ function updateReadouts() {
   const a = analysis();
   const t = state.hoverT ?? state.pinT ?? a?.t;
   $("focus-clock").textContent = clock(t);
-  const parts = TRACE_ORDER.map((ch) => {
+  const parts = tracesToDraw().map((ch) => {
     const row = sampleAt(series(ch.id), t);
     const unit = meta(ch.id).unit || "";
     return `${ch.title} ${fmt(row?.value_num)} ${unit}`;
   });
   $("hover-read").textContent = t != null ? `${clock(t)}  ·  ${parts.join("   ")}` : "";
-  TRACE_ORDER.forEach((spec) => {
+  tracesToDraw().forEach((spec) => {
     const el = document.querySelector(`[data-ch="${spec.id}"]`);
     const c = charts[spec.id];
     if (!el || !c) return;
@@ -495,9 +570,10 @@ function updateReadouts() {
 function renderIncidents() {
   $("incidents").innerHTML = state.incidents
     .map((item) => {
-      return `<button type="button" class="run ${item.id === state.incidentId ? "is-on" : ""}" data-incident="${item.id}">
+      const st = item.status || "open";
+      return `<button type="button" class="run ${item.id === state.incidentId ? "is-on" : ""} ${st === "filed" ? "is-filed" : ""}" data-incident="${item.id}">
         <span class="id">${item.id}</span>
-        <span class="note">${escapeHtml(item.title)} · ${escapeHtml(item.alarm)}</span>
+        <span class="note">${escapeHtml(item.title)} · <span class="chip chip-${escapeHtml(st)}">${escapeHtml(st)}</span></span>
       </button>`;
     })
     .join("");
@@ -556,6 +632,19 @@ function closeSlip() {
   $("slip").hidden = true;
 }
 
+function openFileSlip() {
+  if (!state.incidentId || state.incident?.status === "filed") return;
+  $("file-slip-id").textContent = state.incident?.id || "INC-····";
+  $("file-slip-action").textContent = $("decide-title").textContent || "Recommended action";
+  $("file-note").value = "";
+  $("file-slip").hidden = false;
+  $("file-note").focus();
+}
+
+function closeFileSlip() {
+  $("file-slip").hidden = true;
+}
+
 function setStoreStatus(ok) {
   const el = $("store-status");
   el.classList.toggle("is-on", ok);
@@ -567,7 +656,26 @@ function renderAlarm(a) {
   const hero = $("alarm");
   const inc = state.incident;
   const alarm = alarmChannel();
-  $("alarm-kicker").textContent = inc ? inc.status || "open" : "Incident";
+  const st = inc?.status || "";
+  $("alarm-kicker").textContent = inc ? inc.id : "Incident";
+  const chip = $("status-chip");
+  if (st) {
+    chip.hidden = false;
+    chip.className = `chip chip-${st}`;
+    chip.textContent = st;
+  } else {
+    chip.hidden = true;
+  }
+  document.body.classList.toggle("is-filed", st === "filed");
+  const banner = $("filed-banner");
+  banner.hidden = st !== "filed";
+  if (st === "filed") {
+    const n = (inc.notes || "").trim();
+    $("filed-banner-copy").textContent =
+      n && !n.startsWith("Canonical")
+        ? n
+        : "Close-out recorded. The recommended command was not sent.";
+  }
   $("alarm-title").textContent = inc?.title || inc?.id || "Select an incident";
   $("case-meta").textContent = inc
     ? `${inc.id}  ·  Aurora-1  ·  ${inc.run_id}  ·  ${inc.alarm}`
@@ -614,22 +722,33 @@ function renderCompare(a) {
     },
     {
       k: "Payload",
-      v: a.payload?.value_num,
+      v: a.payloadA,
       unit: "A",
-      why: a.science
-        ? `SCIENCE_MODE at ${clock(a.science.time_s)} — looks guilty, draws < 1 A.`
-        : "Payload never left STANDBY in this run.",
-      ratio: a.mode?.value_text || "",
-      cls: "confounder",
+      why: a.payloadSuspect
+        ? `SCIENCE_MODE draw is ${fmt(a.payloadRatio, 1)}× the ${fmt(a.payloadHealthy, 1)} A healthy baseline.`
+        : a.science
+          ? `SCIENCE_MODE at ${clock(a.science.time_s)} — looks guilty only if current is ≥2× ~0.9 A.`
+          : "Payload never left STANDBY in this run.",
+      ratio: a.payloadRatio != null ? `${fmt(a.payloadRatio, 1)}× science` : a.mode?.value_text || "",
+      cls: a.payloadSuspect ? "suspect-payload" : a.science && !a.suspect ? "confounder" : "",
     },
-    {
-      k: "Bus current",
-      v: a.busI?.value_num,
-      unit: "A",
-      why: `Warn at ${fmt(meta("EPS.bus_current").warn_limit, 1)} A. Sum of loads, not a cause.`,
-      ratio: "",
-      cls: "",
-    },
+    a.batterySuspect
+      ? {
+          k: "Battery",
+          v: sampleAt(series("EPS.battery_voltage"), a.t)?.value_num,
+          unit: "V",
+          why: "Pack sagged with healthy load currents. That is IR, not a load to inhibit.",
+          ratio: "EPS-09",
+          cls: "suspect-battery",
+        }
+      : {
+          k: "Bus current",
+          v: a.busI?.value_num,
+          unit: "A",
+          why: `Warn at ${fmt(meta("EPS.bus_current").warn_limit, 1)} A. Sum of loads, not a cause.`,
+          ratio: "",
+          cls: "",
+        },
   ];
   root.innerHTML = cards
     .map(
@@ -660,7 +779,7 @@ function renderTimeline(a) {
   if (a.warn) {
     items.push({
       t: a.warn.time_s,
-      title: "EPS.bus_voltage WARN",
+      title: `${alarmChannel()} WARN`,
       sub: `${fmt(a.warn.value_num, 2)} V · first crossing`,
       warn: true,
     });
@@ -715,10 +834,10 @@ function renderTraces() {
   $("trace-caption").textContent = a?.warn
     ? `Shared time axis · pin ${clock(state.pinT ?? a.t)} · dashed lines are commands, solid amber is the first warn.`
     : "Shared time axis.";
-  root.innerHTML = TRACE_ORDER.map(
+  root.innerHTML = tracesToDraw().map(
     (t) => `<article class="trace ${t.primary ? "primary" : ""}" data-ch="${t.id}"></article>`
   ).join("");
-  TRACE_ORDER.forEach((t) => {
+  tracesToDraw().forEach((t) => {
     const el = root.querySelector(`[data-ch="${t.id}"]`);
     drawTrace(el, t.id, t.title, t.color, t.primary);
   });
@@ -726,15 +845,23 @@ function renderTraces() {
 }
 
 function renderProc(a) {
+  const id = procedureId(a);
+  const book = PROC_BOOK[id];
+  $("proc-id").textContent = id;
+  $("proc-title").textContent = book.title;
+  $("proc-aka").textContent = book.aka;
+  $("proc-applies").textContent = book.applies;
+  $("proc-entry").innerHTML = book.entry;
+  $("proc-goal").textContent = book.goal;
   const status = {
     confirm: a?.warn ? "Satisfied" : "",
     commands: a?.windowEvents.length ? "Satisfied" : "",
-    currents: a?.heaterA != null ? "Satisfied" : "",
-    ratio: a?.suspect ? "Satisfied" : "",
+    currents: a?.heaterA != null || a?.payloadA != null ? "Satisfied" : "",
+    ratio: a?.suspect || a?.payloadSuspect || a?.batterySuspect ? "Satisfied" : "",
     payload: a ? "Satisfied" : "",
-    inhibit: a?.suspect ? "Not sent" : "",
+    action: a?.suspect || a?.payloadSuspect || a?.batterySuspect ? "Not sent" : "",
   };
-  $("proc").innerHTML = PROC_STEPS.map((step) => {
+  $("proc").innerHTML = book.steps.map((step) => {
     const label = status[step.id];
     const done = label === "Satisfied";
     const human = step.human && Boolean(label);
@@ -748,34 +875,81 @@ function renderProc(a) {
 
 function renderDecision(a) {
   const status = $("decide-meta");
+  const fileBtn = $("file-incident");
+  const openPane = $("decide-open");
+  const filedPane = $("decide-filed");
+  const filed = state.incident?.status === "filed";
+  openPane.hidden = filed;
+  filedPane.hidden = !filed;
+  fileBtn.hidden = filed || !state.incidentId;
+  fileBtn.disabled = Boolean(state.filing);
+  fileBtn.textContent = state.filing ? "Filing…" : "File close-out";
+  if (filed) {
+    $("filed-action-title").textContent = $("decide-title").textContent || "Filed";
+    const note = (state.incident.notes || "").trim();
+    const box = $("operator-note");
+    if (note && !note.startsWith("Canonical")) {
+      box.hidden = false;
+      box.textContent = note;
+    } else {
+      box.hidden = true;
+    }
+  }
   if (!a) {
     $("decide-title").textContent = "None yet";
     $("decide-sub").textContent = "Select a case to see a recommended next step.";
     status.textContent = "";
+    fileBtn.hidden = true;
     return;
   }
   if (a.suspect) {
     $("decide-title").textContent = "Inhibit Heater B";
     $("decide-sub").textContent = "Then watch EPS.bus_voltage recover. Leave the payload as-is unless the bus does not come back.";
     status.textContent = "Not sent";
+    if (filed) {
+      $("filed-action-title").textContent = "Inhibit Heater B";
+      $("filed-action-sub").textContent = "Recorded in the library. ORBIT did not uplink.";
+    }
+    return;
+  }
+  if (a.payloadSuspect) {
+    $("decide-title").textContent = "Safe payload to STANDBY";
+    $("decide-sub").textContent = "Payload current is ≥2× healthy science. Do not inhibit Heater B.";
+    status.textContent = "Not sent";
+    if (filed) {
+      $("filed-action-title").textContent = "Safe payload to STANDBY";
+      $("filed-action-sub").textContent = "Recorded in the library. ORBIT did not uplink.";
+    }
+    return;
+  }
+  if (a.batterySuspect) {
+    $("decide-title").textContent = "Continue EPS-09";
+    $("decide-sub").textContent = "Pack sagged under a healthy load. Do not inhibit the heater or payload.";
+    status.textContent = "Not sent";
+    if (filed) {
+      $("filed-action-title").textContent = "Continue EPS-09";
+      $("filed-action-sub").textContent = "Recorded in the library. ORBIT did not uplink.";
+    }
     return;
   }
   if (!a.warn) {
     $("decide-title").textContent = "No action";
-    $("decide-sub").textContent = "No bus-voltage warn on this case.";
+    $("decide-sub").textContent = "No warn on this case.";
     status.textContent = "";
+    if (filed) $("filed-action-title").textContent = "No action";
     return;
   }
   $("decide-title").textContent = "Keep reading";
-  $("decide-sub").textContent = "Heater current is not ≥2× healthy.";
+  $("decide-sub").textContent = "No load is ≥2× healthy.";
   status.textContent = "";
+  if (filed) $("filed-action-title").textContent = "Keep reading";
 }
 
 function renderFindings() {
   const body = $("findings-body");
   const btn = $("assemble");
   btn.disabled = state.investigating || !state.incidentId;
-  btn.textContent = state.investigating ? "Assembling…" : "Assemble EPS-17 report";
+  btn.textContent = state.investigating ? "Assembling…" : "Assemble report";
   if (state.report) {
     const sections = state.report.split(/\n(?=## )/);
     body.innerHTML = sections
@@ -798,7 +972,7 @@ function renderFindings() {
     body.innerHTML = `<p class="empty">Load a run to begin.</p>`;
     return;
   }
-  body.innerHTML = `<p class="empty">The traces already show the story. Assemble the tagged EPS-17 report when you want the same evidence stamped OBSERVED / DERIVED / DOCUMENTED / HYPOTHESIS. Rules only — no paid model.</p>`;
+    body.innerHTML = `<p class="empty">The traces already show the story. Assemble the tagged report when you want the same evidence stamped OBSERVED / DERIVED / DOCUMENTED / HYPOTHESIS. Rules only — no paid model.</p>`;
 }
 
 function renderCase() {
@@ -842,6 +1016,12 @@ async function assemble() {
     if (!res.ok) throw new Error(`investigate ${res.status}`);
     const data = await res.json();
     state.report = data.report;
+    if (data.status && state.incident) state.incident.status = data.status;
+    const listed = state.incidents.find((item) => item.id === state.incidentId);
+    if (listed && data.status) listed.status = data.status;
+    renderIncidents();
+    renderAlarm(analysis());
+    renderDecision(analysis());
   } catch (err) {
     state.report = `# Could not assemble\n\n${err.message}`;
   } finally {
@@ -879,6 +1059,41 @@ async function createIncident(ev) {
   form.reset();
   fillCreateForm();
   await loadIncident(created.id);
+}
+
+async function fileIncident(ev) {
+  if (ev) ev.preventDefault();
+  if (!state.incidentId || state.filing || state.incident?.status === "filed") return;
+  state.filing = true;
+  const confirmBtn = $("confirm-file");
+  confirmBtn.disabled = true;
+  confirmBtn.textContent = "Filing…";
+  try {
+    const res = await fetch(`/incidents/${encodeURIComponent(state.incidentId)}/file`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: $("file-note").value.trim() || null }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      window.alert(err.detail || "Could not file close-out");
+      return;
+    }
+    const data = await res.json();
+    const filed = data.incident;
+    state.incident = filed;
+    state.incidents = state.incidents.map((item) => (item.id === filed.id ? { ...item, ...filed } : item));
+    closeFileSlip();
+    renderIncidents();
+    renderAlarm(analysis());
+    renderDecision(analysis());
+    $("filed-banner").scrollIntoView({ behavior: "smooth", block: "start" });
+  } finally {
+    state.filing = false;
+    confirmBtn.disabled = false;
+    confirmBtn.textContent = "File to library";
+    renderDecision(analysis());
+  }
 }
 
 async function openDoc(id) {
@@ -935,7 +1150,18 @@ function bind() {
     renderCase();
   });
   $("assemble").addEventListener("click", assemble);
-  $("open-eps17").addEventListener("click", () => openDoc("EPS-17"));
+  $("file-incident").addEventListener("click", openFileSlip);
+  $("file-form").addEventListener("submit", fileIncident);
+  $("cancel-file").addEventListener("click", closeFileSlip);
+  $("file-slip").addEventListener("click", (ev) => {
+    if (ev.target.id === "file-slip") closeFileSlip();
+  });
+  const openCloseout = () => {
+    if (state.incidentId) openDoc(state.incidentId);
+  };
+  $("open-closeout").addEventListener("click", openCloseout);
+  $("open-closeout-banner").addEventListener("click", openCloseout);
+  $("open-proc").addEventListener("click", () => openDoc(procedureId(analysis())));
   $("reader-close").addEventListener("click", closeReader);
   $("reader").addEventListener("click", (ev) => {
     if (ev.target.id === "reader") closeReader();
@@ -944,6 +1170,10 @@ function bind() {
     if (ev.key !== "Escape") return;
     if (!$("slip").hidden) {
       closeSlip();
+      return;
+    }
+    if (!$("file-slip").hidden) {
+      closeFileSlip();
       return;
     }
     closeReader();

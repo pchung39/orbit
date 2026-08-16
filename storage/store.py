@@ -18,7 +18,17 @@ import pandas as pd
 import psycopg
 from psycopg.rows import dict_row
 
-from simulator.scenarios import clock_to_s, format_clock
+from simulator.scenarios import (
+    clock_to_s,
+    format_clock,
+    run_batt003,
+    run_eps204,
+    run_inc0162,
+    run_inc0187,
+    run_inc0191,
+    run_nominal_slice,
+    run_pay002,
+)
 from simulator.simulate import SPEC_PATH, load_and_validate
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -44,15 +54,50 @@ def connect(url: str | None = None) -> psycopg.Connection:
     return psycopg.connect(url or os.environ.get("DATABASE_URL", DEFAULT_URL), row_factory=dict_row)
 
 
+def _column_exists(conn: psycopg.Connection, table: str, column: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND table_name = %s AND column_name = %s",
+        (table, column),
+    ).fetchone()
+    return row is not None
+
+
+def _skip_redundant_alter(conn: psycopg.Connection, stmt: str) -> bool:
+    """Avoid ACCESS EXCLUSIVE locks from ADD COLUMN IF NOT EXISTS on every request."""
+    text = " ".join(stmt.split())
+    prefix = "ALTER TABLE "
+    marker = " ADD COLUMN IF NOT EXISTS "
+    if not text.upper().startswith(prefix) or marker not in text.upper():
+        return False
+    # Preserve original casing for names; split on the known schema shape.
+    head, rest = text.split(" ADD COLUMN IF NOT EXISTS ", 1)
+    table = head.split()[-1]
+    column = rest.split()[0]
+    return _column_exists(conn, table, column)
+
+
 def init_schema(conn: psycopg.Connection) -> None:
     for stmt in SCHEMA_PATH.read_text().split(";"):
         stmt = stmt.strip()
-        if stmt:
-            conn.execute(stmt)
+        if not stmt:
+            continue
+        if _skip_redundant_alter(conn, stmt):
+            continue
+        conn.execute(stmt)
     conn.commit()
 
 
 def _replace_run(conn: psycopg.Connection, run_id: str) -> None:
+    filed = conn.execute(
+        "SELECT id FROM incidents WHERE run_id = %s AND status = 'filed'",
+        (run_id,),
+    ).fetchall()
+    for row in filed:
+        conn.execute(
+            "DELETE FROM documents WHERE id = %s AND path LIKE 'filed:%%'",
+            (row["id"],),
+        )
     conn.execute("DELETE FROM incidents WHERE run_id = %s", (run_id,))
     conn.execute("DELETE FROM events WHERE run_id = %s", (run_id,))
     conn.execute("DELETE FROM telemetry WHERE run_id = %s", (run_id,))
@@ -110,7 +155,6 @@ def ingest_run(
 def ingest_documents(conn: psycopg.Connection, spec: dict[str, Any]) -> int:
     from storage.embed import as_pgvector, embed_texts
 
-    conn.execute("DELETE FROM documents")
     docs: list[tuple[str, str, str, str, str]] = []
     for proc_id, meta in spec["procedures_referenced"].items():
         path = ROOT / meta["path"]
@@ -118,6 +162,9 @@ def ingest_documents(conn: psycopg.Connection, spec: dict[str, Any]) -> int:
     for inc in spec["historical_incidents_to_author"]:
         path = ROOT / inc["path"]
         docs.append((inc["id"], "incident", inc["id"], str(path), path.read_text()))
+
+    authored = [doc_id for doc_id, *_ in docs]
+    conn.execute("DELETE FROM documents WHERE id = ANY(%s)", (authored,))
 
     for doc_id, kind, title, path, body in docs:
         conn.execute(
@@ -146,11 +193,15 @@ def events_for_run(spec: dict[str, Any], run_id: str) -> list[tuple[float, str, 
                 (clock_to_s(event["t"]), event["event"], event["channel"], event["action"])
             )
         return out
-    if run_id == "inc0187":
-        return [
-            (clock_to_s("01:52:00"), "command", "THM.heater_b_current", "HEATER_B_ENABLE"),
-        ]
-    return []
+    catalog = {
+        "inc0187": [(clock_to_s("01:52:00"), "command", "THM.heater_b_current", "HEATER_B_ENABLE")],
+        "pay002": [(clock_to_s("10:12:00"), "mode_change", "PAY.mode", "SCIENCE_MODE")],
+        "inc0191": [(clock_to_s("08:14:00"), "mode_change", "PAY.mode", "SCIENCE_MODE")],
+        "batt003": [(clock_to_s("00:10:00"), "command", "THM.heater_b_current", "HEATER_B_ENABLE")],
+        "inc0162": [(clock_to_s("00:18:00"), "command", "THM.heater_b_current", "HEATER_B_ENABLE")],
+        "nominal": [(clock_to_s("12:10:00"), "mode_change", "PAY.mode", "SCIENCE_MODE")],
+    }
+    return list(catalog.get(run_id, []))
 
 
 def query_channel(
@@ -188,19 +239,25 @@ def list_runs(conn: psycopg.Connection) -> list[dict[str, Any]]:
     )
 
 
+_INCIDENT_COLS = (
+    "id, title, run_id, alarm, status, opened_at, notes, filed_at, closeout"
+)
+_INCIDENT_LIST_COLS = (
+    "id, title, run_id, alarm, status, opened_at, notes, filed_at"
+)
+
+
 def list_incidents(conn: psycopg.Connection) -> list[dict[str, Any]]:
     return list(
         conn.execute(
-            "SELECT id, title, run_id, alarm, status, opened_at, notes "
-            "FROM incidents ORDER BY opened_at DESC, id DESC"
+            f"SELECT {_INCIDENT_LIST_COLS} FROM incidents ORDER BY opened_at DESC, id DESC"
         ).fetchall()
     )
 
 
 def get_incident(conn: psycopg.Connection, incident_id: str) -> dict[str, Any] | None:
     return conn.execute(
-        "SELECT id, title, run_id, alarm, status, opened_at, notes "
-        "FROM incidents WHERE id = %s",
+        f"SELECT {_INCIDENT_COLS} FROM incidents WHERE id = %s",
         (incident_id,),
     ).fetchone()
 
@@ -240,26 +297,115 @@ def create_incident(
     return dict(row)
 
 
+SEED_INCIDENTS = (
+    (
+        "INC-0204",
+        "Bus voltage warn",
+        "eps204",
+        "EPS.bus_voltage",
+        "open",
+        "2026-08-14T14:32:00Z",
+        "Canonical EPS-204 demo. Operator already had the alarm; ORBIT did not detect it.",
+    ),
+    (
+        "INC-0205",
+        "Heater-only bus sag",
+        "fault1",
+        "EPS.bus_voltage",
+        "open",
+        "2026-08-14T14:32:00Z",
+        "Same heater fault as EPS-204; payload stayed STANDBY.",
+    ),
+    (
+        "INC-0210",
+        "Payload current warn",
+        "pay002",
+        "PAY.payload_current",
+        "open",
+        "2026-08-14T10:12:00Z",
+        "FAULT-002 contrast. Payload is actually guilty. Do not inhibit Heater B.",
+    ),
+    (
+        "INC-0211",
+        "Battery voltage warn",
+        "batt003",
+        "EPS.battery_voltage",
+        "open",
+        "2026-08-14T00:10:00Z",
+        "FAULT-003 contrast. Pack IR sag with a healthy heater.",
+    ),
+)
+
+
 def ensure_demo_incident(conn: psycopg.Connection) -> None:
-    """One open incident so the console is not an empty tape list."""
-    if list_incidents(conn):
-        return
-    if not any(row["id"] == "eps204" for row in list_runs(conn)):
-        return
-    conn.execute(
-        "INSERT INTO incidents (id, title, run_id, alarm, status, opened_at, notes) "
-        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-        (
-            "INC-0204",
-            "Bus voltage warn",
-            "eps204",
-            "EPS.bus_voltage",
-            "open",
-            "2026-08-14T14:32:00Z",
-            "Canonical EPS-204 demo. Operator already had the alarm; ORBIT did not detect it.",
-        ),
-    )
+    """Seed the open roster if those ids are missing. Does not wipe operator incidents."""
+    existing = {row["id"] for row in list_incidents(conn)}
+    runs = {row["id"] for row in list_runs(conn)}
+    for incident_id, title, run_id, alarm, status, opened, notes in SEED_INCIDENTS:
+        if incident_id in existing or run_id not in runs:
+            continue
+        conn.execute(
+            "INSERT INTO incidents (id, title, run_id, alarm, status, opened_at, notes) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+            (incident_id, title, run_id, alarm, status, opened, notes),
+        )
     conn.commit()
+
+
+def mark_incident_recommended(conn: psycopg.Connection, incident_id: str) -> dict[str, Any] | None:
+    row = get_incident(conn, incident_id)
+    if row is None:
+        return None
+    if row["status"] == "open":
+        conn.execute(
+            "UPDATE incidents SET status = %s WHERE id = %s",
+            ("recommended", incident_id),
+        )
+        conn.commit()
+        row = get_incident(conn, incident_id)
+    return dict(row) if row else None
+
+
+def upsert_filed_document(conn: psycopg.Connection, incident_id: str, title: str, body: str) -> None:
+    from storage.embed import as_pgvector, embed_texts
+
+    path = f"filed:{incident_id}"
+    conn.execute(
+        "INSERT INTO documents (id, kind, title, path, body) VALUES (%s, %s, %s, %s, %s) "
+        "ON CONFLICT (id) DO UPDATE SET title = EXCLUDED.title, path = EXCLUDED.path, body = EXCLUDED.body",
+        (incident_id, "incident", title, path, body),
+    )
+    vec = as_pgvector(embed_texts([f"{title}\n{body}"])[0])
+    conn.execute(
+        "UPDATE documents SET embedding = %s::vector WHERE id = %s",
+        (vec, incident_id),
+    )
+
+
+def file_incident(
+    conn: psycopg.Connection,
+    incident_id: str,
+    closeout: str,
+    operator_note: str | None = None,
+) -> dict[str, Any]:
+    from datetime import datetime, timezone
+
+    row = get_incident(conn, incident_id)
+    if row is None:
+        raise ValueError(f"unknown incident {incident_id}")
+    if row["status"] == "filed":
+        raise ValueError(f"{incident_id} is already filed")
+    filed_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    remark = (operator_note or "").strip() or None
+    conn.execute(
+        "UPDATE incidents SET status = %s, filed_at = %s, closeout = %s, notes = %s WHERE id = %s",
+        ("filed", filed_at, closeout, remark, incident_id),
+    )
+    upsert_filed_document(conn, incident_id, row["title"], closeout)
+    conn.commit()
+    out = get_incident(conn, incident_id)
+    assert out is not None
+    return dict(out)
 
 
 def list_documents(conn: psycopg.Connection) -> list[dict[str, Any]]:
@@ -300,13 +446,49 @@ def search_documents(conn: psycopg.Connection, query: str, limit: int = 5) -> li
     )
 
 
+RUN_GENERATORS = {
+    "eps204": lambda spec: run_eps204(spec, with_science_mode=True),
+    "fault1": lambda spec: run_eps204(spec, with_science_mode=False),
+    "inc0187": run_inc0187,
+    "pay002": run_pay002,
+    "inc0191": run_inc0191,
+    "batt003": run_batt003,
+    "inc0162": run_inc0162,
+    "nominal": run_nominal_slice,
+}
+
+
+def _ensure_run_csv(spec: dict[str, Any], run_id: str, path: Path) -> None:
+    gen = RUN_GENERATORS.get(run_id)
+    if gen is None:
+        return
+    if path.exists() and run_id != "nominal":
+        return
+    if path.exists() and run_id == "nominal":
+        # Older 3-day nominal tapes are too large for the console workspace.
+        with path.open() as handle:
+            n = sum(1 for _ in handle) - 1
+        if n <= 2000:
+            return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df = gen(spec)
+    df.to_csv(path, index=False)
+    print(f"wrote {path}")
+
+
 def _ingest_defaults(conn: psycopg.Connection, spec: dict[str, Any]) -> None:
     catalog = (
         ("eps204", "eps204", ROOT / "runs" / "eps204.csv", "demo: heater fault + science-mode confounder"),
         ("fault1", "fault1", ROOT / "runs" / "fault1.csv", "heater fault only"),
         ("inc0187", "inc0187", ROOT / "runs" / "inc0187.csv", "prior incident source run"),
+        ("pay002", "pay002", ROOT / "runs" / "pay002.csv", "payload overcurrent on SCIENCE_MODE"),
+        ("inc0191", "inc0191", ROOT / "runs" / "inc0191.csv", "prior payload-spike source run"),
+        ("batt003", "batt003", ROOT / "runs" / "batt003.csv", "pack IR sag, heater healthy"),
+        ("inc0162", "inc0162", ROOT / "runs" / "inc0162.csv", "prior pack-IR source run"),
+        ("nominal", "nominal", ROOT / "runs" / "nominal.csv", "healthy SCIENCE_MODE control tape"),
     )
     for run_id, scenario, path, notes in catalog:
+        _ensure_run_csv(spec, run_id, path)
         if not path.exists():
             print(f"skip {run_id}: {path} not found")
             continue
@@ -322,7 +504,7 @@ def main() -> None:
     parser.add_argument("--url", default=None, help="Postgres URL (default DATABASE_URL or local compose)")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    sub.add_parser("ingest", help="load default runs + EPS-17 + INC-0187")
+    sub.add_parser("ingest", help="load default runs + procedures + historical incidents")
 
     ch = sub.add_parser("channel", help="read one channel in a time window")
     ch.add_argument("run_id")

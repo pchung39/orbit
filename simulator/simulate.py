@@ -162,11 +162,18 @@ def validate_spec(spec: dict[str, Any]) -> list[str]:
             if field not in channel:
                 problems.append(f"{name}: missing field {field}")
 
-    fault = spec.get("fault_library", {}).get("HEATER_B_OVERCURRENT")
-    if not isinstance(fault, dict):
+    faults = spec.get("fault_library", {})
+    heater = faults.get("HEATER_B_OVERCURRENT")
+    if not isinstance(heater, dict):
         problems.append("fault_library.HEATER_B_OVERCURRENT is missing")
-    elif "fault_multiplier_on_heater_current" not in fault:
+    elif "fault_multiplier_on_heater_current" not in heater:
         problems.append("HEATER_B_OVERCURRENT missing fault_multiplier_on_heater_current")
+    payload = faults.get("PAYLOAD_POWER_SPIKE")
+    if not isinstance(payload, dict) or "fault_multiplier_on_payload_current" not in payload:
+        problems.append("PAYLOAD_POWER_SPIKE missing fault_multiplier_on_payload_current")
+    battery = faults.get("BATTERY_RESISTANCE_DEGRADATION")
+    if not isinstance(battery, dict) or "fault_multiplier_on_internal_resistance" not in battery:
+        problems.append("BATTERY_RESISTANCE_DEGRADATION missing fault_multiplier_on_internal_resistance")
 
     script = spec.get("demo_scenario_EPS204", {}).get("script")
     if not isinstance(script, list) or not script:
@@ -346,14 +353,15 @@ def step(
     i_batt = regulated_battery_current(
         i_solar, i_bus, state.soc_pct, assumptions.charge_taper_start_pct
     )
-    v_batt = battery_voltage_v(
-        state.soc_pct, i_batt, c["battery_internal_resistance_ohm_nominal"], assumptions
+    r_batt = c["battery_internal_resistance_ohm_nominal"] * active_fault_multiplier(
+        "battery_internal_resistance", state.t_s, faults
     )
+    v_batt = battery_voltage_v(state.soc_pct, i_batt, r_batt, assumptions)
     v_bus = bus_voltage_v(v_batt, i_bus, assumptions)
     p_payload = i_payload * v_bus
 
     heater_heat = (i_heater**2) * c["heater_b_nominal_resistance_ohm"]
-    batt_heat = (i_batt**2) * c["battery_internal_resistance_ohm_nominal"]
+    batt_heat = (i_batt**2) * r_batt
     t_eq_heater = mix(
         assumptions.t_amb_heater_eclipse_c, assumptions.t_amb_heater_sun_c, illum
     ) + assumptions.heater_temp_gain * heater_heat

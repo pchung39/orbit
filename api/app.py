@@ -14,6 +14,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from agent.closeout import build_closeout
 from agent.investigate import investigate_rules
 from simulator.scenarios import clock_to_s, format_clock
 from simulator.simulate import load_and_validate
@@ -21,12 +22,14 @@ from storage.store import (
     connect,
     create_incident,
     ensure_demo_incident,
+    file_incident,
     get_document,
     get_incident,
     init_schema,
     list_documents,
     list_incidents,
     list_runs,
+    mark_incident_recommended,
     query_channel,
     query_events,
     search_documents,
@@ -37,6 +40,8 @@ UI_DIR = Path(__file__).resolve().parent.parent / "ui"
 WORKSPACE_CHANNELS = (
     "EPS.bus_voltage",
     "EPS.bus_current",
+    "EPS.battery_voltage",
+    "EPS.solar_array_current",
     "THM.heater_b_current",
     "PAY.payload_current",
     "PAY.mode",
@@ -190,18 +195,51 @@ def workspace_payload(
 
 
 @app.post("/incidents/{incident_id}/investigate")
-def investigate_incident(incident_id: str) -> dict[str, str]:
+def investigate_incident(incident_id: str) -> dict[str, Any]:
     with _conn() as conn:
         row = get_incident(conn, incident_id)
         if row is None:
             raise HTTPException(404, f"unknown incident {incident_id}")
+        mark_incident_recommended(conn, incident_id)
+        row = get_incident(conn, incident_id) or row
     report = investigate_rules(row["run_id"], alarm_channel=row["alarm"])
     return {
         "incident_id": incident_id,
         "run_id": row["run_id"],
         "provider": "rules",
         "alarm": row["alarm"],
+        "status": row["status"],
         "report": report,
+    }
+
+
+class FileIn(BaseModel):
+    note: str | None = Field(default=None)
+
+
+@app.post("/incidents/{incident_id}/file")
+def file_open_incident(incident_id: str, body: FileIn | None = None) -> dict[str, Any]:
+    """Write a library close-out. Does not command the spacecraft."""
+    note = (body.note if body else None) or None
+    if note:
+        note = note.strip() or None
+    with _conn() as conn:
+        row = get_incident(conn, incident_id)
+        if row is None:
+            raise HTTPException(404, f"unknown incident {incident_id}")
+        if row["status"] == "filed":
+            raise HTTPException(409, f"{incident_id} is already filed")
+    report = investigate_rules(row["run_id"], alarm_channel=row["alarm"])
+    closeout = build_closeout(dict(row), report, note)
+    try:
+        with _conn() as conn:
+            filed = file_incident(conn, incident_id, closeout, operator_note=note)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {
+        "incident": filed,
+        "document_id": filed["id"],
+        "status": filed["status"],
     }
 
 

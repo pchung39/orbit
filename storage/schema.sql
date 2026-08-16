@@ -54,3 +54,6 @@ CREATE TABLE IF NOT EXISTS incidents (
     opened_at TEXT NOT NULL,
     notes TEXT
 );
+
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS filed_at TEXT;
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS closeout TEXT;

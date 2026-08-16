@@ -37,14 +37,14 @@
         <div class="mission">
           <div class="craft">
             <svg class="logo-aurora" viewBox="0 0 48 48" aria-hidden="true">
-              <circle cx="24" cy="24" r="22.5" fill="#1c1b18" />
-              <circle cx="24" cy="24" r="20" fill="#f4efe3" />
-              <path d="M8 31c7-12 12-19 16-19s9 7 16 19" fill="none" stroke="#2a9d8f" stroke-width="2.4" stroke-linecap="round" />
-              <path d="M10 33c6.5-10 11-16 14-16s7.5 6 14 16" fill="none" stroke="#7b5ea7" stroke-width="2" stroke-linecap="round" />
-              <path d="M12 35c5.5-8 9-12 12-12s6.5 4 12 12" fill="none" stroke="#e9c46a" stroke-width="1.8" stroke-linecap="round" />
-              <path d="M24 11l3.4 8H20.6L24 11z" fill="#1c1b18" />
-              <rect x="22.6" y="18.6" width="2.8" height="5.2" rx="0.5" fill="#1c1b18" />
-              <circle cx="24" cy="26.4" r="1.2" fill="#e76f51" />
+              <circle cx="24" cy="24" r="22.5" fill="#0c1922" />
+              <circle cx="24" cy="24" r="20" fill="#f4f6f7" />
+              <path d="M8 31c7-12 12-19 16-19s9 7 16 19" fill="none" stroke="#1f8a7a" stroke-width="2.4" stroke-linecap="round" />
+              <path d="M10 33c6.5-10 11-16 14-16s7.5 6 14 16" fill="none" stroke="#3d4a52" stroke-width="2" stroke-linecap="round" />
+              <path d="M12 35c5.5-8 9-12 12-12s6.5 4 12 12" fill="none" stroke="#1d4e89" stroke-width="1.8" stroke-linecap="round" />
+              <path d="M24 11l3.4 8H20.6L24 11z" fill="#0c1922" />
+              <rect x="22.6" y="18.6" width="2.8" height="5.2" rx="0.5" fill="#0c1922" />
+              <circle cx="24" cy="26.4" r="1.2" fill="#c45c12" />
             </svg>
             <div>
               <p class="eyebrow">Spacecraft</p>
@@ -56,7 +56,10 @@
 
         <header class="case-head" id="alarm">
           <div>
-            <p class="eyebrow" id="alarm-kicker">Incident</p>
+            <div class="kicker-row">
+              <p class="eyebrow" id="alarm-kicker">Incident</p>
+              <span class="chip" id="status-chip" hidden></span>
+            </div>
             <h1 id="alarm-title">Select an incident</h1>
             <p class="lede" id="alarm-lede">ORBIT assembles telemetry, commands, procedures, and prior incidents for a human decision.</p>
             <p class="case-meta" id="case-meta"></p>
@@ -67,21 +70,33 @@
           </div>
         </header>
 
-        <section id="compare">
+        <div class="filed-banner" id="filed-banner" hidden>
+          <p class="stamp">Filed</p>
+          <div>
+            <p class="filed-banner-title">This incident is in the library</p>
+            <p class="filed-banner-copy" id="filed-banner-copy">Close-out recorded. The recommended command was not sent.</p>
+          </div>
+          <button type="button" class="btn btn-ghost" id="open-closeout-banner">Read close-out</button>
+        </div>
+
+        <section class="panel panel-compare" id="compare">
+          <p class="panel-kicker">01 · Evidence</p>
           <h2>Loads at the warn</h2>
-          <p class="hint">Currents at the first voltage warn. The last command is not automatically the cause.</p>
+          <p class="hint">Currents at the first warn. The last command is not automatically the cause.</p>
           <div class="compare" id="compare-grid"></div>
         </section>
 
-        <section id="commands">
-          <h2>Commands</h2>
-          <p class="hint">Ten minutes before the first warn. Click a row to pin that time on the traces.</p>
+        <section class="panel panel-commands" id="commands">
+          <p class="panel-kicker">02 · Commands</p>
+          <h2>Ten minutes before the warn</h2>
+          <p class="hint">Click a row to pin that time on the traces.</p>
           <ol class="timeline" id="timeline"></ol>
         </section>
 
-        <section id="traces">
+        <section class="panel panel-traces" id="traces">
           <div class="row">
             <div>
+              <p class="panel-kicker">03 · Tape</p>
               <h2>Telemetry</h2>
               <p class="hint" id="trace-caption">Shared time axis. Dashed lines are commands and the first warn.</p>
             </div>
@@ -95,53 +110,69 @@
           <p class="hover-read" id="hover-read"></p>
         </section>
 
-        <section id="findings">
+        <section class="panel panel-findings" id="findings">
           <div class="row">
             <div>
-              <h2>Report</h2>
+              <p class="panel-kicker">04 · Report</p>
+              <h2>Tagged investigation</h2>
               <p class="hint">Claims tagged OBSERVED, DERIVED, DOCUMENTED, or HYPOTHESIS.</p>
             </div>
             <button type="button" class="btn" id="assemble">Assemble report</button>
           </div>
           <div class="findings" id="findings-body">
-            <p class="empty">Assemble the EPS-17 report to stamp this case. Rules only — no paid model.</p>
+            <p class="empty">Assemble the tagged report to stamp this case. Rules only — no paid model.</p>
           </div>
         </section>
 
-        <section id="action">
-          <p class="eyebrow">Suggested action</p>
-          <h2 id="decide-title">None yet</h2>
-          <p class="lede" id="decide-sub">Select a case to see a recommended next step.</p>
-          <p class="action-status" id="decide-meta"></p>
+        <section class="panel panel-decide" id="action">
+          <div id="decide-open">
+            <p class="panel-kicker">05 · Decision</p>
+            <p class="eyebrow">Suggested action</p>
+            <h2 id="decide-title">None yet</h2>
+            <p class="lede" id="decide-sub">Select a case to see a recommended next step.</p>
+            <p class="action-status" id="decide-meta"></p>
+            <div class="form-actions action-row">
+              <button type="button" class="btn" id="file-incident" hidden>File close-out</button>
+            </div>
+          </div>
+          <div id="decide-filed" hidden>
+            <p class="panel-kicker">05 · Closed</p>
+            <p class="stamp">Filed · not sent</p>
+            <h2 id="filed-action-title">Inhibit Heater B</h2>
+            <p class="lede" id="filed-action-sub">Recorded in the library. ORBIT did not uplink.</p>
+            <blockquote class="operator-note" id="operator-note" hidden></blockquote>
+            <button type="button" class="text-btn" id="open-closeout">Read full close-out</button>
+          </div>
         </section>
 
-        <section id="procedure">
+        <section class="panel panel-proc" id="procedure">
           <article class="procedure">
+            <p class="panel-kicker">06 · Book</p>
             <p class="eyebrow">Original procedure</p>
             <header class="proc-head">
-              <p class="proc-id">EPS-17</p>
+              <p class="proc-id" id="proc-id">EPS-17</p>
               <div>
-                <h2>EPS low-voltage response</h2>
-                <p class="proc-aka">Check recently activated nonessential loads</p>
+                <h2 id="proc-title">EPS low-voltage response</h2>
+                <p class="proc-aka" id="proc-aka">Check recently activated nonessential loads</p>
               </div>
             </header>
             <dl class="proc-meta">
               <div>
                 <dt>Applies to</dt>
-                <dd>Aurora-1 Electrical Power System</dd>
+                <dd id="proc-applies">Aurora-1 Electrical Power System</dd>
               </div>
               <div>
                 <dt>Entry</dt>
-                <dd><code>EPS.bus_voltage</code> at or below warn (26.5 V)</dd>
+                <dd id="proc-entry"><code>EPS.bus_voltage</code> at or below warn (26.5 V)</dd>
               </div>
               <div>
                 <dt>Goal</dt>
-                <dd>Find the load that just came on. Do not guess the payload first.</dd>
+                <dd id="proc-goal">Find the load that just came on. Do not guess the payload first.</dd>
               </div>
             </dl>
-            <p class="hint">Green on a step means this incident already has the evidence. It is not a sign-off. Step 6 is still a human command — ORBIT does not send it.</p>
+            <p class="hint">Green on a step means this incident already has the evidence. It is not a sign-off. The last step is still a human command — ORBIT does not send it.</p>
             <ol class="proc" id="proc"></ol>
-            <button type="button" class="text-btn" id="open-eps17">Open full procedure</button>
+            <button type="button" class="text-btn" id="open-proc">Open full procedure</button>
           </article>
         </section>
       </main>
@@ -171,6 +202,30 @@
               <button type="button" class="text-btn" id="cancel-incident">Cancel</button>
               <button type="submit" class="btn">Open incident</button>
             </div>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="slip-wrap" id="file-slip" hidden>
+      <div class="slip slip-file" role="dialog" aria-modal="true" aria-labelledby="file-slip-title">
+        <aside class="slip-stub">
+          <div>
+            <p class="eyebrow" id="file-slip-title">File</p>
+            <p class="slip-id" id="file-slip-id">INC-····</p>
+          </div>
+          <p class="slip-stub-note">Stamps the library. Does not uplink a command.</p>
+        </aside>
+        <form class="slip-body" id="file-form">
+          <p class="pick-label">Recommended action</p>
+          <p class="file-action" id="file-slip-action">Inhibit Heater B</p>
+          <p class="hint">You are accepting this as the close. Step 6 stays <strong>Not sent</strong>.</p>
+          <label class="slip-title-field">Operator remark
+            <textarea name="note" id="file-note" rows="4" placeholder="Heater was already ~3× before SCIENCE_MODE. Do not safe the payload."></textarea>
+          </label>
+          <div class="form-actions">
+            <button type="button" class="text-btn" id="cancel-file">Cancel</button>
+            <button type="submit" class="btn" id="confirm-file">File to library</button>
           </div>
         </form>
       </div>

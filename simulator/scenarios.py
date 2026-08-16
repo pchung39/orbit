@@ -1,4 +1,4 @@
-"""Named runs on top of the sim core: EPS-204, fault #1, INC-0187 source.
+"""Named runs on top of the sim core.
 
 Does not compute physics. It schedules commands, injects faults, and checks
 the demo script's timestamps against a finished dataframe.
@@ -50,6 +50,26 @@ def heater_overcurrent_fault(spec: dict[str, Any], onset_s: float) -> ActiveFaul
     )
 
 
+def payload_spike_fault(spec: dict[str, Any], onset_s: float) -> ActiveFault:
+    fault = spec["fault_library"]["PAYLOAD_POWER_SPIKE"]
+    return ActiveFault(
+        name="PAYLOAD_POWER_SPIKE",
+        onset_s=onset_s,
+        channel="PAY.payload_current",
+        multiplier=float(fault["fault_multiplier_on_payload_current"]),
+    )
+
+
+def battery_ir_fault(spec: dict[str, Any], onset_s: float) -> ActiveFault:
+    fault = spec["fault_library"]["BATTERY_RESISTANCE_DEGRADATION"]
+    return ActiveFault(
+        name="BATTERY_RESISTANCE_DEGRADATION",
+        onset_s=onset_s,
+        channel="battery_internal_resistance",
+        multiplier=float(fault["fault_multiplier_on_internal_resistance"]),
+    )
+
+
 def run_heater_fault(
     spec: dict[str, Any],
     start_clock: str,
@@ -94,6 +114,90 @@ def run_inc0187(spec: dict[str, Any]) -> pd.DataFrame:
         heater_enable="01:52:00",
         science_mode=None,
         epoch=epoch,
+    )
+
+
+def run_payload_fault(
+    spec: dict[str, Any],
+    start_clock: str,
+    end_clock: str,
+    science_mode: str,
+    epoch: datetime | None = None,
+) -> pd.DataFrame:
+    """Payload overcurrent on SCIENCE_MODE. Heater stays off."""
+    assumptions = Assumptions(
+        initial_soc_pct=100.0,
+        t_batt_init_c=18.0,
+        t_heater_init_c=18.0,
+        epoch=epoch or Assumptions().epoch,
+    )
+    start_s = clock_to_s(start_clock)
+    onset = clock_to_s(science_mode)
+    return run_simulation(
+        spec,
+        duration_s=clock_to_s(end_clock) - start_s,
+        assumptions=assumptions,
+        faults=[payload_spike_fault(spec, onset)],
+        state=initial_state(assumptions, t_s=start_s),
+        commands=[(onset, "SCIENCE_MODE")],
+    )
+
+
+def run_pay002(spec: dict[str, Any]) -> pd.DataFrame:
+    return run_payload_fault(spec, "10:00:00", "10:40:00", "10:12:00")
+
+
+def run_inc0191(spec: dict[str, Any]) -> pd.DataFrame:
+    """Prior payload spike — source for INC-0191."""
+    epoch = datetime(2026, 5, 2, tzinfo=timezone.utc)
+    return run_payload_fault(spec, "08:00:00", "08:40:00", "08:14:00", epoch=epoch)
+
+
+def run_battery_fault(
+    spec: dict[str, Any],
+    start_clock: str,
+    end_clock: str,
+    heater_enable: str,
+    epoch: datetime | None = None,
+) -> pd.DataFrame:
+    """High pack IR in eclipse. Heater ON and healthy so there is discharge load."""
+    assumptions = Assumptions(
+        initial_soc_pct=90.0,
+        t_batt_init_c=10.0,
+        t_heater_init_c=14.0,
+        epoch=epoch or Assumptions().epoch,
+    )
+    start_s = clock_to_s(start_clock)
+    return run_simulation(
+        spec,
+        duration_s=clock_to_s(end_clock) - start_s,
+        assumptions=assumptions,
+        faults=[battery_ir_fault(spec, start_s)],
+        state=initial_state(assumptions, t_s=start_s),
+        commands=[(clock_to_s(heater_enable), "HEATER_B_ENABLE")],
+    )
+
+
+def run_batt003(spec: dict[str, Any]) -> pd.DataFrame:
+    return run_battery_fault(spec, "00:00:00", "00:45:00", "00:10:00")
+
+
+def run_inc0162(spec: dict[str, Any]) -> pd.DataFrame:
+    """Prior pack-IR sag — source for INC-0162."""
+    epoch = datetime(2026, 4, 22, tzinfo=timezone.utc)
+    return run_battery_fault(spec, "00:05:00", "00:50:00", "00:18:00", epoch=epoch)
+
+
+def run_nominal_slice(spec: dict[str, Any]) -> pd.DataFrame:
+    """Healthy sunlit window with a normal SCIENCE_MODE pass — control tape."""
+    assumptions = Assumptions(initial_soc_pct=95.0, epoch=Assumptions().epoch)
+    start_s = clock_to_s("12:00:00")
+    return run_simulation(
+        spec,
+        duration_s=clock_to_s("12:40:00") - start_s,
+        assumptions=assumptions,
+        state=initial_state(assumptions, t_s=start_s),
+        commands=[(clock_to_s("12:10:00"), "SCIENCE_MODE")],
     )
 
 
