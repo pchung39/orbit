@@ -1,11 +1,11 @@
 const ALARM = "EPS.bus_voltage";
 const TRACE_CATALOG = [
-  { id: "EPS.bus_voltage", title: "Bus voltage", color: "var(--bus)" },
-  { id: "EPS.battery_voltage", title: "Battery voltage", color: "var(--accent)" },
-  { id: "THM.heater_b_current", title: "Heater B current", color: "var(--heater)" },
-  { id: "PAY.payload_current", title: "Payload current", color: "var(--payload)" },
-  { id: "EPS.bus_current", title: "Bus current", color: "var(--ink)" },
-  { id: "EPS.solar_array_current", title: "Solar array current", color: "var(--mute)" },
+  { id: "EPS.bus_voltage", title: "Bus voltage", color: "var(--ch-bus)" },
+  { id: "EPS.battery_voltage", title: "Battery voltage", color: "var(--ch-batt)" },
+  { id: "THM.heater_b_current", title: "Heater B current", color: "var(--ch-heater)" },
+  { id: "PAY.payload_current", title: "Payload current", color: "var(--ch-payload)" },
+  { id: "EPS.bus_current", title: "Bus current", color: "var(--ch-busi)" },
+  { id: "EPS.solar_array_current", title: "Solar array current", color: "var(--ch-solar)" },
 ];
 
 const TAPE_ORDER = ["eps204", "fault1", "pay002", "batt003", "nominal", "inc0187", "inc0191", "inc0162"];
@@ -175,6 +175,7 @@ const state = {
   workspace: null,
   desk: null,
   deskRunId: "eps204",
+  incidentFilter: "all",
   window: "focus",
   pinT: null,
   hoverT: null,
@@ -185,7 +186,7 @@ const state = {
   libraryQuery: "",
   libraryHits: null,
   librarySearching: false,
-  libraryPinned: false,
+  libraryKind: "all",
   libraryOpen: false,
   openDocId: null,
   openDoc: null,
@@ -674,42 +675,140 @@ function updateReadouts() {
   });
 }
 
+const INC_FILTERS = [
+  { id: "all", label: "All", match: () => true },
+  { id: "open", label: "Open", match: (item) => item.status !== "filed" && item.status !== "recommended" },
+  { id: "ready", label: "Ready", match: (item) => item.status === "recommended" },
+  { id: "filed", label: "Filed", match: (item) => item.status === "filed" },
+];
+
 function renderIncidents() {
   const byTime = (a, b) =>
     statusRank(a.status) - statusRank(b.status) || String(b.opened_at || "").localeCompare(String(a.opened_at || ""));
-  const active = state.incidents.filter((item) => item.status !== "filed").sort(byTime);
-  const ready = active.filter((item) => item.status === "recommended");
-  const filed = state.incidents.filter((item) => item.status === "filed").sort(byTime);
+  const all = [...state.incidents].sort(byTime);
+  const count = (id) => all.filter(INC_FILTERS.find((f) => f.id === id).match).length;
+  const nOpen = count("open");
+  const nReady = count("ready");
+  const nFiled = count("filed");
+
+  const tabN = $("tab-incidents-n");
+  if (tabN) tabN.textContent = nOpen + nReady ? String(nOpen + nReady) : "";
 
   const hero = $("inc-head");
   if (hero) {
-    const walk = active.length
-      ? `${active.length} to walk${ready.length ? ` · ${ready.length} ready to file` : ""}`
-      : "No open cases";
     hero.innerHTML = `<div>
-      <p class="craft-kicker">Aurora-1</p>
+      <p class="craft-kicker">Aurora-1 · case log</p>
       <h1>Incidents</h1>
-      <p class="inc-lede">Walk a case you already opened, or open one from an alarm you already have. ORBIT does not detect or uplink.</p>
-      <p class="inc-meta">${walk}</p>
+      <p class="inc-lede">Walk a case you already opened, or open one from an alarm you already have. ORBIT does not detect anomalies and does not uplink commands.</p>
+      <div class="inc-stats">
+        ${[
+          { id: "open", n: nOpen, label: "Open" },
+          { id: "ready", n: nReady, label: "Ready to file" },
+          { id: "filed", n: nFiled, label: "Filed" },
+        ]
+          .map(
+            (s) =>
+              `<button type="button" class="inc-stat tone-${s.id} ${state.incidentFilter === s.id ? "is-on" : ""}" data-filter="${s.id}">
+                <span class="n">${s.n}</span><span class="l">${s.label}</span>
+              </button>`
+          )
+          .join("")}
+      </div>
     </div>
     <button type="button" class="btn" data-open-slip>Open case</button>`;
   }
 
+  const bar = $("inc-bar");
+  if (bar) {
+    bar.innerHTML = `<div class="inc-filters" role="group" aria-label="Filter cases">${INC_FILTERS.map(
+      (f) =>
+        `<button type="button" class="inc-filter ${f.id === state.incidentFilter ? "is-on" : ""}" data-filter="${f.id}">${f.label}<span class="n">${count(f.id)}</span></button>`
+    ).join("")}</div>`;
+  }
+
+  renderIncidentSide(all);
+
   const list = $("inc-list");
   if (!list) return;
+  const active = INC_FILTERS.find((f) => f.id === state.incidentFilter) || INC_FILTERS[0];
+  const rows = all.filter(active.match);
+  if (!rows.length) {
+    list.innerHTML = `<p class="inc-empty">No cases in this view. Open one from an alarm you already have.</p>`;
+    return;
+  }
   const cols = `<div class="inc-cols" aria-hidden="true">
     <span>Case</span><span>Alarm</span><span>Tape</span><span>Opened</span><span>Status</span>
   </div>`;
-  const activeBlock = active.length
-    ? `<div class="inc-table">${cols}${active.map(incRow).join("")}</div>`
-    : `<p class="hint">Nothing to walk. Open a case from an alarm you already have.</p>`;
-  const filedBlock = filed.length
-    ? `<section class="inc-filed">
-        <p class="panel-kicker">Filed</p>
-        <div class="inc-table">${cols}${filed.map(incRow).join("")}</div>
+  list.innerHTML = `<div class="inc-table">${cols}${rows.map(incRow).join("")}</div>`;
+}
+
+/* A case list shows cases. This rail shows the craft: what is waiting on you,
+   and which faults keep coming back with what they closed on last time. */
+function renderIncidentSide(all) {
+  const side = $("inc-side");
+  if (!side) return;
+
+  const ready = all.filter((item) => item.status === "recommended");
+  const queue = ready.length
+    ? `<section class="side-card is-queue">
+        <p class="panel-kicker">Next up</p>
+        <h3>${ready.length} ready to file</h3>
+        <p class="hint">Walked and stamped. One step from the record — still not sent.</p>
+        ${ready
+          .slice(0, 3)
+          .map(
+            (item) => `<button type="button" class="queue-case" data-open-case="${escapeHtml(item.id)}">
+              <span class="id">${escapeHtml(item.id)}</span>
+              <span class="act">${escapeHtml(caseAction(item) || "Review the report")}</span>
+              <span class="why">${escapeHtml(alarmTitle(item.alarm))} · decision not filed</span>
+            </button>`
+          )
+          .join("")}
       </section>`
-    : "";
-  list.innerHTML = activeBlock + filedBlock;
+    : `<section class="side-card">
+        <p class="panel-kicker">Next up</p>
+        <h3>Nothing ready to file</h3>
+        <p class="hint">Walk an open case through to the tagged report, then file the decision.</p>
+      </section>`;
+
+  const groups = new Map();
+  for (const item of all) {
+    const key = item.alarm || "other";
+    const g = groups.get(key) || { key, n: 0, filed: 0, closes: new Map() };
+    g.n += 1;
+    if (item.status === "filed") {
+      g.filed += 1;
+      const act = caseAction(item);
+      if (act) g.closes.set(act, (g.closes.get(act) || 0) + 1);
+    }
+    groups.set(key, g);
+  }
+  const rows = [...groups.values()].sort((a, b) => b.n - a.n || b.filed - a.filed);
+  const max = Math.max(1, ...rows.map((r) => r.n));
+  const sig = `<section class="side-card">
+    <p class="panel-kicker">Signatures</p>
+    <h3>What recurs on this craft</h3>
+    <p class="hint">Every case on Aurora-1, grouped by the alarm it was opened from.</p>
+    <ul class="sig-list">${rows
+      .map((r) => {
+        const top = [...r.closes.entries()].sort((a, b) => b[1] - a[1])[0];
+        return `<li class="tone-${incidentTone({ alarm: r.key })}">
+          <span class="sig-top">
+            <span class="sig-name">${escapeHtml(alarmTitle(r.key))}</span>
+            <span class="sig-n">${r.n} case${r.n === 1 ? "" : "s"}</span>
+          </span>
+          <span class="sig-bar"><i style="width:${((r.n / max) * 100).toFixed(0)}%"></i></span>
+          <span class="sig-close">${
+            top
+              ? `${r.filed} filed → <strong>${escapeHtml(top[0])}</strong>`
+              : `<span class="none">No precedent filed yet</span>`
+          }</span>
+        </li>`;
+      })
+      .join("")}</ul>
+  </section>`;
+
+  side.innerHTML = queue + sig;
 }
 
 function incRow(item) {
@@ -802,13 +901,12 @@ function closeFileSlip() {
 }
 
 function setStoreStatus(ok) {
-  for (const id of ["store-status", "home-status"]) {
-    const el = $(id);
-    if (!el) continue;
-    el.classList.toggle("is-on", ok);
-    el.classList.toggle("is-empty", !ok);
-    el.innerHTML = `<span class="pulse"></span> ${ok ? "Connected" : "Empty"}`;
-  }
+  const el = $("store-status");
+  if (!el) return;
+  el.classList.toggle("is-on", ok);
+  el.classList.toggle("is-empty", !ok);
+  const st = el.querySelector(".st");
+  if (st) st.textContent = ok ? "STORE OK" : "NO STORE";
 }
 
 function setView(view) {
@@ -822,7 +920,7 @@ function setView(view) {
   if (skip) {
     skip.href = view === "incidents" ? "#incidents-desk" : view === "case" ? "#stage" : "#home";
     skip.textContent =
-      view === "incidents" ? "Skip to incidents" : view === "case" ? "Skip to case" : "Skip to home";
+      view === "incidents" ? "Skip to incidents" : view === "case" ? "Skip to case" : "Skip to overview";
   }
 }
 
@@ -843,15 +941,50 @@ function enterIncidents() {
 function enterCase() {
   setView("case");
   renderIncidents();
+  setSpine("compare");
+}
+
+/* Case spine: the six steps of the walk, kept in sync with the scroll position. */
+const SPINE_IDS = ["compare", "commands", "traces", "procedure", "findings", "action"];
+const spineVisible = new Map();
+
+function setSpine(id) {
+  document.querySelectorAll(".spine-step").forEach((btn) => {
+    btn.classList.toggle("is-on", btn.dataset.target === id);
+  });
+}
+
+function initSpine() {
+  const root = $("stage");
+  const spine = $("case-spine");
+  if (!root || !spine) return;
+  spine.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-target]");
+    if (btn) $(btn.dataset.target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  if (typeof IntersectionObserver !== "function") return;
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) spineVisible.set(entry.target.id, entry.isIntersecting);
+      if (state.view !== "case") return;
+      const first = SPINE_IDS.find((id) => spineVisible.get(id));
+      if (first) setSpine(first);
+    },
+    { root, rootMargin: "-10% 0px -68% 0px", threshold: 0 }
+  );
+  for (const id of SPINE_IDS) {
+    const el = $(id);
+    if (el) observer.observe(el);
+  }
 }
 
 function channelInk(id) {
-  if (id.includes("heater")) return "var(--heater)";
-  if (id.includes("PAY") || id.includes("payload")) return "var(--payload)";
-  if (id.includes("solar")) return "var(--accent)";
-  if (id.includes("battery")) return "var(--accent)";
-  if (id.includes("bus_current")) return "var(--ink)";
-  return "var(--bus)";
+  if (id.includes("heater")) return "var(--ch-heater)";
+  if (id.includes("PAY") || id.includes("payload")) return "var(--ch-payload)";
+  if (id.includes("solar")) return "var(--ch-solar)";
+  if (id.includes("battery")) return "var(--ch-batt)";
+  if (id.includes("bus_current")) return "var(--ch-busi)";
+  return "var(--ch-bus)";
 }
 
 function sparkGeom(ch) {
@@ -921,24 +1054,38 @@ function sparkSvg(ch) {
 function orbitSvg(orbit) {
   if (!orbit) return "";
   const theta = Number(orbit.phase || 0) * Math.PI * 2;
-  const cx = 160;
-  const cy = 68;
-  const rx = 118;
-  const ry = 38;
+  const cx = 158;
+  const cy = 70;
+  const rx = 112;
+  const ry = 40;
   const x = (cx + rx * Math.cos(theta)).toFixed(1);
   const y = (cy + ry * Math.sin(theta)).toFixed(1);
   const sun = orbit.illumination === "sun";
-  return `<svg class="orbit-map" viewBox="0 0 320 140" aria-hidden="true">
-    <g transform="rotate(-22 ${cx} ${cy})">
-      <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(126,224,208,0.28)" stroke-width="1.4"/>
-      <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(12,25,34,0.55)" stroke-width="16" stroke-dasharray="190 540" transform="rotate(200 ${cx} ${cy})"/>
-      <circle cx="${x}" cy="${y}" r="5.5" fill="${sun ? "#7ee0d0" : "#c45c12"}"/>
-      <circle cx="${x}" cy="${y}" r="9" fill="none" stroke="${sun ? "#7ee0d0" : "#c45c12"}" opacity="0.45"/>
+  const mark = sun ? "#7ff0d4" : "#f2a33c";
+  /* Teal arc is the sunlit half of the ring; the craft dot takes the colour of where it is now. */
+  return `<svg class="orbit-map" viewBox="0 0 320 148" aria-hidden="true">
+    <defs>
+      <radialGradient id="orbit-sun">
+        <stop offset="0%" stop-color="#ffe08a" stop-opacity="0.75" />
+        <stop offset="100%" stop-color="#ffe08a" stop-opacity="0" />
+      </radialGradient>
+      <radialGradient id="orbit-earth" cx="34%" cy="30%">
+        <stop offset="0%" stop-color="#2d4a63" />
+        <stop offset="100%" stop-color="#0b141d" />
+      </radialGradient>
+    </defs>
+    <circle cx="288" cy="28" r="32" fill="url(#orbit-sun)" />
+    <circle cx="288" cy="28" r="6.5" fill="#ffe08a" />
+    <g transform="rotate(-20 ${cx} ${cy})">
+      <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="#22323f" stroke-width="1.2" />
+      <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(127,240,212,0.45)"
+        stroke-width="1.6" stroke-dasharray="252 253" stroke-dashoffset="126" />
+      <circle cx="${x}" cy="${y}" r="9" fill="none" stroke="${mark}" stroke-width="1" opacity="0.35" />
+      <circle cx="${x}" cy="${y}" r="4" fill="${mark}" />
     </g>
-    <circle cx="252" cy="42" r="11" fill="#f3e2b6"/>
-    <circle cx="248" cy="40" r="4" fill="#fff6d6" opacity="0.7"/>
-    <text x="18" y="128" fill="#8aa8a3" font-size="10" font-family="IBM Plex Mono,monospace" letter-spacing="1.6">ECLIPSE</text>
-    <text x="262" y="128" fill="#8aa8a3" font-size="10" font-family="IBM Plex Mono,monospace" letter-spacing="1.6">SUN</text>
+    <circle cx="${cx}" cy="${cy}" r="16" fill="url(#orbit-earth)" stroke="#22323f" stroke-width="1" />
+    <text x="14" y="136" fill="#66798c" font-size="9" font-family="IBM Plex Mono,monospace" letter-spacing="1.8">ECLIPSE</text>
+    <text x="306" y="136" text-anchor="end" fill="#66798c" font-size="9" font-family="IBM Plex Mono,monospace" letter-spacing="1.8">SUNLIT</text>
   </svg>`;
 }
 
@@ -958,6 +1105,31 @@ function tileLimit(ch, sample) {
   return row.clock ? `${row.clock} on tape` : "No warn on this channel";
 }
 
+/* How far this reading sits from its warn limit, so the operator doesn't do the
+   arithmetic. The meter's tick sits at the limit; fill past it means outside. */
+function marginMeter(ch) {
+  if (ch.id === "PAY.mode") return "";
+  const value = ch.value_num;
+  const warn = ch.warn_limit == null ? null : Number(ch.warn_limit);
+  if (value == null || warn == null || !Number.isFinite(warn) || warn === 0) return "";
+  const below = ch.limit_direction === "below";
+  const ratio = value / warn;
+  const past = below ? warn - value : value - warn;
+  const pct = Math.abs(past / warn) * 100;
+  const outside = past > 0;
+  const label = outside
+    ? `${pct.toFixed(pct < 10 ? 1 : 0)}% past warn`
+    : `${pct.toFixed(pct < 10 ? 1 : 0)}% margin`;
+  /* The tick sits at 62% of the track; scale so the limit always lands on it. */
+  const fill = below
+    ? Math.min(100, (1 / Math.max(ratio, 1e-6)) * 62)
+    : Math.min(100, ratio * 62);
+  return `<p class="ch-margin">
+    <span class="ch-meter"><i style="width:${fill.toFixed(0)}%"></i></span>
+    <span class="pct">${label}</span>
+  </p>`;
+}
+
 function pickFeatured() {
   const onTape = state.incidents.filter((item) => item.run_id === state.deskRunId && item.status !== "filed");
   const ready = onTape.filter((item) => item.status === "recommended");
@@ -968,12 +1140,19 @@ function sitrep() {
   const chans = state.desk?.channels || [];
   const orbit = state.desk?.orbit;
   const warns = chans.filter((ch) => ch.id !== "PAY.mode" && (ch.state === "warn" || ch.state === "critical"));
+  const crits = warns.filter((ch) => ch.state === "critical");
   const mode = chans.find((ch) => ch.id === "PAY.mode");
   const illum = orbit?.illumination === "sun" ? "Sunlit" : orbit ? "Eclipse" : "Tape";
-  const worst = warns.find((ch) => ch.state === "critical") || warns[0];
+  const worst = crits[0] || warns[0];
+  const level = crits.length ? "crit" : warns.length ? "warn" : "ok";
+  const label = crits.length ? "Critical" : warns.length ? "Warn" : "Nominal";
+  const headline = worst
+    ? `${worst.title} ${tileValue(worst)} ${worst.unit || ""}`.replace(/\s+/g, " ").trim()
+    : "All channels inside limits";
+  const others = warns.length - 1;
   const title = worst
-    ? `${illum} · ${worst.title} ${worst.state === "critical" ? "critical" : "warn"}`
-    : `${illum} · inside limits`;
+    ? `${worst.title} ${worst.state === "critical" ? "critical" : "at warn"}${others > 0 ? ` · ${others} more outside limits` : ""}`
+    : "All channels inside limits";
   const lines = [];
   for (const ch of warns) {
     const at = ch.crossed?.clock ? ` at ${ch.crossed.clock}` : "";
@@ -981,9 +1160,9 @@ function sitrep() {
   }
   if (mode?.value_text) lines.push(`Payload is ${String(mode.value_text).replaceAll("_", " ")}.`);
   if (!warns.length) {
-    lines.push("Last sample is inside limits. Open a case only if you already have an alarm.");
+    lines.push("Last sample on this tape is inside limits. Open a case only if you already have an alarm.");
   }
-  return { title, lede: lines.join(" "), warn: warns.length > 0 };
+  return { level, label, headline, title, lede: lines.join(" "), illum, warn: warns.length > 0 };
 }
 
 function renderDesk() {
@@ -1018,14 +1197,16 @@ function renderDesk() {
   if (channels) {
     channels.innerHTML = (desk?.channels || [])
       .map((ch) => {
-        const warn = ch.state === "warn" || ch.state === "critical" ? "is-warn" : "";
-        const science = ch.id === "PAY.mode" && ch.value_text === "SCIENCE_MODE" ? "is-science" : "";
-        const unit = ch.id === "PAY.mode" ? "" : ch.unit || "";
-        const badge = ch.state === "critical" ? "Crit" : ch.state === "warn" ? "Warn" : "Tape";
-        return `<article class="ch-tile ${warn} ${science}" data-ch="${escapeHtml(ch.id)}">
-          <p class="ch-kicker"><span>${escapeHtml(ch.subsystem || "")}</span><span>${badge}</span></p>
+        const tone = ch.state === "critical" ? "is-crit" : ch.state === "warn" ? "is-warn" : "";
+        const isMode = ch.id === "PAY.mode";
+        const science = isMode && ch.value_text === "SCIENCE_MODE" ? "is-science" : "";
+        const unit = isMode ? "" : ch.unit || "";
+        const badge = ch.state === "critical" ? "Crit" : ch.state === "warn" ? "Warn" : "Nominal";
+        return `<article class="ch-tile ${tone} ${science} ${isMode ? "is-mode" : ""}" data-ch="${escapeHtml(ch.id)}">
+          <p class="ch-kicker"><span>${escapeHtml(ch.subsystem || "")}</span><span class="st">${badge}</span></p>
           <h3>${escapeHtml(ch.title)}</h3>
           <p class="ch-read"><span class="ch-value">${escapeHtml(tileValue(ch))}</span><span class="ch-unit">${escapeHtml(unit)}</span></p>
+          ${marginMeter(ch)}
           <p class="ch-limit">${escapeHtml(tileLimit(ch))}</p>
           ${sparkSvg(ch)}
         </article>`;
@@ -1035,15 +1216,23 @@ function renderDesk() {
   }
 
   const sit = sitrep();
+  const posture = $("home-posture");
+  if (posture) {
+    posture.className = `posture is-${sit.level}`;
+    posture.innerHTML = `<span class="dot"></span>
+      <span class="k">${escapeHtml(sit.label)}</span>
+      <span class="v">${escapeHtml(sit.headline)}</span>`;
+  }
+
   const featured = pickFeatured();
   const next = $("home-next");
   if (next) {
     const nOpen = state.incidents.filter((item) => item.status !== "filed").length;
     const walk = featured
-      ? `<button type="button" class="btn" data-open-case="${escapeHtml(featured.id)}">Walk ${escapeHtml(featured.id)}</button>`
+      ? `<button type="button" class="btn btn-ghost" data-open-case="${escapeHtml(featured.id)}">Walk ${escapeHtml(featured.id)}</button>`
       : "";
     next.className = `home-next ${sit.warn ? "is-warn" : "is-ok"}`;
-    next.innerHTML = `<p class="panel-kicker">Last sample</p>
+    next.innerHTML = `<p class="panel-kicker">Assessment · last sample</p>
       <h2>${escapeHtml(sit.title)}</h2>
       <p class="lede">${escapeHtml(sit.lede)}</p>
       <div class="form-actions sit-actions">
@@ -1064,7 +1253,7 @@ function renderDesk() {
           )
           .join("")}</ol>`
       : `<p class="hint">No commands on this recording.</p>`;
-    log.innerHTML = `<p class="panel-kicker">Commands</p><h2>On this recording</h2>${rows}`;
+    log.innerHTML = `<p class="panel-kicker">Command log</p><h2>On this recording</h2>${rows}`;
   }
 }
 
@@ -1157,7 +1346,13 @@ function renderAlarm(a) {
   }
   $("alarm-title").textContent = inc ? alarmTitle(inc.alarm) : "Select a case";
   const when = a?.warn ? clock(a.warn.time_s) : openedClock(inc?.opened_at);
-  $("case-meta").textContent = inc && when ? when : "";
+  const provenance = [];
+  if (inc) {
+    provenance.push(a?.warn ? `First warn ${when}` : when ? `Opened ${when}` : "");
+    provenance.push(`Entry ${alarm}`);
+    if (inc.run_id) provenance.push(`Tape ${inc.run_id}`);
+  }
+  $("case-meta").textContent = provenance.filter(Boolean).join("  ·  ");
   if (!a) {
     $("alarm-lede").textContent = "Open a case from an alarm you already have. ORBIT does not detect anomalies.";
     $("alarm-value").textContent = "—";
@@ -1452,7 +1647,13 @@ function renderFindings() {
   }
     body.innerHTML = `<div class="report-cta">
       <p class="report-cta-kicker">Not stamped</p>
-      <p>Assemble the tagged report when you want this evidence on the record. OBSERVED / DERIVED / DOCUMENTED / HYPOTHESIS.</p>
+      <p>Assemble the tagged report when you want this evidence on the record. Every claim gets its provenance:</p>
+      <p class="report-legend">
+        <span class="tag tag-observed">OBSERVED</span>
+        <span class="tag tag-derived">DERIVED</span>
+        <span class="tag tag-documented">DOCUMENTED</span>
+        <span class="tag tag-hypothesis">HYPOTHESIS</span>
+      </p>
       <p class="hint">Rules only — no paid model.</p>
     </div>`;
 }
@@ -1477,7 +1678,8 @@ async function loadIncident(incidentId) {
   state.pinT = null;
   state.hoverT = null;
   enterCase();
-  setLibraryOpen(true);
+  /* Below the breakpoint the drawer overlays the case instead of sitting beside it. */
+  setLibraryOpen(window.innerWidth > 900);
   $("stage").scrollTop = 0;
   renderIncidents();
   const res = await fetch(`/incidents/${encodeURIComponent(incidentId)}/workspace`);
@@ -1639,15 +1841,6 @@ function libraryKindLabel(doc) {
   return "similar case";
 }
 
-function libraryFamily(doc) {
-  if (LIB_COPY[doc.id]?.family) return LIB_COPY[doc.id].family;
-  const blob = `${doc.id || ""} ${doc.title || ""}`;
-  if (/heater/i.test(blob)) return "heater";
-  if (/payload/i.test(blob)) return "payload";
-  if (/battery|pack/i.test(blob)) return "battery";
-  return "";
-}
-
 function libraryUse(doc) {
   if (LIB_COPY[doc.id]?.use) return LIB_COPY[doc.id].use;
   if (libraryKind(doc) === "filed") return "Already stamped on this craft. The recommended command was not sent.";
@@ -1673,31 +1866,12 @@ function likeThisQuery() {
   return parts.join(" ");
 }
 
-function docCard(doc, { showKind = false } = {}) {
-  const kind = libraryKind(doc);
-  const fam = libraryFamily(doc);
-  const on = doc.id === state.openDocId ? "is-on" : "";
-  const close = libraryClose(doc);
-  const chip = showKind
-    ? `<span class="lib-card-top"><span class="kind-chip kind-${kind}">${escapeHtml(libraryKindLabel(doc))}</span></span>`
-    : "";
-  return `<button type="button" class="lib-card kind-${kind} ${fam ? `fam-${fam}` : ""} ${on}" data-doc="${escapeHtml(doc.id)}">
-    ${chip}
-    <span class="id">${escapeHtml(doc.id)}</span>
-    <span class="use">${escapeHtml(libraryUse(doc))}</span>
-    ${close ? `<span class="close-line">${escapeHtml(close)}</span>` : ""}
-  </button>`;
-}
-
-function docRow(doc) {
-  const kind = libraryKind(doc);
-  const on = doc.id === state.openDocId ? "is-on" : "";
-  const line = libraryClose(doc) || libraryUse(doc);
-  return `<button type="button" class="lib-row kind-${kind} ${on}" data-doc="${escapeHtml(doc.id)}">
-    <span class="id">${escapeHtml(doc.id)}</span>
-    <span class="use">${escapeHtml(line)}</span>
-  </button>`;
-}
+const LIB_KINDS = [
+  { id: "all", label: "All" },
+  { id: "procedure", label: "Procedures" },
+  { id: "history", label: "Cases" },
+  { id: "filed", label: "Filed" },
+];
 
 function setLibraryOpen(open) {
   state.libraryOpen = open;
@@ -1709,104 +1883,158 @@ function setLibraryOpen(open) {
   }
 }
 
-function libraryMode() {
-  if (state.libraryPinned) return "search";
-  if (state.libraryHits) return "related";
-  return "catalog";
+function escapeRx(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function renderShelf(title, items, kind = "") {
-  if (!items.length) return "";
-  const [top, ...rest] = items;
-  const more = rest.length
-    ? `<div class="lib-also">${rest.map((doc) => docRow(doc)).join("")}</div>`
-    : "";
-  return `<section class="lib-shelf ${kind ? `kind-${kind}` : ""}">
-    <p class="family-head">${escapeHtml(title)}</p>
-    ${docCard(top)}
-    ${more}
+function highlightTerms(text, query) {
+  const safe = escapeHtml(text);
+  const terms = String(query || "")
+    .split(/[^\w.-]+/)
+    .filter((t) => t.length > 2);
+  if (!terms.length) return safe;
+  const rx = new RegExp(`(${terms.map(escapeRx).join("|")})`, "gi");
+  return safe.replace(rx, "<mark>$1</mark>");
+}
+
+/* The documents this case is actually built on, chosen by the same analysis that
+   drives the case — not by search ranking. Each one states why it is here. */
+function groundedDocs() {
+  if (!state.incidentId) return [];
+  const a = analysis();
+  const byId = (id) => state.docs.find((doc) => doc.id === id);
+  const out = [];
+  const proc = byId(procedureId(a));
+  if (proc) out.push({ doc: proc, why: "Procedure for this case" });
+  const priorId = a?.suspect ? "INC-0187" : a?.payloadSuspect ? "INC-0191" : a?.batterySuspect ? "INC-0162" : null;
+  const prior = priorId ? byId(priorId) : null;
+  if (prior) out.push({ doc: prior, why: "Same signature" });
+  const own = state.docs.find(
+    (doc) => doc.id === state.incidentId && String(doc.path || "").startsWith("filed:")
+  );
+  if (own) out.push({ doc: own, why: "This case, filed" });
+  return out;
+}
+
+function matchScaler(hits) {
+  const scores = hits.map((h) => Number(h.score) || 0);
+  const max = Math.max(...scores);
+  const min = Math.min(...scores);
+  const span = max - min;
+  return (hit) => (span > 1e-4 ? 18 + 82 * ((Number(hit.score) - min) / span) : 100);
+}
+
+function libItem(doc, opts = {}) {
+  const kind = libraryKind(doc);
+  const on = doc.id === state.openDocId ? "is-on" : "";
+  const close = libraryClose(doc);
+  const q = opts.query || "";
+  const match =
+    opts.match != null
+      ? `<span class="lib-match">
+          <span class="bar"><i style="width:${opts.match.toFixed(0)}%"></i></span>
+          <span class="score">${Number(doc.score || 0).toFixed(2)}</span>
+        </span>`
+      : "";
+  return `<button type="button" class="lib-item kind-${kind} ${on}" data-doc="${escapeHtml(doc.id)}">
+    <span class="lib-item-top">
+      <span class="id">${highlightTerms(doc.id, q)}</span>
+      <span class="kind-chip kind-${kind}">${escapeHtml(libraryKindLabel(doc))}</span>
+    </span>
+    <span class="use">${highlightTerms(libraryUse(doc), q)}</span>
+    ${close ? `<span class="close-line">${escapeHtml(close)}</span>` : ""}
+    ${opts.why ? `<span class="lib-why">${escapeHtml(opts.why)}</span>` : ""}
+    ${match}
+  </button>`;
+}
+
+function libGroup(title, html, extra = "") {
+  if (!html) return "";
+  return `<section class="lib-group ${extra}">
+    <p class="family-head">${escapeHtml(title)}</p>${html}
   </section>`;
 }
 
 function renderLibrary() {
   const reading = Boolean(state.openDocId);
-  const mode = libraryMode();
   const kicker = $("library-kicker");
-  if (kicker) kicker.textContent = reading && state.openDocId ? state.openDocId : "Library";
-  const modes = $("library-modes");
-  if (modes) modes.hidden = reading;
-  $("library-mode-case")?.classList.toggle("is-on", mode === "related");
-  $("library-mode-all")?.classList.toggle("is-on", mode === "catalog");
-  $("library-form").hidden = reading;
-  const picks = $("library-picks");
-  if (picks) {
-    if (reading) {
-      const pool = (state.libraryHits || state.docs).filter((doc) => doc.id !== state.incidentId);
-      picks.hidden = false;
-      picks.innerHTML = pool
-        .slice(0, 8)
-        .map((doc) => {
-          const kind = libraryKind(doc);
-          const on = doc.id === state.openDocId ? "is-on" : "";
-          return `<button type="button" class="lib-pick kind-${kind} ${on}" data-doc="${escapeHtml(doc.id)}">${escapeHtml(doc.id)}</button>`;
-        })
-        .join("");
-    } else {
-      picks.hidden = true;
-      picks.innerHTML = "";
-    }
-  }
+  if (kicker) kicker.textContent = reading ? state.openDocId : "Library";
+  const form = $("library-form");
+  const kindsRoot = $("library-kinds");
+  const status = $("library-status");
   const root = $("library-body");
-  if (!root) return;
-  root.hidden = reading;
-  if (reading) return;
+  const count = $("library-count");
+  if (form) form.hidden = reading;
+  if (kindsRoot) kindsRoot.hidden = reading;
+  if (status) status.hidden = reading;
+  if (root) root.hidden = reading;
+  if (count) count.textContent = reading ? "" : `${state.docs.length} docs`;
+  const clear = $("library-clear");
+  if (clear) clear.hidden = !state.libraryQuery;
+  if (reading || !root) return;
+
+  const query = state.libraryQuery;
+  const kind = state.libraryKind || "all";
+  const inKind = (doc) => kind === "all" || libraryKind(doc) === kind;
+
+  const base = query && state.libraryHits ? state.libraryHits : state.docs;
+  const counts = { all: base.length, procedure: 0, history: 0, filed: 0 };
+  for (const doc of base) counts[libraryKind(doc)] = (counts[libraryKind(doc)] || 0) + 1;
+  if (kindsRoot) {
+    kindsRoot.innerHTML = LIB_KINDS.map(
+      (k) =>
+        `<button type="button" class="lib-kind kind-${k.id} ${k.id === kind ? "is-on" : ""}" data-kind="${k.id}">${k.label}<span class="n">${counts[k.id] || 0}</span></button>`
+    ).join("");
+  }
+
   if (state.librarySearching) {
-    root.innerHTML = `<p class="lib-hint">Searching…</p>`;
+    if (status) status.textContent = "Searching";
+    root.innerHTML = `<p class="lib-hint">Searching the library…</p>`;
     return;
   }
-  if (state.libraryHits) {
-    const hits = state.libraryHits.filter((hit) => hit.id !== state.incidentId);
+
+  if (query) {
+    const hits = (state.libraryHits || []).filter(inKind);
+    if (status) status.textContent = `${hits.length} result${hits.length === 1 ? "" : "s"} · “${query}”`;
     if (!hits.length) {
-      root.innerHTML = `<p class="lib-hint">Nothing close. Try All, or a shorter search.</p>`;
+      root.innerHTML = `<p class="lib-hint">Nothing matched “${escapeHtml(query)}”. Try a shorter search, or clear the kind filter.</p>`;
       return;
     }
-    if (mode === "search") {
-      root.innerHTML = hits.map((hit) => docCard(hit, { showKind: true })).join("");
-      return;
-    }
-    const procs = hits.filter((hit) => libraryKind(hit) === "procedure");
-    const priors = hits.filter((hit) => libraryKind(hit) === "history");
-    const filed = hits.filter((hit) => libraryKind(hit) === "filed");
-    root.innerHTML = [
-      renderShelf("Procedures", procs, "procedure"),
-      renderShelf("Similar cases", priors, "history"),
-      renderShelf("Filed", filed, "filed"),
-    ].join("") || `<p class="lib-hint">Nothing close for this case.</p>`;
+    const scale = matchScaler(hits);
+    root.innerHTML = hits.map((hit) => libItem(hit, { query, match: scale(hit) })).join("");
     return;
   }
-  root.innerHTML = [
-    renderShelf(
-      "Procedures",
-      state.docs.filter((doc) => libraryKind(doc) === "procedure"),
-      "procedure"
-    ),
-    renderShelf(
-      "Similar cases",
-      state.docs.filter((doc) => libraryKind(doc) === "history"),
-      "history"
-    ),
-    renderShelf(
-      "Filed",
-      state.docs.filter((doc) => libraryKind(doc) === "filed"),
-      "filed"
-    ),
-  ].join("");
+
+  const ground = groundedDocs().filter((g) => inKind(g.doc));
+  const groundIds = new Set(ground.map((g) => g.doc.id));
+  const related = (state.libraryHits || []).filter((doc) => inKind(doc) && !groundIds.has(doc.id));
+  const relatedIds = new Set(related.map((doc) => doc.id));
+  const rest = state.docs.filter((doc) => inKind(doc) && !groundIds.has(doc.id) && !relatedIds.has(doc.id));
+
+  const shown = ground.length + related.length + rest.length;
+  if (status) {
+    status.textContent = state.incidentId
+      ? `${shown} document${shown === 1 ? "" : "s"} · ranked for ${state.incidentId}`
+      : `${shown} document${shown === 1 ? "" : "s"}`;
+  }
+  if (!shown) {
+    root.innerHTML = `<p class="lib-hint">Nothing in this filter.</p>`;
+    return;
+  }
+  const scale = related.length ? matchScaler(related) : null;
+  root.innerHTML =
+    libGroup("For this case", ground.map((g) => libItem(g.doc, { why: g.why })).join(""), "is-ground") +
+    libGroup(
+      "Related by search",
+      related.map((doc) => libItem(doc, { match: scale ? scale(doc) : null })).join("")
+    ) +
+    libGroup(state.incidentId ? "Everything else" : "All documents", rest.map((doc) => libItem(doc)).join(""));
 }
 
 async function searchLibrary(query, opts = {}) {
   const q = (query || "").trim();
-  state.libraryQuery = q;
-  if (opts.grounded) state.libraryPinned = false;
+  /* A grounded fetch ranks the shelf for the open case; it is not a user query. */
+  state.libraryQuery = opts.grounded ? "" : q;
   if (!q) {
     state.libraryHits = null;
     renderLibrary();
@@ -1815,7 +2043,7 @@ async function searchLibrary(query, opts = {}) {
   state.librarySearching = true;
   renderLibrary();
   try {
-    const res = await fetch(`/search?q=${encodeURIComponent(q)}&limit=8`);
+    const res = await fetch(`/search?q=${encodeURIComponent(q)}&limit=12`);
     if (!res.ok) throw new Error(`search ${res.status}`);
     state.libraryHits = await res.json();
   } catch (err) {
@@ -1829,6 +2057,7 @@ async function searchLibrary(query, opts = {}) {
 function followThisCase() {
   const input = $("library-q");
   if (input) input.value = "";
+  state.libraryQuery = "";
   if (!state.incidentId) {
     browseLibrary();
     return;
@@ -1837,12 +2066,21 @@ function followThisCase() {
 }
 
 function browseLibrary() {
-  state.libraryPinned = false;
   state.libraryQuery = "";
   state.libraryHits = null;
   const input = $("library-q");
   if (input) input.value = "";
   renderLibrary();
+}
+
+function focusLibrarySearch() {
+  setLibraryOpen(true);
+  if (state.openDocId) closeReader();
+  const input = $("library-q");
+  if (input) {
+    input.focus();
+    input.select();
+  }
 }
 
 let libraryTimer = 0;
@@ -1854,9 +2092,8 @@ function onLibraryTyped() {
       followThisCase();
       return;
     }
-    state.libraryPinned = true;
     searchLibrary(q);
-  }, 220);
+  }, 200);
 }
 
 async function refreshDocs() {
@@ -1892,9 +2129,16 @@ function bind() {
       openSlip();
       return;
     }
+    const filter = ev.target.closest("[data-filter]");
+    if (filter) {
+      state.incidentFilter = filter.dataset.filter;
+      renderIncidents();
+      return;
+    }
     const btn = ev.target.closest("[data-open-case]");
     if (btn) loadIncident(btn.dataset.openCase);
   });
+  initSpine();
   $("library-form").addEventListener("submit", (ev) => {
     ev.preventDefault();
     window.clearTimeout(libraryTimer);
@@ -1903,13 +2147,24 @@ function bind() {
       followThisCase();
       return;
     }
-    state.libraryPinned = true;
     searchLibrary(q);
   });
   $("library-q").addEventListener("input", onLibraryTyped);
-  $("library-mode-case").addEventListener("click", followThisCase);
-  $("library-mode-all").addEventListener("click", browseLibrary);
+  $("library-clear").addEventListener("click", () => {
+    window.clearTimeout(libraryTimer);
+    followThisCase();
+    $("library-q").focus();
+  });
+  $("library-kinds").addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-kind]");
+    if (!btn) return;
+    state.libraryKind = btn.dataset.kind;
+    renderLibrary();
+  });
   $("library-toggle").addEventListener("click", () => setLibraryOpen(!state.libraryOpen));
+  $("theme-toggle").addEventListener("click", () => {
+    setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
+  });
   $("library").addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-doc]");
     if (btn) openDoc(btn.dataset.doc);
@@ -1963,6 +2218,17 @@ function bind() {
   $("open-proc").addEventListener("click", () => openDoc(procedureId(analysis())));
   $("reader-close").addEventListener("click", closeReader);
   document.addEventListener("keydown", (ev) => {
+    const typing = /^(INPUT|TEXTAREA)$/.test(ev.target?.tagName || "");
+    if ((ev.key === "k" || ev.key === "K") && (ev.metaKey || ev.ctrlKey)) {
+      ev.preventDefault();
+      focusLibrarySearch();
+      return;
+    }
+    if (ev.key === "/" && !typing && !ev.metaKey && !ev.ctrlKey) {
+      ev.preventDefault();
+      focusLibrarySearch();
+      return;
+    }
     if (ev.key !== "Escape") return;
     if (!$("slip").hidden) {
       closeSlip();
@@ -1976,11 +2242,39 @@ function bind() {
       closeReader();
       return;
     }
+    if (state.libraryQuery) {
+      window.clearTimeout(libraryTimer);
+      followThisCase();
+      return;
+    }
     if (state.libraryOpen) setLibraryOpen(false);
   });
 }
 
+function setTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  try {
+    window.localStorage.setItem("orbit-theme", theme);
+  } catch (err) {
+    /* private mode — the theme just won't persist */
+  }
+  const btn = $("theme-toggle");
+  if (btn) btn.title = theme === "light" ? "Switch to dark" : "Switch to light";
+}
+
+function initTheme() {
+  let saved = null;
+  try {
+    saved = window.localStorage.getItem("orbit-theme");
+  } catch (err) {
+    saved = null;
+  }
+  const prefersLight = window.matchMedia?.("(prefers-color-scheme: light)").matches;
+  setTheme(saved || (prefersLight ? "light" : "dark"));
+}
+
 async function boot() {
+  initTheme();
   bind();
   setLibraryOpen(false);
   const [runsRes, incidentRes, alarmRes, docsRes] = await Promise.all([

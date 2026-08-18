@@ -7,29 +7,43 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap"
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body class="view-home">
-    <a class="skip" href="#home" id="skip">Skip to home</a>
+    <a class="skip" href="#home" id="skip">Skip to overview</a>
 
     <header class="appbar">
-      <button type="button" class="brand" id="go-home-brand" aria-label="ORBIT home">
+      <button type="button" class="brand" id="go-home-brand" aria-label="ORBIT overview">
         <svg class="logo-orbit" viewBox="0 0 32 32" aria-hidden="true">
           <ellipse cx="16" cy="16" rx="13" ry="6.2" fill="none" stroke="currentColor" stroke-width="1.4" transform="rotate(-28 16 16)" />
           <circle cx="25.4" cy="11.2" r="2.3" fill="currentColor" />
         </svg>
         <p class="wordmark">ORBIT</p>
       </button>
-      <nav class="app-nav" aria-label="ORBIT">
-        <button type="button" class="app-tab is-on" id="tab-home">Home</button>
-        <button type="button" class="app-tab" id="tab-incidents">Incidents</button>
+      <nav class="app-nav" aria-label="Sections">
+        <button type="button" class="app-tab is-on" id="tab-home">Overview</button>
+        <button type="button" class="app-tab" id="tab-incidents">Incidents<span class="n" id="tab-incidents-n"></span></button>
       </nav>
       <div class="appbar-actions">
-        <button type="button" class="btn-bar" id="new-incident-btn">Open case</button>
+        <p class="craft-chip" id="store-status">
+          <span class="pulse"></span>
+          <span class="name">AURORA-1</span>
+          <span class="st">LINKING</span>
+        </p>
         <span class="clock" id="focus-clock">--:--:--</span>
+        <button type="button" class="icon-btn theme-btn" id="theme-toggle" aria-label="Switch colour theme" title="Switch colour theme">
+          <svg class="i-moon" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
+          </svg>
+          <svg class="i-sun" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="3.1" fill="none" stroke="currentColor" stroke-width="1.3" />
+            <path d="M8 1v1.6M8 13.4V15M1 8h1.6M13.4 8H15M3.1 3.1l1.1 1.1M11.8 11.8l1.1 1.1M12.9 3.1l-1.1 1.1M4.2 11.8l-1.1 1.1" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" />
+          </svg>
+        </button>
+        <button type="button" class="btn-bar" id="new-incident-btn">Open case</button>
       </div>
     </header>
 
@@ -55,11 +69,11 @@
                 </div>
               </div>
               <p class="home-lede" id="home-lede">Pick any ingested tape. Last sample on the recording — ORBIT does not downlink, detect, or command.</p>
+              <div class="posture" id="home-posture"></div>
               <div class="home-hero-meta">
                 <p class="home-clock" id="home-clock">--:--:--</p>
                 <p class="tag" id="home-illum"></p>
                 <p class="quiet" id="home-orbit-meta"></p>
-                <p class="link" id="home-status"><span class="pulse"></span> Connecting</p>
               </div>
             </div>
             <div class="orbit-wrap" id="home-orbit"></div>
@@ -74,152 +88,149 @@
 
         <section class="incidents-desk" id="incidents-desk">
           <header class="inc-head" id="inc-head"></header>
-          <div class="inc-list" id="inc-list"></div>
+          <div class="inc-bar" id="inc-bar"></div>
+          <div class="inc-grid">
+            <div class="inc-list" id="inc-list"></div>
+            <aside class="inc-side" id="inc-side" aria-label="Craft patterns"></aside>
+          </div>
         </section>
 
         <div class="case-desk" id="case-desk">
-        <div class="mission">
-          <div class="craft">
-            <svg class="logo-aurora" viewBox="0 0 48 48" aria-hidden="true">
-              <circle cx="24" cy="24" r="22.5" fill="#0c1922" />
-              <circle cx="24" cy="24" r="20" fill="#f4f6f7" />
-              <path d="M8 31c7-12 12-19 16-19s9 7 16 19" fill="none" stroke="#1f8a7a" stroke-width="2.4" stroke-linecap="round" />
-              <path d="M10 33c6.5-10 11-16 14-16s7.5 6 14 16" fill="none" stroke="#3d4a52" stroke-width="2" stroke-linecap="round" />
-              <path d="M12 35c5.5-8 9-12 12-12s6.5 4 12 12" fill="none" stroke="#1d4e89" stroke-width="1.8" stroke-linecap="round" />
-              <path d="M24 11l3.4 8H20.6L24 11z" fill="#0c1922" />
-              <rect x="22.6" y="18.6" width="2.8" height="5.2" rx="0.5" fill="#0c1922" />
-              <circle cx="24" cy="26.4" r="1.2" fill="#c45c12" />
-            </svg>
-            <div>
-              <p class="craft-kicker">Spacecraft</p>
-              <p class="craft-name">Aurora-1</p>
-            </div>
-          </div>
-          <p class="link" id="store-status"><span class="pulse"></span> Connecting</p>
-        </div>
-
-        <p class="case-back">
-          <button type="button" class="text-btn" id="back-incidents">Incidents</button>
-        </p>
-
-        <header class="case-head" id="alarm">
-          <div class="case-head-main">
-            <div>
-              <div class="kicker-row">
-                <p class="eyebrow" id="alarm-kicker">Case</p>
-                <span class="chip" id="status-chip" hidden></span>
-              </div>
-              <h1 id="alarm-title">Select a case</h1>
-              <p class="lede" id="alarm-lede">ORBIT assembles telemetry, commands, procedures, and prior cases for a human decision.</p>
-              <p class="case-meta" id="case-meta"></p>
-            </div>
-            <div class="hero-readout">
-              <p class="hero-value"><span id="alarm-value">—</span><span class="unit" id="alarm-unit"></span></p>
-              <p class="hero-limit" id="alarm-limit"></p>
-            </div>
-          </div>
-          <p class="case-filed" id="case-filed" hidden>
-            <span id="case-filed-copy">In the library. Command not sent.</span>
-            <button type="button" class="text-btn" id="open-closeout-case">Read close-out</button>
+          <p class="case-back">
+            <button type="button" class="text-btn" id="back-incidents">Incidents</button>
           </p>
-        </header>
 
-        <section class="panel panel-compare" id="compare">
-          <p class="panel-kicker">01 · Evidence</p>
-          <h2>Loads at the warn</h2>
-          <p class="hint">Currents at the first warn. The last command is not automatically the cause.</p>
-          <div class="compare" id="compare-grid"></div>
-        </section>
-
-        <section class="panel panel-commands" id="commands">
-          <p class="panel-kicker">02 · Commands</p>
-          <h2>Ten minutes before the warn</h2>
-          <p class="hint">Click a row to pin that time on the traces.</p>
-          <ol class="timeline" id="timeline"></ol>
-        </section>
-
-        <section class="panel panel-traces" id="traces">
-          <div class="row">
-            <div>
-              <p class="panel-kicker">03 · Tape</p>
-              <h2>Telemetry</h2>
-              <p class="hint" id="trace-caption">Shared time axis. Dashed lines are commands and the first warn.</p>
-            </div>
-            <div class="seg" role="group" aria-label="Time window">
-              <button type="button" data-window="focus" class="is-on">Warn ± 8 min</button>
-              <button type="button" data-window="full">Full run</button>
-            </div>
-          </div>
-          <div class="mode-strip" id="mode-strip"></div>
-          <div class="traces" id="trace-stack"></div>
-          <p class="hover-read" id="hover-read"></p>
-        </section>
-
-        <section class="panel panel-findings" id="findings">
-          <div class="report-head">
-            <div>
-              <p class="panel-kicker">04 · Report</p>
-              <h2>Tagged investigation</h2>
-              <p class="hint">Stamp claims OBSERVED, DERIVED, DOCUMENTED, or HYPOTHESIS. This is the record a human files against.</p>
-            </div>
-            <button type="button" class="btn btn-report" id="assemble">Assemble report</button>
-          </div>
-          <div class="findings" id="findings-body">
-            <p class="empty">Assemble the tagged report to stamp this case. Rules only — no paid model.</p>
-          </div>
-        </section>
-
-        <section class="panel panel-decide" id="action">
-          <div id="decide-open">
-            <p class="panel-kicker">05 · Decision</p>
-            <p class="eyebrow">Suggested action</p>
-            <h2 id="decide-title">None yet</h2>
-            <p class="lede" id="decide-sub">Select a case to see a next step.</p>
-            <p class="action-status" id="decide-meta"></p>
-            <div class="form-actions action-row">
-              <button type="button" class="btn" id="file-incident" hidden>File decision</button>
-            </div>
-          </div>
-          <div id="decide-filed" hidden>
-            <p class="panel-kicker">05 · Filed</p>
-            <p class="stamp">Filed · not sent</p>
-            <h2 id="filed-action-title">Inhibit Heater B</h2>
-            <p class="lede" id="filed-action-sub">Recorded in the library. ORBIT did not uplink.</p>
-            <blockquote class="operator-note" id="operator-note" hidden></blockquote>
-            <button type="button" class="text-btn" id="open-closeout">Read full close-out</button>
-          </div>
-        </section>
-
-        <section class="panel panel-proc" id="procedure">
-          <article class="procedure">
-            <p class="panel-kicker">06 · Procedure</p>
-            <p class="eyebrow">Book</p>
-            <header class="proc-head">
-              <p class="proc-id" id="proc-id">EPS-17</p>
+          <header class="case-head" id="alarm">
+            <div class="case-head-main">
               <div>
-                <h2 id="proc-title">EPS low-voltage response</h2>
-                <p class="proc-aka" id="proc-aka">Check recently activated nonessential loads</p>
+                <div class="kicker-row">
+                  <p class="eyebrow" id="alarm-kicker">Case</p>
+                  <span class="chip" id="status-chip" hidden></span>
+                </div>
+                <h1 id="alarm-title">Select a case</h1>
+                <p class="lede" id="alarm-lede">ORBIT assembles telemetry, commands, procedures, and prior cases for a human decision.</p>
+                <p class="case-meta" id="case-meta"></p>
               </div>
-            </header>
-            <dl class="proc-meta">
-              <div>
-                <dt>Applies to</dt>
-                <dd id="proc-applies">Aurora-1 Electrical Power System</dd>
+              <div class="hero-readout">
+                <p class="hero-value"><span id="alarm-value">—</span><span class="unit" id="alarm-unit"></span></p>
+                <p class="hero-limit" id="alarm-limit"></p>
               </div>
-              <div>
-                <dt>Entry</dt>
-                <dd id="proc-entry"><code>EPS.bus_voltage</code> at or below warn (26.5 V)</dd>
-              </div>
-              <div>
-                <dt>Goal</dt>
-                <dd id="proc-goal">Find the load that just came on. Do not guess the payload first.</dd>
-              </div>
-            </dl>
-            <p class="hint">Green on a step means this case already has the evidence. It is not a sign-off. The last step is still a human command — ORBIT does not send it.</p>
-            <ol class="proc" id="proc"></ol>
-            <button type="button" class="text-btn" id="open-proc">Open full procedure</button>
-          </article>
-        </section>
+            </div>
+            <p class="case-filed" id="case-filed" hidden>
+              <span id="case-filed-copy">In the library. Command not sent.</span>
+              <button type="button" class="text-btn" id="open-closeout-case">Read close-out</button>
+            </p>
+          </header>
+
+          <div class="case-grid">
+            <nav class="spine" id="case-spine" aria-label="Case walkthrough">
+              <button type="button" class="spine-step is-on" data-target="compare"><span class="n">01</span><span>Evidence</span></button>
+              <button type="button" class="spine-step" data-target="commands"><span class="n">02</span><span>Commands</span></button>
+              <button type="button" class="spine-step" data-target="traces"><span class="n">03</span><span>Tape</span></button>
+              <button type="button" class="spine-step" data-target="procedure"><span class="n">04</span><span>Procedure</span></button>
+              <button type="button" class="spine-step" data-target="findings"><span class="n">05</span><span>Report</span></button>
+              <button type="button" class="spine-step" data-target="action"><span class="n">06</span><span>Decision</span></button>
+            </nav>
+
+            <div class="case-panels">
+              <section class="panel panel-compare" id="compare">
+                <p class="panel-kicker">01 · Evidence</p>
+                <h2>Loads at the warn</h2>
+                <p class="hint">Currents at the first warn. The last command is not automatically the cause.</p>
+                <div class="compare" id="compare-grid"></div>
+              </section>
+
+              <section class="panel panel-commands" id="commands">
+                <p class="panel-kicker">02 · Commands</p>
+                <h2>Ten minutes before the warn</h2>
+                <p class="hint">Click a row to pin that time on the traces.</p>
+                <ol class="timeline" id="timeline"></ol>
+              </section>
+
+              <section class="panel panel-traces" id="traces">
+                <div class="row">
+                  <div>
+                    <p class="panel-kicker">03 · Tape</p>
+                    <h2>Telemetry</h2>
+                    <p class="hint" id="trace-caption">Shared time axis. Dashed lines are commands and the first warn.</p>
+                  </div>
+                  <div class="seg" role="group" aria-label="Time window">
+                    <button type="button" data-window="focus" class="is-on">Warn ± 8 min</button>
+                    <button type="button" data-window="full">Full run</button>
+                  </div>
+                </div>
+                <div class="mode-strip" id="mode-strip"></div>
+                <div class="traces" id="trace-stack"></div>
+                <p class="hover-read" id="hover-read"></p>
+              </section>
+
+              <section class="panel panel-proc" id="procedure">
+                <article class="procedure">
+                  <p class="panel-kicker">04 · Procedure</p>
+                  <p class="eyebrow">Book</p>
+                  <header class="proc-head">
+                    <p class="proc-id" id="proc-id">EPS-17</p>
+                    <div>
+                      <h2 id="proc-title">EPS low-voltage response</h2>
+                      <p class="proc-aka" id="proc-aka">Check recently activated nonessential loads</p>
+                    </div>
+                  </header>
+                  <dl class="proc-meta">
+                    <div>
+                      <dt>Applies to</dt>
+                      <dd id="proc-applies">Aurora-1 Electrical Power System</dd>
+                    </div>
+                    <div>
+                      <dt>Entry</dt>
+                      <dd id="proc-entry"><code>EPS.bus_voltage</code> at or below warn (26.5 V)</dd>
+                    </div>
+                    <div>
+                      <dt>Goal</dt>
+                      <dd id="proc-goal">Find the load that just came on. Do not guess the payload first.</dd>
+                    </div>
+                  </dl>
+                  <p class="hint">Green on a step means this case already has the evidence. It is not a sign-off. The last step is still a human command — ORBIT does not send it.</p>
+                  <ol class="proc" id="proc"></ol>
+                  <button type="button" class="text-btn" id="open-proc">Open full procedure</button>
+                </article>
+              </section>
+
+              <section class="panel panel-findings" id="findings">
+                <div class="report-head">
+                  <div>
+                    <p class="panel-kicker">05 · Report</p>
+                    <h2>Tagged investigation</h2>
+                    <p class="hint">Stamp claims OBSERVED, DERIVED, DOCUMENTED, or HYPOTHESIS. This is the record a human files against.</p>
+                  </div>
+                  <button type="button" class="btn btn-report" id="assemble">Assemble report</button>
+                </div>
+                <div class="findings" id="findings-body">
+                  <p class="empty">Assemble the tagged report to stamp this case. Rules only — no paid model.</p>
+                </div>
+              </section>
+
+              <section class="panel panel-decide" id="action">
+                <div id="decide-open">
+                  <p class="panel-kicker">06 · Decision</p>
+                  <p class="eyebrow">Suggested action</p>
+                  <h2 id="decide-title">None yet</h2>
+                  <p class="lede" id="decide-sub">Select a case to see a next step.</p>
+                  <p class="action-status" id="decide-meta"></p>
+                  <div class="form-actions action-row">
+                    <button type="button" class="btn" id="file-incident" hidden>File decision</button>
+                  </div>
+                </div>
+                <div id="decide-filed" hidden>
+                  <p class="panel-kicker">06 · Filed</p>
+                  <p class="stamp">Filed · not sent</p>
+                  <h2 id="filed-action-title">Inhibit Heater B</h2>
+                  <p class="lede" id="filed-action-sub">Recorded in the library. ORBIT did not uplink.</p>
+                  <blockquote class="operator-note" id="operator-note" hidden></blockquote>
+                  <button type="button" class="text-btn" id="open-closeout">Read full close-out</button>
+                </div>
+              </section>
+            </div>
+          </div>
         </div>
       </main>
 
@@ -231,24 +242,28 @@
       <aside class="library rail" id="library" aria-label="Library">
         <header class="lib-head">
           <p class="nav-label" id="library-kicker">Library</p>
-          <div class="lib-modes" role="group" aria-label="Library scope" id="library-modes">
-            <button type="button" class="lib-mode is-on" id="library-mode-case">This case</button>
-            <button type="button" class="lib-mode" id="library-mode-all">All</button>
-          </div>
+          <p class="lib-count" id="library-count"></p>
         </header>
         <form class="lib-search" id="library-form">
           <label class="sr-only" for="library-q">Search the library</label>
-          <input id="library-q" name="q" type="search" placeholder="Search" autocomplete="off" />
+          <svg class="lib-ico" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.5" />
+            <path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+          <input id="library-q" name="q" type="search" placeholder="Search the library" autocomplete="off" />
+          <span class="kbd" id="library-kbd">/</span>
+          <button type="button" class="lib-clear" id="library-clear" aria-label="Clear search" hidden>×</button>
         </form>
-        <div class="lib-picks" id="library-picks" hidden></div>
+        <div class="lib-kinds" id="library-kinds" role="group" aria-label="Filter by kind"></div>
+        <p class="lib-status" id="library-status"></p>
         <div class="lib-scroll" id="library-body"></div>
         <section class="lib-reader" id="library-reader" hidden>
+          <button type="button" class="text-btn lib-back" id="reader-close">Back to library</button>
           <header>
             <div>
               <p class="eyebrow" id="reader-kind"></p>
               <h2 id="reader-title"></h2>
             </div>
-            <button type="button" class="icon-btn" id="reader-close" aria-label="Close document">×</button>
           </header>
           <p class="lib-reader-why" id="reader-why"></p>
           <div class="reader-body md" id="reader-body"></div>
