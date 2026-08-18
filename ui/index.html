@@ -23,18 +23,17 @@
         </svg>
         <p class="wordmark">ORBIT</p>
       </div>
-      <p class="app-case" id="app-case">Aurora-1</p>
       <span class="clock" id="focus-clock">--:--:--</span>
     </header>
 
     <div class="app">
       <aside class="nav rail">
         <header class="rail-head">
-          <p class="nav-label">Queue</p>
+          <p class="nav-label">Open</p>
           <p class="rail-meta" id="queue-meta"></p>
         </header>
-        <button type="button" class="btn-new" id="new-incident-btn">New incident</button>
-        <nav class="runs" id="incidents" aria-label="Incident queue"></nav>
+        <button type="button" class="btn-new" id="new-incident-btn">Open case</button>
+        <nav class="runs" id="incidents" aria-label="Open cases"></nav>
       </aside>
 
       <main class="stage" id="stage">
@@ -51,7 +50,7 @@
               <circle cx="24" cy="26.4" r="1.2" fill="#c45c12" />
             </svg>
             <div>
-              <p class="eyebrow">Spacecraft</p>
+              <p class="craft-kicker">Spacecraft</p>
               <p class="craft-name">Aurora-1</p>
             </div>
           </div>
@@ -61,11 +60,11 @@
         <header class="case-head" id="alarm">
           <div>
             <div class="kicker-row">
-              <p class="eyebrow" id="alarm-kicker">Incident</p>
+              <p class="eyebrow" id="alarm-kicker">Case</p>
               <span class="chip" id="status-chip" hidden></span>
             </div>
-            <h1 id="alarm-title">Select an incident</h1>
-            <p class="lede" id="alarm-lede">ORBIT assembles telemetry, commands, procedures, and prior incidents for a human decision.</p>
+            <h1 id="alarm-title">Select a case</h1>
+            <p class="lede" id="alarm-lede">ORBIT assembles telemetry, commands, procedures, and prior cases for a human decision.</p>
             <p class="case-meta" id="case-meta"></p>
           </div>
           <div class="hero-readout">
@@ -77,8 +76,8 @@
         <div class="filed-banner" id="filed-banner" hidden>
           <p class="stamp">Filed</p>
           <div>
-            <p class="filed-banner-title">This incident is in the library</p>
-            <p class="filed-banner-copy" id="filed-banner-copy">Close-out recorded. The recommended command was not sent.</p>
+            <p class="filed-banner-title">This case is in the library</p>
+            <p class="filed-banner-copy" id="filed-banner-copy">Decision recorded. The recommended command was not sent.</p>
           </div>
           <button type="button" class="btn btn-ghost" id="open-closeout-banner">Read close-out</button>
         </div>
@@ -115,13 +114,13 @@
         </section>
 
         <section class="panel panel-findings" id="findings">
-          <div class="row">
+          <div class="report-head">
             <div>
               <p class="panel-kicker">04 · Report</p>
               <h2>Tagged investigation</h2>
-              <p class="hint">Claims tagged OBSERVED, DERIVED, DOCUMENTED, or HYPOTHESIS.</p>
+              <p class="hint">Stamp claims OBSERVED, DERIVED, DOCUMENTED, or HYPOTHESIS. This is the record a human files against.</p>
             </div>
-            <button type="button" class="btn" id="assemble">Assemble report</button>
+            <button type="button" class="btn btn-report" id="assemble">Assemble report</button>
           </div>
           <div class="findings" id="findings-body">
             <p class="empty">Assemble the tagged report to stamp this case. Rules only — no paid model.</p>
@@ -133,14 +132,14 @@
             <p class="panel-kicker">05 · Decision</p>
             <p class="eyebrow">Suggested action</p>
             <h2 id="decide-title">None yet</h2>
-            <p class="lede" id="decide-sub">Select a case to see a recommended next step.</p>
+            <p class="lede" id="decide-sub">Select a case to see a next step.</p>
             <p class="action-status" id="decide-meta"></p>
             <div class="form-actions action-row">
-              <button type="button" class="btn" id="file-incident" hidden>File close-out</button>
+              <button type="button" class="btn" id="file-incident" hidden>File decision</button>
             </div>
           </div>
           <div id="decide-filed" hidden>
-            <p class="panel-kicker">05 · Closed</p>
+            <p class="panel-kicker">05 · Filed</p>
             <p class="stamp">Filed · not sent</p>
             <h2 id="filed-action-title">Inhibit Heater B</h2>
             <p class="lede" id="filed-action-sub">Recorded in the library. ORBIT did not uplink.</p>
@@ -151,8 +150,8 @@
 
         <section class="panel panel-proc" id="procedure">
           <article class="procedure">
-            <p class="panel-kicker">06 · Book</p>
-            <p class="eyebrow">Original procedure</p>
+            <p class="panel-kicker">06 · Procedure</p>
+            <p class="eyebrow">Book</p>
             <header class="proc-head">
               <p class="proc-id" id="proc-id">EPS-17</p>
               <div>
@@ -174,7 +173,7 @@
                 <dd id="proc-goal">Find the load that just came on. Do not guess the payload first.</dd>
               </div>
             </dl>
-            <p class="hint">Green on a step means this incident already has the evidence. It is not a sign-off. The last step is still a human command — ORBIT does not send it.</p>
+            <p class="hint">Green on a step means this case already has the evidence. It is not a sign-off. The last step is still a human command — ORBIT does not send it.</p>
             <ol class="proc" id="proc"></ol>
             <button type="button" class="text-btn" id="open-proc">Open full procedure</button>
           </article>
@@ -224,19 +223,19 @@
           <p class="slip-stub-note">You already have the alarm. ORBIT does not detect.</p>
         </aside>
         <form class="slip-body" id="new-incident">
-          <p class="pick-label">Entry alarm</p>
+          <p class="pick-label">Alarm</p>
           <input type="hidden" name="alarm" id="incident-alarm-value" value="" />
           <input type="hidden" name="run_id" id="incident-run-value" value="" />
           <div class="picks picks-alarms" id="incident-alarm"></div>
-          <p class="pick-label">Telemetry tape</p>
+          <p class="pick-label">Tape</p>
           <div class="picks picks-tapes" id="incident-run"></div>
           <div class="slip-foot">
-            <label class="slip-title-field">Working title
-              <input name="title" placeholder="Bus voltage warn" autocomplete="off" />
+            <label class="slip-title-field">Headline <span class="opt">optional</span>
+              <input name="title" placeholder="Leave blank to use the alarm" autocomplete="off" />
             </label>
             <div class="form-actions">
               <button type="button" class="text-btn" id="cancel-incident">Cancel</button>
-              <button type="submit" class="btn">Open incident</button>
+              <button type="submit" class="btn">Open case</button>
             </div>
           </div>
         </form>
@@ -250,18 +249,18 @@
             <p class="eyebrow" id="file-slip-title">File</p>
             <p class="slip-id" id="file-slip-id">INC-····</p>
           </div>
-          <p class="slip-stub-note">Stamps the library. Does not uplink a command.</p>
+          <p class="slip-stub-note">Records the decision. Does not uplink a command.</p>
         </aside>
         <form class="slip-body" id="file-form">
-          <p class="pick-label">Recommended action</p>
+          <p class="pick-label">Action</p>
           <p class="file-action" id="file-slip-action">Inhibit Heater B</p>
-          <p class="hint">You are accepting this as the close. Step 6 stays <strong>Not sent</strong>.</p>
+          <p class="hint">You are recording this decision. Step 6 stays <strong>Not sent</strong>.</p>
           <label class="slip-title-field">Operator remark
             <textarea name="note" id="file-note" rows="4" placeholder="Heater was already ~3× before SCIENCE_MODE. Do not safe the payload."></textarea>
           </label>
           <div class="form-actions">
             <button type="button" class="text-btn" id="cancel-file">Cancel</button>
-            <button type="submit" class="btn" id="confirm-file">File to library</button>
+            <button type="submit" class="btn" id="confirm-file">File decision</button>
           </div>
         </form>
       </div>

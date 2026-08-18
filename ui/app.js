@@ -21,13 +21,6 @@ const RUN_COPY = {
   inc0162: { kind: "Prior", title: "INC-0162 source", note: "Library match for the pack-IR close." },
 };
 
-const FAMILIES = [
-  { id: "heater", label: "Heater B", runs: ["eps204", "fault1", "inc0187"] },
-  { id: "payload", label: "Payload", runs: ["pay002", "inc0191"] },
-  { id: "battery", label: "Battery", runs: ["batt003", "inc0162"] },
-  { id: "other", label: "Other", runs: ["nominal"] },
-];
-
 const LIB_COPY = {
   "EPS-17": {
     use: "Bus voltage warn. Check the load that just came on.",
@@ -61,19 +54,47 @@ const LIB_COPY = {
   },
 };
 
-function incidentFamily(item) {
+function incidentTone(item) {
   if (item.alarm === "PAY.payload_current") return "payload";
   if (item.alarm === "EPS.battery_voltage") return "battery";
-  for (const fam of FAMILIES) {
-    if (fam.runs.includes(item.run_id)) return fam.id;
-  }
+  if (item.alarm === "EPS.bus_voltage") return "bus";
   return "other";
 }
 
+function alarmShort(alarm) {
+  if (alarm === "EPS.bus_voltage") return "Bus V";
+  if (alarm === "PAY.payload_current") return "Payload I";
+  if (alarm === "EPS.battery_voltage") return "Battery V";
+  return String(alarm || "").split(".").pop() || "Alarm";
+}
+
+function alarmTitle(alarm) {
+  const ch = TRACE_CATALOG.find((row) => row.id === alarm);
+  return ch ? ch.title : alarmShort(alarm);
+}
+
+function statusLabel(status) {
+  if (status === "recommended") return "Ready";
+  if (status === "filed") return "Filed";
+  return "Open";
+}
+
 function statusRank(status) {
+  if (status === "recommended") return 0;
   if (status === "filed") return 2;
-  if (status === "recommended") return 1;
-  return 0;
+  return 1;
+}
+
+function openedClock(iso) {
+  const m = String(iso || "").match(/T(\d{2}):(\d{2})/);
+  return m ? `${m[1]}:${m[2]}` : "";
+}
+
+function caseAction(item) {
+  if (item.alarm === "PAY.payload_current") return "Safe payload to STANDBY";
+  if (item.alarm === "EPS.battery_voltage") return "No inhibit";
+  if (item.alarm === "EPS.bus_voltage") return "Inhibit Heater B";
+  return "";
 }
 
 function tapeCopy(run) {
@@ -647,31 +668,33 @@ function updateReadouts() {
 }
 
 function renderIncidents() {
-  const groups = FAMILIES.map((fam) => ({
-    ...fam,
-    items: state.incidents
-      .filter((item) => incidentFamily(item) === fam.id)
-      .sort((a, b) => statusRank(a.status) - statusRank(b.status) || String(b.opened_at || "").localeCompare(String(a.opened_at || ""))),
-  })).filter((fam) => fam.items.length);
-  $("incidents").innerHTML = groups
-    .map((fam) => {
-      const rows = fam.items
-        .map((item) => {
-          const st = item.status || "open";
-          return `<button type="button" class="run ${item.id === state.incidentId ? "is-on" : ""} ${st === "filed" ? "is-filed" : ""}" data-incident="${item.id}">
-            <span class="id">${item.id}</span>
-            <span class="note">${escapeHtml(item.title)} · <span class="chip chip-${escapeHtml(st)}">${escapeHtml(st)}</span></span>
-          </button>`;
-        })
-        .join("");
-      return `<section class="family family-${fam.id}">
-        <p class="family-head">${escapeHtml(fam.label)} <span class="n">${fam.items.length}</span></p>
-        ${rows}
-      </section>`;
-    })
-    .join("") || `<p class="lib-hint">No cases on this craft.</p>`;
+  const byTime = (a, b) =>
+    statusRank(a.status) - statusRank(b.status) || String(b.opened_at || "").localeCompare(String(a.opened_at || ""));
+  const open = state.incidents.filter((item) => item.status !== "filed").sort(byTime);
+  const filed = state.incidents.filter((item) => item.status === "filed").sort(byTime);
+  const row = (item) => {
+    const st = item.status || "open";
+    const clock = openedClock(item.opened_at);
+    const action = st === "open" ? "" : caseAction(item);
+    const on = item.id === state.incidentId ? "is-on" : "";
+    return `<button type="button" class="run tone-${incidentTone(item)} ${on} ${st === "filed" ? "is-filed" : ""}" data-incident="${item.id}">
+      <span class="run-top">
+        <span class="id">${item.id}</span>
+        <span class="chip chip-${st === "recommended" ? "ready" : escapeHtml(st)}">${statusLabel(st)}</span>
+      </span>
+      <span class="run-mid">${escapeHtml(alarmShort(item.alarm))}${clock ? ` · ${clock}` : ""}</span>
+      ${action ? `<span class="run-act">${escapeHtml(action)}</span>` : ""}
+    </button>`;
+  };
+  const openBlock = open.length
+    ? open.map(row).join("")
+    : `<p class="lib-hint">No open cases.</p>`;
+  const filedBlock = filed.length
+    ? `<section class="desk-filed"><p class="family-head">Filed <span class="n">${filed.length}</span></p>${filed.map(row).join("")}</section>`
+    : "";
+  $("incidents").innerHTML = openBlock + filedBlock;
   const meta = $("queue-meta");
-  if (meta) meta.textContent = state.incidents.length ? `${state.incidents.length}` : "";
+  if (meta) meta.textContent = open.length ? String(open.length) : "";
 }
 
 function nextIncidentPreview() {
@@ -757,12 +780,12 @@ function renderAlarm(a) {
   const inc = state.incident;
   const alarm = alarmChannel();
   const st = inc?.status || "";
-  $("alarm-kicker").textContent = inc ? inc.id : "Incident";
+  $("alarm-kicker").textContent = inc ? inc.id : "Case";
   const chip = $("status-chip");
   if (st) {
     chip.hidden = false;
-    chip.className = `chip chip-${st}`;
-    chip.textContent = st;
+    chip.className = `chip chip-${st === "recommended" ? "ready" : st}`;
+    chip.textContent = statusLabel(st);
   } else {
     chip.hidden = true;
   }
@@ -774,15 +797,13 @@ function renderAlarm(a) {
     $("filed-banner-copy").textContent =
       n && !n.startsWith("Canonical")
         ? n
-        : "Close-out recorded. The recommended command was not sent.";
+        : "Decision recorded. The recommended command was not sent.";
   }
-  $("alarm-title").textContent = inc?.title || inc?.id || "Select an incident";
-  $("case-meta").textContent = inc
-    ? `${inc.id}  ·  Aurora-1  ·  ${inc.run_id}  ·  ${inc.alarm}`
-    : "";
-  renderChrome();
+  $("alarm-title").textContent = inc ? alarmTitle(inc.alarm) : "Select a case";
+  const when = a?.warn ? clock(a.warn.time_s) : openedClock(inc?.opened_at);
+  $("case-meta").textContent = inc && when ? when : "";
   if (!a) {
-    $("alarm-lede").textContent = "Open an incident from an alarm you already have. ORBIT does not detect anomalies.";
+    $("alarm-lede").textContent = "Open a case from an alarm you already have. ORBIT does not detect anomalies.";
     $("alarm-value").textContent = "—";
     $("alarm-unit").textContent = "";
     $("alarm-limit").textContent = "";
@@ -793,8 +814,8 @@ function renderAlarm(a) {
   const ch = meta(alarm);
   const crossed = Boolean(a.warn);
   $("alarm-lede").textContent = crossed
-    ? `${alarm} crossed warn at ${clock(a.warn.time_s)} (${fmt(v, 2)} ${ch.unit || ""}).`
-    : `No ${alarm} warn in this telemetry. Entry still stands — you opened from an alarm you already had.`;
+    ? `${alarmTitle(alarm)} crossed warn at ${clock(a.warn.time_s)} (${fmt(v, 2)} ${ch.unit || ""}).`
+    : `No ${alarmTitle(alarm)} warn in this telemetry. Entry still stands — you opened from an alarm you already had.`;
   $("alarm-value").textContent = fmt(v, 2);
   $("alarm-unit").textContent = ch.unit || "";
   $("alarm-limit").textContent = crossed
@@ -984,7 +1005,7 @@ function renderDecision(a) {
   filedPane.hidden = !filed;
   fileBtn.hidden = filed || !state.incidentId;
   fileBtn.disabled = Boolean(state.filing);
-  fileBtn.textContent = state.filing ? "Filing…" : "File close-out";
+  fileBtn.textContent = state.filing ? "Filing…" : "File decision";
   if (filed) {
     $("filed-action-title").textContent = $("decide-title").textContent || "Filed";
     const note = (state.incident.notes || "").trim();
@@ -998,7 +1019,7 @@ function renderDecision(a) {
   }
   if (!a) {
     $("decide-title").textContent = "None yet";
-    $("decide-sub").textContent = "Select a case to see a recommended next step.";
+    $("decide-sub").textContent = "Select a case to see a next step.";
     status.textContent = "";
     fileBtn.hidden = true;
     return;
@@ -1070,10 +1091,14 @@ function renderFindings() {
   }
   const a = analysis();
   if (!a) {
-    body.innerHTML = `<p class="empty">Load a run to begin.</p>`;
+    body.innerHTML = `<p class="empty">Select a case to begin.</p>`;
     return;
   }
-    body.innerHTML = `<p class="empty">The traces already show the story. Assemble the tagged report when you want the same evidence stamped OBSERVED / DERIVED / DOCUMENTED / HYPOTHESIS. Rules only — no paid model.</p>`;
+    body.innerHTML = `<div class="report-cta">
+      <p class="report-cta-kicker">Not stamped</p>
+      <p>Assemble the tagged report when you want this evidence on the record. OBSERVED / DERIVED / DOCUMENTED / HYPOTHESIS.</p>
+      <p class="hint">Rules only — no paid model.</p>
+    </div>`;
 }
 
 function renderCase() {
@@ -1144,7 +1169,7 @@ async function createIncident(ev) {
     title: form.title.value.trim() || null,
   };
   if (!body.run_id || !body.alarm) {
-    window.alert("Pick a tape and an entry alarm first.");
+    window.alert("Pick a tape and an alarm first.");
     return;
   }
   const res = await fetch("/incidents", {
@@ -1154,7 +1179,7 @@ async function createIncident(ev) {
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    window.alert(err.detail || "Could not open incident");
+    window.alert(err.detail || "Could not open case");
     return;
   }
   const created = await res.json();
@@ -1199,7 +1224,7 @@ async function fileIncident(ev) {
   } finally {
     state.filing = false;
     confirmBtn.disabled = false;
-    confirmBtn.textContent = "File to library";
+    confirmBtn.textContent = "File decision";
     renderDecision(analysis());
   }
 }
@@ -1323,17 +1348,6 @@ function setLibraryOpen(open) {
     btn.setAttribute("aria-expanded", open ? "true" : "false");
     btn.setAttribute("aria-label", open ? "Hide library" : "Show library");
   }
-}
-
-function renderChrome() {
-  const el = $("app-case");
-  if (!el) return;
-  const inc = state.incident;
-  if (!inc) {
-    el.textContent = "Aurora-1";
-    return;
-  }
-  el.innerHTML = `Aurora-1<span class="sep">·</span>${escapeHtml(inc.id)}<span class="sep">·</span>${escapeHtml(inc.status || "open")}`;
 }
 
 function libraryMode() {
@@ -1602,7 +1616,6 @@ async function boot() {
   renderLibrary();
   const preferred = state.incidents.find((item) => item.id === "INC-0204") || state.incidents[0];
   if (preferred) await loadIncident(preferred.id);
-  else renderChrome();
 }
 
 boot().catch((err) => {
