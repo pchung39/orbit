@@ -48,6 +48,24 @@ WORKSPACE_CHANNELS = (
     "THM.heater_b_temperature",
 )
 
+DESK_CHANNELS = (
+    "EPS.bus_voltage",
+    "EPS.bus_current",
+    "THM.heater_b_current",
+    "PAY.mode",
+    "EPS.battery_voltage",
+    "EPS.solar_array_current",
+)
+
+DESK_TITLES = {
+    "EPS.bus_voltage": "Bus voltage",
+    "EPS.bus_current": "Bus current",
+    "THM.heater_b_current": "Heater B",
+    "PAY.mode": "Payload mode",
+    "EPS.battery_voltage": "Battery voltage",
+    "EPS.solar_array_current": "Solar array",
+}
+
 class IncidentIn(BaseModel):
     run_id: str
     alarm: str
@@ -94,6 +112,84 @@ def _row(row: Any) -> dict[str, Any]:
     return data
 
 
+def _downsample(rows: list[dict[str, Any]], n: int = 52) -> list[dict[str, Any]]:
+    if len(rows) <= n:
+        return rows
+    step = (len(rows) - 1) / (n - 1)
+    return [rows[round(i * step)] for i in range(n)]
+
+
+def _limit_crossed(value: float | None, limit: Any, direction: str | None) -> bool:
+    if value is None or limit is None or direction in (None, "not_applicable"):
+        return False
+    if direction == "below":
+        return value < float(limit)
+    if direction == "above":
+        return value > float(limit)
+    if direction == "above_absolute_value":
+        return abs(value) > float(limit)
+    return False
+
+
+def _spark_point(row: dict[str, Any]) -> dict[str, Any]:
+    time_s = float(row["time_s"])
+    value = row.get("value_num")
+    return {
+        "time_s": time_s,
+        "clock": format_clock(time_s),
+        "value_num": float(value) if value is not None else None,
+        "value_text": row.get("value_text"),
+    }
+
+
+def _desk_channel(spec: dict[str, Any], name: str, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    meta = spec["channels"][name]
+    last = rows[-1] if rows else None
+    warn = meta.get("warn_limit")
+    crit = meta.get("critical_limit")
+    direction = meta.get("limit_direction")
+    value = last.get("value_num") if last else None
+    if value is not None:
+        value = float(value)
+    state = "nominal"
+    if last and name != "PAY.mode":
+        if _limit_crossed(value, crit, direction):
+            state = "critical"
+        elif _limit_crossed(value, warn, direction):
+            state = "warn"
+    crossed = None
+    if name != "PAY.mode" and warn is not None:
+        for row in rows:
+            num = row.get("value_num")
+            if num is None:
+                continue
+            if _limit_crossed(float(num), warn, direction):
+                time_s = float(row["time_s"])
+                crossed = {
+                    "time_s": time_s,
+                    "clock": format_clock(time_s),
+                    "value_num": float(num),
+                }
+                break
+    return {
+        "id": name,
+        "title": DESK_TITLES.get(name, name),
+        "subsystem": meta.get("subsystem"),
+        "unit": "" if name == "PAY.mode" else (meta.get("unit") or ""),
+        "warn_limit": warn,
+        "critical_limit": crit,
+        "limit_direction": direction,
+        "nominal_range": meta.get("nominal_range"),
+        "value_num": value,
+        "value_text": last.get("value_text") if last else None,
+        "time_s": float(last["time_s"]) if last else None,
+        "clock": format_clock(float(last["time_s"])) if last else None,
+        "state": state,
+        "crossed": crossed,
+        "spark": [_spark_point(row) for row in _downsample(rows)],
+    }
+
+
 def _channel_card(spec: dict[str, Any], name: str) -> dict[str, Any]:
     meta = spec["channels"][name]
     return {
@@ -112,6 +208,59 @@ def _channel_card(spec: dict[str, Any], name: str) -> dict[str, Any]:
 @app.get("/health")
 def health() -> dict[str, bool]:
     return {"ok": True}
+
+
+@app.get("/desk")
+def desk(run_id: str | None = Query(default=None)) -> dict[str, Any]:
+    """Last samples on a tape. Not a live downlink. ORBIT does not detect."""
+    spec = load_and_validate()
+    with _conn() as conn:
+        ensure_demo_incident(conn)
+        runs = list_runs(conn)
+        if not runs:
+            return {
+                "run_id": None,
+                "clock": None,
+                "time_s": None,
+                "scope": "Last sample on this tape. Not a live downlink.",
+                "orbit": None,
+                "channels": [],
+                "events": [],
+            }
+        ids = {row["id"] for row in runs}
+        chosen = run_id or "eps204"
+        if chosen not in ids:
+            if run_id:
+                raise HTTPException(404, f"unknown run {run_id}")
+            chosen = runs[0]["id"]
+        run = next(row for row in runs if row["id"] == chosen)
+        channels = [
+            _desk_channel(spec, name, [_row(item) for item in query_channel(conn, chosen, name)])
+            for name in DESK_CHANNELS
+            if name in spec["channels"]
+        ]
+        events = [_row(item) for item in query_events(conn, chosen)]
+    last_t = max((ch.get("time_s") or 0) for ch in channels) if channels else None
+    period_min = float(spec["constants"]["orbital_period_min"])
+    period_s = period_min * 60.0
+    solar = next((ch for ch in channels if ch["id"] == "EPS.solar_array_current"), None)
+    solar_now = (solar or {}).get("value_num")
+    return {
+        "run_id": chosen,
+        "scenario": run.get("scenario"),
+        "notes": run.get("notes") or "",
+        "clock": format_clock(last_t) if last_t is not None else None,
+        "time_s": last_t,
+        "scope": "Last sample on this tape. Not a live downlink.",
+        "orbit": {
+            "period_min": period_min,
+            "eclipse_fraction": float(spec["constants"]["eclipse_fraction"]),
+            "phase": ((last_t or 0) / period_s) % 1,
+            "illumination": "sun" if (solar_now or 0) > 1 else "eclipse",
+        },
+        "channels": channels,
+        "events": events,
+    }
 
 
 @app.get("/entry-alarms")

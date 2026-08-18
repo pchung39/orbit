@@ -12,31 +12,72 @@
     />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
-  <body class="lib-open">
-    <a class="skip" href="#stage">Skip to case</a>
+  <body class="view-home">
+    <a class="skip" href="#home" id="skip">Skip to home</a>
 
     <header class="appbar">
-      <div class="brand">
+      <button type="button" class="brand" id="go-home-brand" aria-label="ORBIT home">
         <svg class="logo-orbit" viewBox="0 0 32 32" aria-hidden="true">
           <ellipse cx="16" cy="16" rx="13" ry="6.2" fill="none" stroke="currentColor" stroke-width="1.4" transform="rotate(-28 16 16)" />
           <circle cx="25.4" cy="11.2" r="2.3" fill="currentColor" />
         </svg>
         <p class="wordmark">ORBIT</p>
+      </button>
+      <nav class="app-nav" aria-label="ORBIT">
+        <button type="button" class="app-tab is-on" id="tab-home">Home</button>
+        <button type="button" class="app-tab" id="tab-incidents">Incidents</button>
+      </nav>
+      <div class="appbar-actions">
+        <button type="button" class="btn-bar" id="new-incident-btn">Open case</button>
+        <span class="clock" id="focus-clock">--:--:--</span>
       </div>
-      <span class="clock" id="focus-clock">--:--:--</span>
     </header>
 
     <div class="app">
-      <aside class="nav rail">
-        <header class="rail-head">
-          <p class="nav-label">Open</p>
-          <p class="rail-meta" id="queue-meta"></p>
-        </header>
-        <button type="button" class="btn-new" id="new-incident-btn">Open case</button>
-        <nav class="runs" id="incidents" aria-label="Open cases"></nav>
-      </aside>
-
       <main class="stage" id="stage">
+        <section class="home" id="home">
+          <header class="home-hero" id="home-hero">
+            <div class="home-hero-copy">
+              <div class="craft">
+                <svg class="logo-aurora" viewBox="0 0 48 48" aria-hidden="true">
+                  <circle cx="24" cy="24" r="22.5" fill="#0c1922" />
+                  <circle cx="24" cy="24" r="20" fill="#f4f6f7" />
+                  <path d="M8 31c7-12 12-19 16-19s9 7 16 19" fill="none" stroke="#1f8a7a" stroke-width="2.4" stroke-linecap="round" />
+                  <path d="M10 33c6.5-10 11-16 14-16s7.5 6 14 16" fill="none" stroke="#3d4a52" stroke-width="2" stroke-linecap="round" />
+                  <path d="M12 35c5.5-8 9-12 12-12s6.5 4 12 12" fill="none" stroke="#1d4e89" stroke-width="1.8" stroke-linecap="round" />
+                  <path d="M24 11l3.4 8H20.6L24 11z" fill="#0c1922" />
+                  <rect x="22.6" y="18.6" width="2.8" height="5.2" rx="0.5" fill="#0c1922" />
+                  <circle cx="24" cy="26.4" r="1.2" fill="#c45c12" />
+                </svg>
+                <div>
+                  <p class="craft-kicker">Spacecraft</p>
+                  <p class="craft-name">Aurora-1</p>
+                </div>
+              </div>
+              <p class="home-lede" id="home-lede">Pick any ingested tape. Last sample on the recording — ORBIT does not downlink, detect, or command.</p>
+              <div class="home-hero-meta">
+                <p class="home-clock" id="home-clock">--:--:--</p>
+                <p class="tag" id="home-illum"></p>
+                <p class="quiet" id="home-orbit-meta"></p>
+                <p class="link" id="home-status"><span class="pulse"></span> Connecting</p>
+              </div>
+            </div>
+            <div class="orbit-wrap" id="home-orbit"></div>
+          </header>
+          <div class="home-tapes" id="home-tapes" role="tablist" aria-label="Telemetry tape"></div>
+          <section class="home-channels" id="home-channels" aria-label="Last samples on this tape"></section>
+          <div class="home-split">
+            <section class="home-log" id="home-log"></section>
+            <section class="home-next" id="home-next"></section>
+          </div>
+        </section>
+
+        <section class="incidents-desk" id="incidents-desk">
+          <header class="inc-head" id="inc-head"></header>
+          <div class="inc-list" id="inc-list"></div>
+        </section>
+
+        <div class="case-desk" id="case-desk">
         <div class="mission">
           <div class="craft">
             <svg class="logo-aurora" viewBox="0 0 48 48" aria-hidden="true">
@@ -57,30 +98,31 @@
           <p class="link" id="store-status"><span class="pulse"></span> Connecting</p>
         </div>
 
-        <header class="case-head" id="alarm">
-          <div>
-            <div class="kicker-row">
-              <p class="eyebrow" id="alarm-kicker">Case</p>
-              <span class="chip" id="status-chip" hidden></span>
-            </div>
-            <h1 id="alarm-title">Select a case</h1>
-            <p class="lede" id="alarm-lede">ORBIT assembles telemetry, commands, procedures, and prior cases for a human decision.</p>
-            <p class="case-meta" id="case-meta"></p>
-          </div>
-          <div class="hero-readout">
-            <p class="hero-value"><span id="alarm-value">—</span><span class="unit" id="alarm-unit"></span></p>
-            <p class="hero-limit" id="alarm-limit"></p>
-          </div>
-        </header>
+        <p class="case-back">
+          <button type="button" class="text-btn" id="back-incidents">Incidents</button>
+        </p>
 
-        <div class="filed-banner" id="filed-banner" hidden>
-          <p class="stamp">Filed</p>
-          <div>
-            <p class="filed-banner-title">This case is in the library</p>
-            <p class="filed-banner-copy" id="filed-banner-copy">Decision recorded. The recommended command was not sent.</p>
+        <header class="case-head" id="alarm">
+          <div class="case-head-main">
+            <div>
+              <div class="kicker-row">
+                <p class="eyebrow" id="alarm-kicker">Case</p>
+                <span class="chip" id="status-chip" hidden></span>
+              </div>
+              <h1 id="alarm-title">Select a case</h1>
+              <p class="lede" id="alarm-lede">ORBIT assembles telemetry, commands, procedures, and prior cases for a human decision.</p>
+              <p class="case-meta" id="case-meta"></p>
+            </div>
+            <div class="hero-readout">
+              <p class="hero-value"><span id="alarm-value">—</span><span class="unit" id="alarm-unit"></span></p>
+              <p class="hero-limit" id="alarm-limit"></p>
+            </div>
           </div>
-          <button type="button" class="btn btn-ghost" id="open-closeout-banner">Read close-out</button>
-        </div>
+          <p class="case-filed" id="case-filed" hidden>
+            <span id="case-filed-copy">In the library. Command not sent.</span>
+            <button type="button" class="text-btn" id="open-closeout-case">Read close-out</button>
+          </p>
+        </header>
 
         <section class="panel panel-compare" id="compare">
           <p class="panel-kicker">01 · Evidence</p>
@@ -178,9 +220,10 @@
             <button type="button" class="text-btn" id="open-proc">Open full procedure</button>
           </article>
         </section>
+        </div>
       </main>
 
-      <button type="button" class="lib-handle" id="library-toggle" aria-expanded="true" aria-controls="library" aria-label="Hide library">
+      <button type="button" class="lib-handle" id="library-toggle" aria-expanded="false" aria-controls="library" aria-label="Show library">
         <svg viewBox="0 0 16 16" aria-hidden="true">
           <path d="M10.2 3.2 5.5 8l4.7 4.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
         </svg>

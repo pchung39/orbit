@@ -165,6 +165,7 @@ function tracesToDraw() {
 }
 
 const state = {
+  view: "home",
   runs: [],
   alarms: [],
   incidents: [],
@@ -172,6 +173,8 @@ const state = {
   incident: null,
   runId: null,
   workspace: null,
+  desk: null,
+  deskRunId: "eps204",
   window: "focus",
   pinT: null,
   hoverT: null,
@@ -183,7 +186,7 @@ const state = {
   libraryHits: null,
   librarySearching: false,
   libraryPinned: false,
-  libraryOpen: true,
+  libraryOpen: false,
   openDocId: null,
   openDoc: null,
 };
@@ -639,6 +642,10 @@ function drawTrace(el, channelId, title, color, primary) {
 
 function updateReadouts() {
   const a = analysis();
+  if (state.view === "home" || state.view === "incidents") {
+    $("focus-clock").textContent = state.desk?.clock || "--:--:--";
+    return;
+  }
   const t = state.hoverT ?? state.pinT ?? a?.t;
   $("focus-clock").textContent = clock(t);
   const parts = tracesToDraw().map((ch) => {
@@ -670,31 +677,57 @@ function updateReadouts() {
 function renderIncidents() {
   const byTime = (a, b) =>
     statusRank(a.status) - statusRank(b.status) || String(b.opened_at || "").localeCompare(String(a.opened_at || ""));
-  const open = state.incidents.filter((item) => item.status !== "filed").sort(byTime);
+  const active = state.incidents.filter((item) => item.status !== "filed").sort(byTime);
+  const ready = active.filter((item) => item.status === "recommended");
   const filed = state.incidents.filter((item) => item.status === "filed").sort(byTime);
-  const row = (item) => {
-    const st = item.status || "open";
-    const clock = openedClock(item.opened_at);
-    const action = st === "open" ? "" : caseAction(item);
-    const on = item.id === state.incidentId ? "is-on" : "";
-    return `<button type="button" class="run tone-${incidentTone(item)} ${on} ${st === "filed" ? "is-filed" : ""}" data-incident="${item.id}">
-      <span class="run-top">
-        <span class="id">${item.id}</span>
-        <span class="chip chip-${st === "recommended" ? "ready" : escapeHtml(st)}">${statusLabel(st)}</span>
-      </span>
-      <span class="run-mid">${escapeHtml(alarmShort(item.alarm))}${clock ? ` · ${clock}` : ""}</span>
-      ${action ? `<span class="run-act">${escapeHtml(action)}</span>` : ""}
-    </button>`;
-  };
-  const openBlock = open.length
-    ? open.map(row).join("")
-    : `<p class="lib-hint">No open cases.</p>`;
+
+  const hero = $("inc-head");
+  if (hero) {
+    const walk = active.length
+      ? `${active.length} to walk${ready.length ? ` · ${ready.length} ready to file` : ""}`
+      : "No open cases";
+    hero.innerHTML = `<div>
+      <p class="craft-kicker">Aurora-1</p>
+      <h1>Incidents</h1>
+      <p class="inc-lede">Walk a case you already opened, or open one from an alarm you already have. ORBIT does not detect or uplink.</p>
+      <p class="inc-meta">${walk}</p>
+    </div>
+    <button type="button" class="btn" data-open-slip>Open case</button>`;
+  }
+
+  const list = $("inc-list");
+  if (!list) return;
+  const cols = `<div class="inc-cols" aria-hidden="true">
+    <span>Case</span><span>Alarm</span><span>Tape</span><span>Opened</span><span>Status</span>
+  </div>`;
+  const activeBlock = active.length
+    ? `<div class="inc-table">${cols}${active.map(incRow).join("")}</div>`
+    : `<p class="hint">Nothing to walk. Open a case from an alarm you already have.</p>`;
   const filedBlock = filed.length
-    ? `<section class="desk-filed"><p class="family-head">Filed <span class="n">${filed.length}</span></p>${filed.map(row).join("")}</section>`
+    ? `<section class="inc-filed">
+        <p class="panel-kicker">Filed</p>
+        <div class="inc-table">${cols}${filed.map(incRow).join("")}</div>
+      </section>`
     : "";
-  $("incidents").innerHTML = openBlock + filedBlock;
-  const meta = $("queue-meta");
-  if (meta) meta.textContent = open.length ? String(open.length) : "";
+  list.innerHTML = activeBlock + filedBlock;
+}
+
+function incRow(item) {
+  const st = item.status || "open";
+  const copy = tapeCopy({ id: item.run_id });
+  const when = openedClock(item.opened_at);
+  const action = st === "open" ? "" : caseAction(item);
+  const on = state.view === "case" && item.id === state.incidentId ? "is-on" : "";
+  return `<button type="button" class="inc-row tone-${incidentTone(item)} ${on} ${st === "recommended" ? "is-ready" : ""}" data-open-case="${item.id}">
+    <span class="id">${item.id}</span>
+    <span class="inc-alarm">
+      <strong>${escapeHtml(alarmTitle(item.alarm))}</strong>
+      ${action ? `<span class="run-act">${escapeHtml(action)}</span>` : ""}
+    </span>
+    <span class="inc-tape">${escapeHtml(copy.kind)} · ${escapeHtml(copy.title)}</span>
+    <span class="inc-clock">${when || "—"}</span>
+    <span class="chip chip-${st === "recommended" ? "ready" : escapeHtml(st)}">${statusLabel(st)}</span>
+  </button>`;
 }
 
 function nextIncidentPreview() {
@@ -769,10 +802,333 @@ function closeFileSlip() {
 }
 
 function setStoreStatus(ok) {
-  const el = $("store-status");
-  el.classList.toggle("is-on", ok);
-  el.classList.toggle("is-empty", !ok);
-  el.innerHTML = `<span class="pulse"></span> ${ok ? "Connected" : "Empty"}`;
+  for (const id of ["store-status", "home-status"]) {
+    const el = $(id);
+    if (!el) continue;
+    el.classList.toggle("is-on", ok);
+    el.classList.toggle("is-empty", !ok);
+    el.innerHTML = `<span class="pulse"></span> ${ok ? "Connected" : "Empty"}`;
+  }
+}
+
+function setView(view) {
+  state.view = view;
+  document.body.classList.toggle("view-home", view === "home");
+  document.body.classList.toggle("view-incidents", view === "incidents");
+  document.body.classList.toggle("view-case", view === "case");
+  $("tab-home")?.classList.toggle("is-on", view === "home");
+  $("tab-incidents")?.classList.toggle("is-on", view === "incidents");
+  const skip = $("skip");
+  if (skip) {
+    skip.href = view === "incidents" ? "#incidents-desk" : view === "case" ? "#stage" : "#home";
+    skip.textContent =
+      view === "incidents" ? "Skip to incidents" : view === "case" ? "Skip to case" : "Skip to home";
+  }
+}
+
+function enterHome() {
+  setView("home");
+  renderDesk();
+  updateReadouts();
+  $("stage").scrollTop = 0;
+}
+
+function enterIncidents() {
+  setView("incidents");
+  renderIncidents();
+  updateReadouts();
+  $("stage").scrollTop = 0;
+}
+
+function enterCase() {
+  setView("case");
+  renderIncidents();
+}
+
+function channelInk(id) {
+  if (id.includes("heater")) return "var(--heater)";
+  if (id.includes("PAY") || id.includes("payload")) return "var(--payload)";
+  if (id.includes("solar")) return "var(--accent)";
+  if (id.includes("battery")) return "var(--accent)";
+  if (id.includes("bus_current")) return "var(--ink)";
+  return "var(--bus)";
+}
+
+function sparkGeom(ch) {
+  const W = 260;
+  const H = 44;
+  const padT = 4;
+  const padB = 4;
+  const isMode = ch.id === "PAY.mode";
+  const vals = (ch.spark || []).map((p) =>
+    isMode ? (p.value_text === "SCIENCE_MODE" ? 1 : 0) : p.value_num
+  );
+  const nums = vals.filter((v) => v != null);
+  if (nums.length < 2) return null;
+  let lo = Math.min(...nums);
+  let hi = Math.max(...nums);
+  if (!isMode && ch.warn_limit != null) {
+    lo = Math.min(lo, Number(ch.warn_limit));
+    hi = Math.max(hi, Number(ch.warn_limit));
+  }
+  if (hi === lo) {
+    lo -= 0.5;
+    hi += 0.5;
+  }
+  const span = hi - lo;
+  lo -= span * 0.12;
+  hi += span * 0.12;
+  return {
+    W,
+    H,
+    vals,
+    isMode,
+    x: (i) => (i / Math.max(1, ch.spark.length - 1)) * W,
+    y: (v) => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB),
+  };
+}
+
+function sparkSvg(ch) {
+  const g = sparkGeom(ch);
+  if (!g) return "";
+  const parts = [];
+  (ch.spark || []).forEach((p, i) => {
+    const v = g.vals[i];
+    if (v == null) return;
+    if (!parts.length) {
+      parts.push(`M${g.x(i).toFixed(1)} ${g.y(v).toFixed(1)}`);
+      return;
+    }
+    if (g.isMode) {
+      parts.push(`H${g.x(i).toFixed(1)}`);
+      parts.push(`V${g.y(v).toFixed(1)}`);
+    } else {
+      parts.push(`L${g.x(i).toFixed(1)} ${g.y(v).toFixed(1)}`);
+    }
+  });
+  const warn =
+    !g.isMode && ch.warn_limit != null
+      ? `<line x1="0" x2="${g.W}" y1="${g.y(Number(ch.warn_limit)).toFixed(1)}" y2="${g.y(Number(ch.warn_limit)).toFixed(1)}" stroke="var(--warn)" stroke-dasharray="3 3" stroke-width="1" opacity="0.7"/>`
+      : "";
+  return `<svg class="ch-spark" viewBox="0 0 ${g.W} ${g.H}" preserveAspectRatio="none" aria-hidden="true">
+    ${warn}
+    <path d="${parts.join(" ")}" fill="none" stroke="${channelInk(ch.id)}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+    <g class="spark-dot"></g>
+    <rect class="spark-hit" x="0" y="0" width="${g.W}" height="${g.H}" fill="transparent"/>
+  </svg>`;
+}
+
+function orbitSvg(orbit) {
+  if (!orbit) return "";
+  const theta = Number(orbit.phase || 0) * Math.PI * 2;
+  const cx = 160;
+  const cy = 68;
+  const rx = 118;
+  const ry = 38;
+  const x = (cx + rx * Math.cos(theta)).toFixed(1);
+  const y = (cy + ry * Math.sin(theta)).toFixed(1);
+  const sun = orbit.illumination === "sun";
+  return `<svg class="orbit-map" viewBox="0 0 320 140" aria-hidden="true">
+    <g transform="rotate(-22 ${cx} ${cy})">
+      <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(126,224,208,0.28)" stroke-width="1.4"/>
+      <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(12,25,34,0.55)" stroke-width="16" stroke-dasharray="190 540" transform="rotate(200 ${cx} ${cy})"/>
+      <circle cx="${x}" cy="${y}" r="5.5" fill="${sun ? "#7ee0d0" : "#c45c12"}"/>
+      <circle cx="${x}" cy="${y}" r="9" fill="none" stroke="${sun ? "#7ee0d0" : "#c45c12"}" opacity="0.45"/>
+    </g>
+    <circle cx="252" cy="42" r="11" fill="#f3e2b6"/>
+    <circle cx="248" cy="40" r="4" fill="#fff6d6" opacity="0.7"/>
+    <text x="18" y="128" fill="#8aa8a3" font-size="10" font-family="IBM Plex Mono,monospace" letter-spacing="1.6">ECLIPSE</text>
+    <text x="262" y="128" fill="#8aa8a3" font-size="10" font-family="IBM Plex Mono,monospace" letter-spacing="1.6">SUN</text>
+  </svg>`;
+}
+
+function tileValue(ch, sample) {
+  const row = sample || ch;
+  if (ch.id === "PAY.mode") return row.value_text || "—";
+  return row.value_num != null ? fmt(row.value_num, 2) : "—";
+}
+
+function tileLimit(ch, sample) {
+  const row = sample || ch;
+  if (ch.id === "PAY.mode") return row.clock ? `${row.clock} on tape` : "On this tape";
+  if (ch.crossed) {
+    return `Warn ${ch.crossed.clock} · limit ${ch.warn_limit} ${ch.unit || ""}`.trim();
+  }
+  if (ch.warn_limit != null) return `Limit ${ch.warn_limit} ${ch.unit || ""}`.trim();
+  return row.clock ? `${row.clock} on tape` : "No warn on this channel";
+}
+
+function pickFeatured() {
+  const onTape = state.incidents.filter((item) => item.run_id === state.deskRunId && item.status !== "filed");
+  const ready = onTape.filter((item) => item.status === "recommended");
+  return ready[0] || onTape.find((item) => item.id === "INC-0204") || onTape[0] || null;
+}
+
+function sitrep() {
+  const chans = state.desk?.channels || [];
+  const orbit = state.desk?.orbit;
+  const warns = chans.filter((ch) => ch.id !== "PAY.mode" && (ch.state === "warn" || ch.state === "critical"));
+  const mode = chans.find((ch) => ch.id === "PAY.mode");
+  const illum = orbit?.illumination === "sun" ? "Sunlit" : orbit ? "Eclipse" : "Tape";
+  const worst = warns.find((ch) => ch.state === "critical") || warns[0];
+  const title = worst
+    ? `${illum} · ${worst.title} ${worst.state === "critical" ? "critical" : "warn"}`
+    : `${illum} · inside limits`;
+  const lines = [];
+  for (const ch of warns) {
+    const at = ch.crossed?.clock ? ` at ${ch.crossed.clock}` : "";
+    lines.push(`${ch.title} is ${tileValue(ch)} ${ch.unit || ""}${at}.`.replace(/\s+/g, " ").trim());
+  }
+  if (mode?.value_text) lines.push(`Payload is ${String(mode.value_text).replaceAll("_", " ")}.`);
+  if (!warns.length) {
+    lines.push("Last sample is inside limits. Open a case only if you already have an alarm.");
+  }
+  return { title, lede: lines.join(" "), warn: warns.length > 0 };
+}
+
+function renderDesk() {
+  const desk = state.desk;
+  const orbit = desk?.orbit;
+  if ($("home-clock")) $("home-clock").textContent = desk?.clock || "--:--:--";
+  if ($("home-illum")) {
+    $("home-illum").textContent = orbit?.illumination === "sun" ? "Sunlit" : orbit ? "Eclipse" : "";
+  }
+  if ($("home-orbit-meta")) {
+    $("home-orbit-meta").textContent = orbit ? `${orbit.period_min} min orbit` : "";
+  }
+  if ($("home-orbit")) $("home-orbit").innerHTML = orbitSvg(orbit);
+  if ($("focus-clock") && (state.view === "home" || state.view === "incidents")) {
+    $("focus-clock").textContent = desk?.clock || "--:--:--";
+  }
+
+  const tapes = $("home-tapes");
+  if (tapes) {
+    tapes.innerHTML = sortTapes(state.runs)
+      .map((run) => {
+        const copy = tapeCopy(run);
+        const on = run.id === state.deskRunId ? "is-on" : "";
+        return `<button type="button" class="tape-pill ${on}" data-tape="${escapeHtml(run.id)}" role="tab" aria-selected="${on ? "true" : "false"}">
+          <span class="kind">${escapeHtml(copy.kind)}</span>${escapeHtml(copy.title)}
+        </button>`;
+      })
+      .join("");
+  }
+
+  const channels = $("home-channels");
+  if (channels) {
+    channels.innerHTML = (desk?.channels || [])
+      .map((ch) => {
+        const warn = ch.state === "warn" || ch.state === "critical" ? "is-warn" : "";
+        const science = ch.id === "PAY.mode" && ch.value_text === "SCIENCE_MODE" ? "is-science" : "";
+        const unit = ch.id === "PAY.mode" ? "" : ch.unit || "";
+        const badge = ch.state === "critical" ? "Crit" : ch.state === "warn" ? "Warn" : "Tape";
+        return `<article class="ch-tile ${warn} ${science}" data-ch="${escapeHtml(ch.id)}">
+          <p class="ch-kicker"><span>${escapeHtml(ch.subsystem || "")}</span><span>${badge}</span></p>
+          <h3>${escapeHtml(ch.title)}</h3>
+          <p class="ch-read"><span class="ch-value">${escapeHtml(tileValue(ch))}</span><span class="ch-unit">${escapeHtml(unit)}</span></p>
+          <p class="ch-limit">${escapeHtml(tileLimit(ch))}</p>
+          ${sparkSvg(ch)}
+        </article>`;
+      })
+      .join("");
+    bindDeskSparks();
+  }
+
+  const sit = sitrep();
+  const featured = pickFeatured();
+  const next = $("home-next");
+  if (next) {
+    const nOpen = state.incidents.filter((item) => item.status !== "filed").length;
+    const walk = featured
+      ? `<button type="button" class="btn" data-open-case="${escapeHtml(featured.id)}">Walk ${escapeHtml(featured.id)}</button>`
+      : "";
+    next.className = `home-next ${sit.warn ? "is-warn" : "is-ok"}`;
+    next.innerHTML = `<p class="panel-kicker">Last sample</p>
+      <h2>${escapeHtml(sit.title)}</h2>
+      <p class="lede">${escapeHtml(sit.lede)}</p>
+      <div class="form-actions sit-actions">
+        <button type="button" class="btn" data-open-slip>Open case</button>
+        ${walk}
+        <button type="button" class="text-btn" data-go-incidents>${nOpen ? `${nOpen} open on this craft` : "All incidents"}</button>
+      </div>`;
+  }
+
+  const log = $("home-log");
+  if (log) {
+    const events = desk?.events || [];
+    const rows = events.length
+      ? `<ol class="tape-events">${events
+          .map(
+            (ev) =>
+              `<li><span class="t">${escapeHtml(ev.clock || clock(ev.time_s))}</span><span class="d">${escapeHtml(ev.detail || ev.event_type)}</span></li>`
+          )
+          .join("")}</ol>`
+      : `<p class="hint">No commands on this recording.</p>`;
+    log.innerHTML = `<p class="panel-kicker">Commands</p><h2>On this recording</h2>${rows}`;
+  }
+}
+
+function bindDeskSparks() {
+  const root = $("home-channels");
+  if (!root) return;
+  root.querySelectorAll("[data-ch]").forEach((el) => {
+    const id = el.dataset.ch;
+    const ch = (state.desk?.channels || []).find((row) => row.id === id);
+    const hit = el.querySelector(".spark-hit");
+    if (!ch || !hit) return;
+    const g = sparkGeom(ch);
+    const show = (sample) => {
+      const value = el.querySelector(".ch-value");
+      const limit = el.querySelector(".ch-limit");
+      const dot = el.querySelector(".spark-dot");
+      if (value) value.textContent = tileValue(ch, sample);
+      if (limit && sample) limit.textContent = `${sample.clock} on tape`;
+      if (state.view === "home" && sample?.clock) $("focus-clock").textContent = sample.clock;
+      if (dot && g && sample) {
+        const i = (ch.spark || []).indexOf(sample);
+        const v = g.vals[i];
+        if (i >= 0 && v != null) {
+          dot.innerHTML = `<circle cx="${g.x(i).toFixed(1)}" cy="${g.y(v).toFixed(1)}" r="3.2" fill="${channelInk(ch.id)}"/>`;
+        }
+      }
+    };
+    hit.addEventListener("mousemove", (ev) => {
+      const rect = hit.getBoundingClientRect();
+      const frac = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
+      const i = Math.round(frac * Math.max(0, (ch.spark || []).length - 1));
+      show(ch.spark[i]);
+    });
+    hit.addEventListener("mouseleave", () => {
+      show(ch);
+      const dot = el.querySelector(".spark-dot");
+      if (dot) dot.innerHTML = "";
+      if (state.view === "home") $("focus-clock").textContent = state.desk?.clock || "--:--:--";
+      const limit = el.querySelector(".ch-limit");
+      if (limit) limit.textContent = tileLimit(ch);
+    });
+  });
+}
+
+async function loadDesk(runId) {
+  const wanted = runId || state.deskRunId || "eps204";
+  const res = await fetch(`/desk?run_id=${encodeURIComponent(wanted)}`);
+  if (!res.ok) throw new Error(`desk ${res.status}`);
+  state.desk = await res.json();
+  state.deskRunId = state.desk.run_id || wanted;
+  if (state.view === "home") renderDesk();
+}
+
+async function goHome() {
+  setLibraryOpen(false);
+  browseLibrary();
+  enterHome();
+  if (!state.desk) await loadDesk(state.deskRunId);
+}
+
+async function goIncidents() {
+  setLibraryOpen(false);
+  browseLibrary();
+  enterIncidents();
 }
 
 function renderAlarm(a) {
@@ -790,14 +1146,14 @@ function renderAlarm(a) {
     chip.hidden = true;
   }
   document.body.classList.toggle("is-filed", st === "filed");
-  const banner = $("filed-banner");
-  banner.hidden = st !== "filed";
+  const filedLine = $("case-filed");
+  filedLine.hidden = st !== "filed";
   if (st === "filed") {
     const n = (inc.notes || "").trim();
-    $("filed-banner-copy").textContent =
+    $("case-filed-copy").textContent =
       n && !n.startsWith("Canonical")
         ? n
-        : "Decision recorded. The recommended command was not sent.";
+        : "In the library. Command not sent.";
   }
   $("alarm-title").textContent = inc ? alarmTitle(inc.alarm) : "Select a case";
   const when = a?.warn ? clock(a.warn.time_s) : openedClock(inc?.opened_at);
@@ -1120,6 +1476,9 @@ async function loadIncident(incidentId) {
   state.report = null;
   state.pinT = null;
   state.hoverT = null;
+  enterCase();
+  setLibraryOpen(true);
+  $("stage").scrollTop = 0;
   renderIncidents();
   const res = await fetch(`/incidents/${encodeURIComponent(incidentId)}/workspace`);
   if (!res.ok) throw new Error(`workspace ${res.status}`);
@@ -1220,7 +1579,7 @@ async function fileIncident(ev) {
     const input = $("library-q");
     if (input) input.value = "";
     await searchLibrary(likeThisQuery(), { grounded: true });
-    $("filed-banner").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("alarm").scrollIntoView({ behavior: "smooth", block: "start" });
   } finally {
     state.filing = false;
     confirmBtn.disabled = false;
@@ -1508,9 +1867,33 @@ async function refreshDocs() {
 }
 
 function bind() {
-  $("incidents").addEventListener("click", (ev) => {
-    const btn = ev.target.closest("[data-incident]");
-    if (btn) loadIncident(btn.dataset.incident);
+  $("tab-home").addEventListener("click", () => goHome());
+  $("tab-incidents").addEventListener("click", () => goIncidents());
+  $("back-incidents").addEventListener("click", () => goIncidents());
+  $("go-home-brand").addEventListener("click", () => goHome());
+  $("home-tapes").addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-tape]");
+    if (btn) loadDesk(btn.dataset.tape);
+  });
+  $("home").addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-go-incidents]")) {
+      goIncidents();
+      return;
+    }
+    if (ev.target.closest("[data-open-slip]")) {
+      openSlip();
+      return;
+    }
+    const btn = ev.target.closest("[data-open-case]");
+    if (btn) loadIncident(btn.dataset.openCase);
+  });
+  $("incidents-desk").addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-open-slip]")) {
+      openSlip();
+      return;
+    }
+    const btn = ev.target.closest("[data-open-case]");
+    if (btn) loadIncident(btn.dataset.openCase);
   });
   $("library-form").addEventListener("submit", (ev) => {
     ev.preventDefault();
@@ -1576,7 +1959,7 @@ function bind() {
     if (state.incidentId) openDoc(state.incidentId);
   };
   $("open-closeout").addEventListener("click", openCloseout);
-  $("open-closeout-banner").addEventListener("click", openCloseout);
+  $("open-closeout-case").addEventListener("click", openCloseout);
   $("open-proc").addEventListener("click", () => openDoc(procedureId(analysis())));
   $("reader-close").addEventListener("click", closeReader);
   document.addEventListener("keydown", (ev) => {
@@ -1599,7 +1982,7 @@ function bind() {
 
 async function boot() {
   bind();
-  setLibraryOpen(true);
+  setLibraryOpen(false);
   const [runsRes, incidentRes, alarmRes, docsRes] = await Promise.all([
     fetch("/runs"),
     fetch("/incidents"),
@@ -1614,11 +1997,16 @@ async function boot() {
   fillCreateForm();
   renderIncidents();
   renderLibrary();
-  const preferred = state.incidents.find((item) => item.id === "INC-0204") || state.incidents[0];
-  if (preferred) await loadIncident(preferred.id);
+  const tape =
+    state.incidents.find((item) => item.id === "INC-0204")?.run_id ||
+    state.runs.find((run) => run.id === "eps204")?.id ||
+    state.runs[0]?.id ||
+    "eps204";
+  enterHome();
+  await loadDesk(tape);
 }
 
 boot().catch((err) => {
-  $("alarm-title").textContent = "Store unreachable";
-  $("alarm-lede").textContent = err.message;
+  const lede = $("home-lede");
+  if (lede) lede.textContent = err.message;
 });
