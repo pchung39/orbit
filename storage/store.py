@@ -410,7 +410,7 @@ def file_incident(
 
 def list_documents(conn: psycopg.Connection) -> list[dict[str, Any]]:
     return list(
-        conn.execute("SELECT id, kind, title FROM documents ORDER BY kind, id").fetchall()
+        conn.execute("SELECT id, kind, title, path FROM documents ORDER BY kind, id").fetchall()
     )
 
 
@@ -420,10 +420,11 @@ def get_document(conn: psycopg.Connection, doc_id: str) -> dict[str, Any] | None
     ).fetchone()
 
 
-def search_documents(conn: psycopg.Connection, query: str, limit: int = 5) -> list[dict[str, Any]]:
+def search_documents(conn: psycopg.Connection, query: str, limit: int = 8) -> list[dict[str, Any]]:
     """Semantic search over procedures/incidents. Local embeddings, not a paid API."""
     from storage.embed import as_pgvector, embed_texts
 
+    snippet = "left(regexp_replace(body, '\\s+', ' ', 'g'), 180) AS snippet"
     n_embedded = conn.execute(
         "SELECT COUNT(*) AS n FROM documents WHERE embedding IS NOT NULL"
     ).fetchone()["n"]
@@ -431,7 +432,7 @@ def search_documents(conn: psycopg.Connection, query: str, limit: int = 5) -> li
         vec = as_pgvector(embed_texts([query])[0])
         return list(
             conn.execute(
-                "SELECT id, kind, title, 1 - (embedding <=> %s::vector) AS score "
+                f"SELECT id, kind, title, path, 1 - (embedding <=> %s::vector) AS score, {snippet} "
                 "FROM documents WHERE embedding IS NOT NULL "
                 "ORDER BY embedding <=> %s::vector LIMIT %s",
                 (vec, vec, limit),
@@ -439,9 +440,9 @@ def search_documents(conn: psycopg.Connection, query: str, limit: int = 5) -> li
         )
     return list(
         conn.execute(
-            "SELECT id, kind, title, NULL AS score FROM documents "
-            "WHERE body ILIKE %s ORDER BY kind, id",
-            (f"%{query}%",),
+            f"SELECT id, kind, title, path, NULL AS score, {snippet} FROM documents "
+            "WHERE body ILIKE %s ORDER BY kind, id LIMIT %s",
+            (f"%{query}%", limit),
         ).fetchall()
     )
 

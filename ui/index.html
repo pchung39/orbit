@@ -12,7 +12,7 @@
     />
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
-  <body>
+  <body class="lib-open">
     <a class="skip" href="#stage">Skip to case</a>
 
     <header class="appbar">
@@ -23,14 +23,18 @@
         </svg>
         <p class="wordmark">ORBIT</p>
       </div>
+      <p class="app-case" id="app-case">Aurora-1</p>
       <span class="clock" id="focus-clock">--:--:--</span>
     </header>
 
     <div class="app">
-      <aside class="nav">
-        <p class="nav-label">Incidents</p>
+      <aside class="nav rail">
+        <header class="rail-head">
+          <p class="nav-label">Queue</p>
+          <p class="rail-meta" id="queue-meta"></p>
+        </header>
         <button type="button" class="btn-new" id="new-incident-btn">New incident</button>
-        <nav class="runs" id="incidents" aria-label="Incidents"></nav>
+        <nav class="runs" id="incidents" aria-label="Incident queue"></nav>
       </aside>
 
       <main class="stage" id="stage">
@@ -176,6 +180,38 @@
           </article>
         </section>
       </main>
+
+      <button type="button" class="lib-handle" id="library-toggle" aria-expanded="true" aria-controls="library" aria-label="Hide library">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M10.2 3.2 5.5 8l4.7 4.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </button>
+      <aside class="library rail" id="library" aria-label="Library">
+        <header class="lib-head">
+          <p class="nav-label" id="library-kicker">Library</p>
+          <div class="lib-modes" role="group" aria-label="Library scope" id="library-modes">
+            <button type="button" class="lib-mode is-on" id="library-mode-case">This case</button>
+            <button type="button" class="lib-mode" id="library-mode-all">All</button>
+          </div>
+        </header>
+        <form class="lib-search" id="library-form">
+          <label class="sr-only" for="library-q">Search the library</label>
+          <input id="library-q" name="q" type="search" placeholder="Search" autocomplete="off" />
+        </form>
+        <div class="lib-picks" id="library-picks" hidden></div>
+        <div class="lib-scroll" id="library-body"></div>
+        <section class="lib-reader" id="library-reader" hidden>
+          <header>
+            <div>
+              <p class="eyebrow" id="reader-kind"></p>
+              <h2 id="reader-title"></h2>
+            </div>
+            <button type="button" class="icon-btn" id="reader-close" aria-label="Close document">×</button>
+          </header>
+          <p class="lib-reader-why" id="reader-why"></p>
+          <div class="reader-body md" id="reader-body"></div>
+        </section>
+      </aside>
     </div>
 
     <div class="slip-wrap" id="slip" hidden>
@@ -228,19 +264,6 @@
             <button type="submit" class="btn" id="confirm-file">File to library</button>
           </div>
         </form>
-      </div>
-    </div>
-
-    <div class="reader" id="reader" hidden>
-      <div class="reader-panel" role="dialog" aria-modal="true" aria-labelledby="reader-title">
-        <header>
-          <div>
-            <p class="eyebrow" id="reader-kind"></p>
-            <h2 id="reader-title"></h2>
-          </div>
-          <button type="button" class="icon-btn" id="reader-close" aria-label="Close document">×</button>
-        </header>
-        <div class="reader-body md" id="reader-body"></div>
       </div>
     </div>
 

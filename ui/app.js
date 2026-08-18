@@ -21,6 +21,61 @@ const RUN_COPY = {
   inc0162: { kind: "Prior", title: "INC-0162 source", note: "Library match for the pack-IR close." },
 };
 
+const FAMILIES = [
+  { id: "heater", label: "Heater B", runs: ["eps204", "fault1", "inc0187"] },
+  { id: "payload", label: "Payload", runs: ["pay002", "inc0191"] },
+  { id: "battery", label: "Battery", runs: ["batt003", "inc0162"] },
+  { id: "other", label: "Other", runs: ["nominal"] },
+];
+
+const LIB_COPY = {
+  "EPS-17": {
+    use: "Bus voltage warn. Check the load that just came on.",
+    close: "Inhibit the load at ≥2×",
+    family: "heater",
+  },
+  "PAY-04": {
+    use: "Payload current ≥2× science. Heater is not the fault.",
+    close: "Safe payload to STANDBY",
+    family: "payload",
+  },
+  "EPS-09": {
+    use: "Pack sag. Heater and payload currents are healthy.",
+    close: "No inhibit · battery checkout",
+    family: "battery",
+  },
+  "INC-0187": {
+    use: "Same heater fault. Payload was idle.",
+    close: "Inhibit Heater B",
+    family: "heater",
+  },
+  "INC-0191": {
+    use: "Same payload fault. Heater was idle.",
+    close: "Safe payload · leave heater",
+    family: "payload",
+  },
+  "INC-0162": {
+    use: "Pack sagged. Heater current was healthy.",
+    close: "No inhibit",
+    family: "battery",
+  },
+};
+
+function incidentFamily(item) {
+  if (item.alarm === "PAY.payload_current") return "payload";
+  if (item.alarm === "EPS.battery_voltage") return "battery";
+  for (const fam of FAMILIES) {
+    if (fam.runs.includes(item.run_id)) return fam.id;
+  }
+  return "other";
+}
+
+function statusRank(status) {
+  if (status === "filed") return 2;
+  if (status === "recommended") return 1;
+  return 0;
+}
+
 function tapeCopy(run) {
   return RUN_COPY[run.id] || { kind: "Tape", title: run.id, note: run.notes || "Telemetry tape" };
 }
@@ -102,6 +157,14 @@ const state = {
   report: null,
   investigating: false,
   filing: false,
+  docs: [],
+  libraryQuery: "",
+  libraryHits: null,
+  librarySearching: false,
+  libraryPinned: false,
+  libraryOpen: true,
+  openDocId: null,
+  openDoc: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -584,15 +647,31 @@ function updateReadouts() {
 }
 
 function renderIncidents() {
-  $("incidents").innerHTML = state.incidents
-    .map((item) => {
-      const st = item.status || "open";
-      return `<button type="button" class="run ${item.id === state.incidentId ? "is-on" : ""} ${st === "filed" ? "is-filed" : ""}" data-incident="${item.id}">
-        <span class="id">${item.id}</span>
-        <span class="note">${escapeHtml(item.title)} · <span class="chip chip-${escapeHtml(st)}">${escapeHtml(st)}</span></span>
-      </button>`;
+  const groups = FAMILIES.map((fam) => ({
+    ...fam,
+    items: state.incidents
+      .filter((item) => incidentFamily(item) === fam.id)
+      .sort((a, b) => statusRank(a.status) - statusRank(b.status) || String(b.opened_at || "").localeCompare(String(a.opened_at || ""))),
+  })).filter((fam) => fam.items.length);
+  $("incidents").innerHTML = groups
+    .map((fam) => {
+      const rows = fam.items
+        .map((item) => {
+          const st = item.status || "open";
+          return `<button type="button" class="run ${item.id === state.incidentId ? "is-on" : ""} ${st === "filed" ? "is-filed" : ""}" data-incident="${item.id}">
+            <span class="id">${item.id}</span>
+            <span class="note">${escapeHtml(item.title)} · <span class="chip chip-${escapeHtml(st)}">${escapeHtml(st)}</span></span>
+          </button>`;
+        })
+        .join("");
+      return `<section class="family family-${fam.id}">
+        <p class="family-head">${escapeHtml(fam.label)} <span class="n">${fam.items.length}</span></p>
+        ${rows}
+      </section>`;
     })
-    .join("");
+    .join("") || `<p class="lib-hint">No cases on this craft.</p>`;
+  const meta = $("queue-meta");
+  if (meta) meta.textContent = state.incidents.length ? `${state.incidents.length}` : "";
 }
 
 function nextIncidentPreview() {
@@ -701,6 +780,7 @@ function renderAlarm(a) {
   $("case-meta").textContent = inc
     ? `${inc.id}  ·  Aurora-1  ·  ${inc.run_id}  ·  ${inc.alarm}`
     : "";
+  renderChrome();
   if (!a) {
     $("alarm-lede").textContent = "Open an incident from an alarm you already have. ORBIT does not detect anomalies.";
     $("alarm-value").textContent = "—";
@@ -1024,6 +1104,9 @@ async function loadIncident(incidentId) {
   const a = analysis();
   state.pinT = a?.warn?.time_s ?? a?.heaterCmd?.time_s ?? null;
   renderCase();
+  const input = $("library-q");
+  if (input) input.value = "";
+  await searchLibrary(likeThisQuery(), { grounded: true });
 }
 
 async function assemble() {
@@ -1108,6 +1191,10 @@ async function fileIncident(ev) {
     renderIncidents();
     renderAlarm(analysis());
     renderDecision(analysis());
+    await refreshDocs();
+    const input = $("library-q");
+    if (input) input.value = "";
+    await searchLibrary(likeThisQuery(), { grounded: true });
     $("filed-banner").scrollIntoView({ behavior: "smooth", block: "start" });
   } finally {
     state.filing = false;
@@ -1121,20 +1208,314 @@ async function openDoc(id) {
   const res = await fetch(`/documents/${encodeURIComponent(id)}`);
   if (!res.ok) return;
   const doc = await res.json();
-  $("reader-kind").textContent = doc.kind;
+  state.openDocId = doc.id;
+  state.openDoc = doc;
+  const kind = libraryKind(doc);
+  document.body.classList.add("lib-reading");
+  $("reader-kind").textContent = libraryKindLabel(doc);
   $("reader-title").textContent = doc.title;
+  const close = libraryClose(doc);
+  $("reader-why").textContent = close ? `${libraryUse(doc)} · ${close}` : libraryUse(doc);
   $("reader-body").innerHTML = renderMd(doc.body);
-  $("reader").hidden = false;
+  const reader = $("library-reader");
+  reader.hidden = false;
+  reader.className = `lib-reader kind-${kind}`;
+  setLibraryOpen(true);
+  renderLibrary();
 }
 
 function closeReader() {
-  $("reader").hidden = true;
+  $("library-reader").hidden = true;
+  $("library-reader").className = "lib-reader";
+  state.openDocId = null;
+  state.openDoc = null;
+  document.body.classList.remove("lib-reading");
+  renderLibrary();
+}
+
+function tidySnippet(s) {
+  return String(s || "")
+    .replace(/^#+\s*/, "")
+    .replace(/\*+/g, "")
+    .replace(/\s*\|\s*/g, " · ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function libraryKind(doc) {
+  if (String(doc.path || "").startsWith("filed:")) return "filed";
+  if (doc.kind === "procedure") return "procedure";
+  return "history";
+}
+
+function libraryKindLabel(doc) {
+  const kind = libraryKind(doc);
+  if (kind === "filed") return "filed";
+  if (kind === "procedure") return "procedure";
+  return "similar case";
+}
+
+function libraryFamily(doc) {
+  if (LIB_COPY[doc.id]?.family) return LIB_COPY[doc.id].family;
+  const blob = `${doc.id || ""} ${doc.title || ""}`;
+  if (/heater/i.test(blob)) return "heater";
+  if (/payload/i.test(blob)) return "payload";
+  if (/battery|pack/i.test(blob)) return "battery";
+  return "";
+}
+
+function libraryUse(doc) {
+  if (LIB_COPY[doc.id]?.use) return LIB_COPY[doc.id].use;
+  if (libraryKind(doc) === "filed") return "Already stamped on this craft. The recommended command was not sent.";
+  return tidySnippet(doc.snippet || doc.title || "");
+}
+
+function libraryClose(doc) {
+  if (LIB_COPY[doc.id]?.close) return LIB_COPY[doc.id].close;
+  if (libraryKind(doc) === "filed") return "In the library · not uplinked";
+  return "";
+}
+
+function likeThisQuery() {
+  const inc = state.incident;
+  const a = analysis();
+  const parts = [];
+  if (inc?.alarm) parts.push(inc.alarm);
+  if (inc?.title) parts.push(inc.title);
+  if (a?.suspect) parts.push("Heater B overcurrent 3× EPS-17 INC-0187 do not close on payload");
+  else if (a?.payloadSuspect) parts.push("payload power spike SCIENCE_MODE PAY-04 INC-0191 do not inhibit heater");
+  else if (a?.batterySuspect) parts.push("battery internal resistance eclipse EPS-09 INC-0162 healthy heater");
+  else parts.push("similar incident procedure close-out");
+  return parts.join(" ");
+}
+
+function docCard(doc, { showKind = false } = {}) {
+  const kind = libraryKind(doc);
+  const fam = libraryFamily(doc);
+  const on = doc.id === state.openDocId ? "is-on" : "";
+  const close = libraryClose(doc);
+  const chip = showKind
+    ? `<span class="lib-card-top"><span class="kind-chip kind-${kind}">${escapeHtml(libraryKindLabel(doc))}</span></span>`
+    : "";
+  return `<button type="button" class="lib-card kind-${kind} ${fam ? `fam-${fam}` : ""} ${on}" data-doc="${escapeHtml(doc.id)}">
+    ${chip}
+    <span class="id">${escapeHtml(doc.id)}</span>
+    <span class="use">${escapeHtml(libraryUse(doc))}</span>
+    ${close ? `<span class="close-line">${escapeHtml(close)}</span>` : ""}
+  </button>`;
+}
+
+function docRow(doc) {
+  const kind = libraryKind(doc);
+  const on = doc.id === state.openDocId ? "is-on" : "";
+  const line = libraryClose(doc) || libraryUse(doc);
+  return `<button type="button" class="lib-row kind-${kind} ${on}" data-doc="${escapeHtml(doc.id)}">
+    <span class="id">${escapeHtml(doc.id)}</span>
+    <span class="use">${escapeHtml(line)}</span>
+  </button>`;
+}
+
+function setLibraryOpen(open) {
+  state.libraryOpen = open;
+  document.body.classList.toggle("lib-open", open);
+  const btn = $("library-toggle");
+  if (btn) {
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    btn.setAttribute("aria-label", open ? "Hide library" : "Show library");
+  }
+}
+
+function renderChrome() {
+  const el = $("app-case");
+  if (!el) return;
+  const inc = state.incident;
+  if (!inc) {
+    el.textContent = "Aurora-1";
+    return;
+  }
+  el.innerHTML = `Aurora-1<span class="sep">·</span>${escapeHtml(inc.id)}<span class="sep">·</span>${escapeHtml(inc.status || "open")}`;
+}
+
+function libraryMode() {
+  if (state.libraryPinned) return "search";
+  if (state.libraryHits) return "related";
+  return "catalog";
+}
+
+function renderShelf(title, items, kind = "") {
+  if (!items.length) return "";
+  const [top, ...rest] = items;
+  const more = rest.length
+    ? `<div class="lib-also">${rest.map((doc) => docRow(doc)).join("")}</div>`
+    : "";
+  return `<section class="lib-shelf ${kind ? `kind-${kind}` : ""}">
+    <p class="family-head">${escapeHtml(title)}</p>
+    ${docCard(top)}
+    ${more}
+  </section>`;
+}
+
+function renderLibrary() {
+  const reading = Boolean(state.openDocId);
+  const mode = libraryMode();
+  const kicker = $("library-kicker");
+  if (kicker) kicker.textContent = reading && state.openDocId ? state.openDocId : "Library";
+  const modes = $("library-modes");
+  if (modes) modes.hidden = reading;
+  $("library-mode-case")?.classList.toggle("is-on", mode === "related");
+  $("library-mode-all")?.classList.toggle("is-on", mode === "catalog");
+  $("library-form").hidden = reading;
+  const picks = $("library-picks");
+  if (picks) {
+    if (reading) {
+      const pool = (state.libraryHits || state.docs).filter((doc) => doc.id !== state.incidentId);
+      picks.hidden = false;
+      picks.innerHTML = pool
+        .slice(0, 8)
+        .map((doc) => {
+          const kind = libraryKind(doc);
+          const on = doc.id === state.openDocId ? "is-on" : "";
+          return `<button type="button" class="lib-pick kind-${kind} ${on}" data-doc="${escapeHtml(doc.id)}">${escapeHtml(doc.id)}</button>`;
+        })
+        .join("");
+    } else {
+      picks.hidden = true;
+      picks.innerHTML = "";
+    }
+  }
+  const root = $("library-body");
+  if (!root) return;
+  root.hidden = reading;
+  if (reading) return;
+  if (state.librarySearching) {
+    root.innerHTML = `<p class="lib-hint">Searching…</p>`;
+    return;
+  }
+  if (state.libraryHits) {
+    const hits = state.libraryHits.filter((hit) => hit.id !== state.incidentId);
+    if (!hits.length) {
+      root.innerHTML = `<p class="lib-hint">Nothing close. Try All, or a shorter search.</p>`;
+      return;
+    }
+    if (mode === "search") {
+      root.innerHTML = hits.map((hit) => docCard(hit, { showKind: true })).join("");
+      return;
+    }
+    const procs = hits.filter((hit) => libraryKind(hit) === "procedure");
+    const priors = hits.filter((hit) => libraryKind(hit) === "history");
+    const filed = hits.filter((hit) => libraryKind(hit) === "filed");
+    root.innerHTML = [
+      renderShelf("Procedures", procs, "procedure"),
+      renderShelf("Similar cases", priors, "history"),
+      renderShelf("Filed", filed, "filed"),
+    ].join("") || `<p class="lib-hint">Nothing close for this case.</p>`;
+    return;
+  }
+  root.innerHTML = [
+    renderShelf(
+      "Procedures",
+      state.docs.filter((doc) => libraryKind(doc) === "procedure"),
+      "procedure"
+    ),
+    renderShelf(
+      "Similar cases",
+      state.docs.filter((doc) => libraryKind(doc) === "history"),
+      "history"
+    ),
+    renderShelf(
+      "Filed",
+      state.docs.filter((doc) => libraryKind(doc) === "filed"),
+      "filed"
+    ),
+  ].join("");
+}
+
+async function searchLibrary(query, opts = {}) {
+  const q = (query || "").trim();
+  state.libraryQuery = q;
+  if (opts.grounded) state.libraryPinned = false;
+  if (!q) {
+    state.libraryHits = null;
+    renderLibrary();
+    return;
+  }
+  state.librarySearching = true;
+  renderLibrary();
+  try {
+    const res = await fetch(`/search?q=${encodeURIComponent(q)}&limit=8`);
+    if (!res.ok) throw new Error(`search ${res.status}`);
+    state.libraryHits = await res.json();
+  } catch (err) {
+    state.libraryHits = [];
+  } finally {
+    state.librarySearching = false;
+    renderLibrary();
+  }
+}
+
+function followThisCase() {
+  const input = $("library-q");
+  if (input) input.value = "";
+  if (!state.incidentId) {
+    browseLibrary();
+    return;
+  }
+  searchLibrary(likeThisQuery(), { grounded: true });
+}
+
+function browseLibrary() {
+  state.libraryPinned = false;
+  state.libraryQuery = "";
+  state.libraryHits = null;
+  const input = $("library-q");
+  if (input) input.value = "";
+  renderLibrary();
+}
+
+let libraryTimer = 0;
+function onLibraryTyped() {
+  window.clearTimeout(libraryTimer);
+  libraryTimer = window.setTimeout(() => {
+    const q = ($("library-q")?.value || "").trim();
+    if (!q) {
+      followThisCase();
+      return;
+    }
+    state.libraryPinned = true;
+    searchLibrary(q);
+  }, 220);
+}
+
+async function refreshDocs() {
+  const res = await fetch("/documents");
+  if (!res.ok) return;
+  state.docs = await res.json();
+  renderLibrary();
 }
 
 function bind() {
   $("incidents").addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-incident]");
     if (btn) loadIncident(btn.dataset.incident);
+  });
+  $("library-form").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    window.clearTimeout(libraryTimer);
+    const q = $("library-q").value.trim();
+    if (!q) {
+      followThisCase();
+      return;
+    }
+    state.libraryPinned = true;
+    searchLibrary(q);
+  });
+  $("library-q").addEventListener("input", onLibraryTyped);
+  $("library-mode-case").addEventListener("click", followThisCase);
+  $("library-mode-all").addEventListener("click", browseLibrary);
+  $("library-toggle").addEventListener("click", () => setLibraryOpen(!state.libraryOpen));
+  $("library").addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-doc]");
+    if (btn) openDoc(btn.dataset.doc);
   });
   $("new-incident-btn").addEventListener("click", openSlip);
   $("cancel-incident").addEventListener("click", closeSlip);
@@ -1184,9 +1565,6 @@ function bind() {
   $("open-closeout-banner").addEventListener("click", openCloseout);
   $("open-proc").addEventListener("click", () => openDoc(procedureId(analysis())));
   $("reader-close").addEventListener("click", closeReader);
-  $("reader").addEventListener("click", (ev) => {
-    if (ev.target.id === "reader") closeReader();
-  });
   document.addEventListener("keydown", (ev) => {
     if (ev.key !== "Escape") return;
     if (!$("slip").hidden) {
@@ -1197,25 +1575,34 @@ function bind() {
       closeFileSlip();
       return;
     }
-    closeReader();
+    if (state.openDocId) {
+      closeReader();
+      return;
+    }
+    if (state.libraryOpen) setLibraryOpen(false);
   });
 }
 
 async function boot() {
   bind();
-  const [runsRes, incidentRes, alarmRes] = await Promise.all([
+  setLibraryOpen(true);
+  const [runsRes, incidentRes, alarmRes, docsRes] = await Promise.all([
     fetch("/runs"),
     fetch("/incidents"),
     fetch("/entry-alarms"),
+    fetch("/documents"),
   ]);
   state.runs = await runsRes.json();
   state.incidents = await incidentRes.json();
   state.alarms = await alarmRes.json();
+  state.docs = docsRes.ok ? await docsRes.json() : [];
   setStoreStatus(state.runs.length > 0);
   fillCreateForm();
   renderIncidents();
+  renderLibrary();
   const preferred = state.incidents.find((item) => item.id === "INC-0204") || state.incidents[0];
   if (preferred) await loadIncident(preferred.id);
+  else renderChrome();
 }
 
 boot().catch((err) => {

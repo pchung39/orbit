@@ -302,13 +302,23 @@ def document(doc_id: str) -> dict[str, Any]:
         row = get_document(conn, doc_id)
         if row is None:
             raise HTTPException(404, f"unknown document {doc_id}")
-        return {"id": row["id"], "kind": row["kind"], "title": row["title"], "body": row["body"]}
+        return {
+            "id": row["id"],
+            "kind": row["kind"],
+            "title": row["title"],
+            "path": row["path"],
+            "body": row["body"],
+        }
 
 
 @app.get("/search")
-def search(q: str = Query(..., min_length=1)) -> list[dict[str, Any]]:
+def search(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(default=8, ge=1, le=20),
+) -> list[dict[str, Any]]:
+    """Semantic library search. Local embeddings, not a paid model."""
     with _conn() as conn:
-        return [_row(row) for row in search_documents(conn, q)]
+        return [_row(row) for row in search_documents(conn, q, limit=limit)]
 
 
 @app.post("/investigate/{run_id}")
