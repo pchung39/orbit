@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css" />
+    <link rel="stylesheet" href="/static/styles.css?v=case-head2" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -102,30 +102,34 @@
 
           <header class="case-head" id="alarm">
             <div class="case-head-main">
-              <div>
+              <div class="case-head-copy">
                 <div class="kicker-row">
                   <p class="eyebrow" id="alarm-kicker">Case</p>
                   <span class="chip" id="status-chip" hidden></span>
                 </div>
                 <h1 id="alarm-title">Select a case</h1>
-                <p class="lede" id="alarm-lede">ORBIT assembles telemetry, commands, procedures, and prior cases for a human decision.</p>
-                <p class="case-meta" id="case-meta"></p>
+                <div class="guess" id="case-guess" hidden></div>
+                <p class="lede" id="alarm-lede"></p>
               </div>
-              <div class="hero-readout">
+              <aside class="hero-readout" id="hero-readout" aria-label="Alarm reading">
+                <p class="hero-ch" id="alarm-ch"></p>
                 <p class="hero-value"><span id="alarm-value">—</span><span class="unit" id="alarm-unit"></span></p>
-                <p class="hero-limit" id="alarm-limit"></p>
-              </div>
+                <p class="hero-meter" id="alarm-meter" hidden><span class="track"><i></i></span><span class="pct"></span></p>
+                <div class="hero-limit" id="alarm-limit"></div>
+              </aside>
             </div>
+            <dl class="case-facts" id="case-meta"></dl>
             <p class="case-filed" id="case-filed" hidden>
               <span id="case-filed-copy">In the library. Command not sent.</span>
               <button type="button" class="text-btn" id="open-closeout-case">Read close-out</button>
             </p>
+            <div class="case-next" id="case-next" hidden></div>
           </header>
 
           <div class="case-grid">
             <nav class="spine" id="case-spine" aria-label="Case walkthrough">
               <button type="button" class="spine-step is-on" data-target="compare"><span class="n">01</span><span>Evidence</span></button>
-              <button type="button" class="spine-step" data-target="commands"><span class="n">02</span><span>Commands</span></button>
+              <button type="button" class="spine-step" data-target="commands"><span class="n">02</span><span>Lead-up</span></button>
               <button type="button" class="spine-step" data-target="traces"><span class="n">03</span><span>Tape</span></button>
               <button type="button" class="spine-step" data-target="procedure"><span class="n">04</span><span>Procedure</span></button>
               <button type="button" class="spine-step" data-target="findings"><span class="n">05</span><span>Report</span></button>
@@ -141,10 +145,10 @@
               </section>
 
               <section class="panel panel-commands" id="commands">
-                <p class="panel-kicker">02 · Commands</p>
-                <h2>Ten minutes before the warn</h2>
-                <p class="hint">Click a row to pin that time on the traces.</p>
-                <ol class="timeline" id="timeline"></ol>
+                <p class="panel-kicker">02 · Lead-up</p>
+                <h2>Before the warn</h2>
+                <p class="hint">Commands, mode changes, and the first crossing on one strip. Last command is a clue, not a verdict. Click a row to pin the tape.</p>
+                <ol class="timeline crumbs" id="timeline"></ol>
               </section>
 
               <section class="panel panel-traces" id="traces">
@@ -152,7 +156,7 @@
                   <div>
                     <p class="panel-kicker">03 · Tape</p>
                     <h2>Telemetry</h2>
-                    <p class="hint" id="trace-caption">Shared time axis. Dashed lines are commands and the first warn.</p>
+                    <p class="hint" id="trace-caption">Same window. Dashed lines are the lead-up and the first warn.</p>
                   </div>
                   <div class="seg" role="group" aria-label="Time window">
                     <button type="button" data-window="focus" class="is-on">Warn ± 8 min</button>
@@ -324,6 +328,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js" type="module"></script>
+    <script src="/static/app.js?v=case-head2" type="module"></script>
   </body>
 </html>

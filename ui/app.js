@@ -97,6 +97,79 @@ function caseAction(item) {
   return "";
 }
 
+function ordinal(n) {
+  const v = n % 100;
+  const suf = v >= 11 && v <= 13 ? "th" : ({ 1: "st", 2: "nd", 3: "rd" }[n % 10] || "th");
+  return `${n}${suf}`;
+}
+
+function familyOf(item, all) {
+  const key = item.alarm || "other";
+  const family = all
+    .filter((row) => (row.alarm || "other") === key)
+    .sort((a, b) => String(a.opened_at || "").localeCompare(String(b.opened_at || "")));
+  const idx = Math.max(1, family.findIndex((row) => row.id === item.id) + 1);
+  const filed = family.filter((row) => row.status === "filed");
+  const last = filed.length ? filed[filed.length - 1] : null;
+  return {
+    n: family.length,
+    idx,
+    title: alarmTitle(item.alarm),
+    close: last ? caseAction(last) : "",
+    lastId: last?.id || "",
+  };
+}
+
+function familyLine(item, all) {
+  const fam = familyOf(item, all || state.incidents);
+  if (fam.n > 1) {
+    return `${ordinal(fam.idx)} of ${fam.n} ${fam.title.toLowerCase()} cases${fam.close ? ` · last filed → ${fam.close}` : " · no precedent filed yet"}`;
+  }
+  return fam.close
+    ? `Only ${fam.title.toLowerCase()} case · filed close was ${fam.close}`
+    : `First ${fam.title.toLowerCase()} case · no precedent filed yet`;
+}
+
+function rowCta(item) {
+  if (item.status === "filed") return { jump: "closeout", label: "Read close-out" };
+  if (item.status === "recommended") return { jump: "action", label: "File · not sent" };
+  return { jump: "walk", label: "Walk" };
+}
+
+function workingGuess(a) {
+  if (!a) return null;
+  if (a.suspect) {
+    return {
+      suspect: `Heater B ${fmt(a.heaterA, 2)} A · ${fmt(a.ratio, 1)}× healthy`,
+      last: a.science ? `SCIENCE_MODE at ${clock(a.science.time_s)}` : a.heaterCmd ? "HEATER_B_ENABLE" : "—",
+      decoy: Boolean(a.science),
+      recommend: "Inhibit Heater B",
+    };
+  }
+  if (a.payloadSuspect) {
+    return {
+      suspect: `Payload ${fmt(a.payloadA, 2)} A · ${fmt(a.payloadRatio, 1)}× science`,
+      last: a.science ? `SCIENCE_MODE at ${clock(a.science.time_s)}` : "—",
+      decoy: Boolean(a.heaterCmd),
+      recommend: "Safe payload to STANDBY",
+    };
+  }
+  if (a.batterySuspect) {
+    return {
+      suspect: "Pack sag · load currents healthy",
+      last: a.heaterCmd ? `HEATER_B_ENABLE at ${clock(a.heaterCmd.time_s)}` : "—",
+      decoy: Boolean(a.heaterCmd),
+      recommend: "Continue EPS-09 · no inhibit",
+    };
+  }
+  return {
+    suspect: "No load ≥2× healthy",
+    last: a.science ? "SCIENCE_MODE" : a.heaterCmd ? "HEATER_B_ENABLE" : "—",
+    decoy: false,
+    recommend: "Keep reading",
+  };
+}
+
 function tapeCopy(run) {
   return RUN_COPY[run.id] || { kind: "Tape", title: run.id, note: run.notes || "Telemetry tape" };
 }
@@ -617,10 +690,11 @@ function drawTrace(el, channelId, title, color, primary) {
       ${marks}
       ${area ? `<path d="${area}" fill="${color}" opacity="0.12"></path>` : ""}
       ${d ? `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.6"></path>` : ""}
+      <g class="pin-g"></g>
       <g class="hover-g"></g>
       <text x="${pad.l}" y="${H - 6}" fill="var(--mute)" font-size="10" font-family="IBM Plex Mono, ui-monospace, monospace">${clock(t0)}</text>
       <text x="${W - pad.r}" y="${H - 6}" text-anchor="end" fill="var(--mute)" font-size="10" font-family="IBM Plex Mono, ui-monospace, monospace">${clock(t1)}</text>
-      <rect class="hit" x="${pad.l}" y="${pad.t}" width="${W - pad.l - pad.r}" height="${H - pad.t - pad.b}" fill="transparent"/>
+      <rect class="hit" x="${pad.l}" y="${pad.t}" width="${W - pad.l - pad.r}" height="${H - pad.t - pad.b}" fill="transparent" pointer-events="all"/>
     </svg>
   `;
   const hit = el.querySelector(".hit");
@@ -635,42 +709,68 @@ function drawTrace(el, channelId, title, color, primary) {
     updateReadouts();
   });
   hit.addEventListener("click", () => {
-    state.pinT = state.hoverT;
-    renderTimeline(analysis());
-    updateReadouts();
+    pinTape(state.hoverT);
   });
+}
+
+function traceCard(id) {
+  return $("trace-stack")?.querySelector(`[data-ch="${id}"]`);
+}
+
+function pinTape(t, { scroll = false } = {}) {
+  const n = Number(t);
+  if (t == null || Number.isNaN(n)) return;
+  state.pinT = n;
+  state.hoverT = null;
+  renderTimeline(analysis());
+  updateReadouts();
+  if (scroll) $("traces")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function updateReadouts() {
   const a = analysis();
   if (state.view === "home" || state.view === "incidents") {
-    $("focus-clock").textContent = state.desk?.clock || "--:--:--";
+    const clockEl = $("focus-clock");
+    if (clockEl) clockEl.textContent = state.desk?.clock || "--:--:--";
     return;
   }
-  const t = state.hoverT ?? state.pinT ?? a?.t;
-  $("focus-clock").textContent = clock(t);
+  const tPin = state.pinT ?? a?.t;
+  const tHover = state.hoverT;
+  const t = tHover ?? tPin;
+  const clockEl = $("focus-clock");
+  if (clockEl) clockEl.textContent = clock(t);
   const parts = tracesToDraw().map((ch) => {
     const row = sampleAt(series(ch.id), t);
     const unit = meta(ch.id).unit || "";
     return `${ch.title} ${fmt(row?.value_num)} ${unit}`;
   });
-  $("hover-read").textContent = t != null ? `${clock(t)}  ·  ${parts.join("   ")}` : "";
+  const hoverRead = $("hover-read");
+  if (hoverRead) hoverRead.textContent = t != null ? `${clock(t)}  ·  ${parts.join("   ")}` : "";
   tracesToDraw().forEach((spec) => {
-    const el = document.querySelector(`[data-ch="${spec.id}"]`);
+    const el = traceCard(spec.id);
     const c = charts[spec.id];
     if (!el || !c) return;
     const now = sampleAt(c.rows, t);
-    const unit = c.unit;
-    el.querySelector(".now").textContent = now ? `${fmt(now.value_num)} ${unit}` : "—";
-    const g = el.querySelector(".hover-g");
-    if (t == null) {
-      g.innerHTML = "";
+    const nowEl = el.querySelector(".now");
+    if (nowEl) nowEl.textContent = now ? `${fmt(now.value_num)} ${c.unit}` : "—";
+    const pinG = el.querySelector(".pin-g");
+    if (pinG) {
+      pinG.innerHTML =
+        tPin == null
+          ? ""
+          : `<line x1="${c.x(tPin)}" x2="${c.x(tPin)}" y1="${c.pad.t}" y2="${c.H - c.pad.b}" stroke="var(--signal)" stroke-width="1.5"/>`;
+    }
+    const hoverG = el.querySelector(".hover-g");
+    if (!hoverG) return;
+    if (tHover == null) {
+      hoverG.innerHTML = "";
       return;
     }
-    const xx = c.x(t);
-    const cy = now ? c.y(now.value_num) : c.pad.t;
-    g.innerHTML = `<line x1="${xx}" x2="${xx}" y1="${c.pad.t}" y2="${c.H - c.pad.b}" stroke="var(--ink)" stroke-width="1" opacity="0.35"/>${
-      now ? `<circle cx="${xx}" cy="${cy}" r="3.2" fill="${c.color}"/>` : ""
+    const sample = sampleAt(c.rows, tHover);
+    const xx = c.x(tHover);
+    const cy = sample ? c.y(sample.value_num) : c.pad.t;
+    hoverG.innerHTML = `<line x1="${xx}" x2="${xx}" y1="${c.pad.t}" y2="${c.H - c.pad.b}" stroke="var(--ink)" stroke-width="1" opacity="0.4"/>${
+      sample ? `<circle cx="${xx}" cy="${cy}" r="3.2" fill="${c.color}"/>` : ""
     }`;
   });
 }
@@ -737,9 +837,9 @@ function renderIncidents() {
     return;
   }
   const cols = `<div class="inc-cols" aria-hidden="true">
-    <span>Case</span><span>Alarm</span><span>Tape</span><span>Opened</span><span>Status</span>
+    <span>Case</span><span>Signature</span><span>Next</span>
   </div>`;
-  list.innerHTML = `<div class="inc-table">${cols}${rows.map(incRow).join("")}</div>`;
+  list.innerHTML = `<div class="inc-table">${cols}${rows.map((item) => incRow(item, all)).join("")}</div>`;
 }
 
 /* A case list shows cases. This rail shows the craft: what is waiting on you,
@@ -811,22 +911,20 @@ function renderIncidentSide(all) {
   side.innerHTML = queue + sig;
 }
 
-function incRow(item) {
+function incRow(item, all) {
   const st = item.status || "open";
   const copy = tapeCopy({ id: item.run_id });
-  const when = openedClock(item.opened_at);
-  const action = st === "open" ? "" : caseAction(item);
+  const cta = rowCta(item);
   const on = state.view === "case" && item.id === state.incidentId ? "is-on" : "";
-  return `<button type="button" class="inc-row tone-${incidentTone(item)} ${on} ${st === "recommended" ? "is-ready" : ""}" data-open-case="${item.id}">
+  return `<div class="inc-row tone-${incidentTone(item)} ${on} ${st === "recommended" ? "is-ready" : ""}" data-open-case="${item.id}" data-jump="${cta.jump}" role="button" tabindex="0">
     <span class="id">${item.id}</span>
     <span class="inc-alarm">
       <strong>${escapeHtml(alarmTitle(item.alarm))}</strong>
-      ${action ? `<span class="run-act">${escapeHtml(action)}</span>` : ""}
+      <span class="inc-fam">${escapeHtml(familyLine(item, all))}</span>
+      <span class="inc-tape">${escapeHtml(copy.kind)} · ${escapeHtml(copy.title)}</span>
     </span>
-    <span class="inc-tape">${escapeHtml(copy.kind)} · ${escapeHtml(copy.title)}</span>
-    <span class="inc-clock">${when || "—"}</span>
-    <span class="chip chip-${st === "recommended" ? "ready" : escapeHtml(st)}">${statusLabel(st)}</span>
-  </button>`;
+    <span class="inc-cta">${escapeHtml(cta.label)}</span>
+  </div>`;
 }
 
 function nextIncidentPreview() {
@@ -1327,55 +1425,120 @@ function renderAlarm(a) {
   const st = inc?.status || "";
   $("alarm-kicker").textContent = inc ? inc.id : "Case";
   const chip = $("status-chip");
-  if (st) {
-    chip.hidden = false;
-    chip.className = `chip chip-${st === "recommended" ? "ready" : st}`;
-    chip.textContent = statusLabel(st);
-  } else {
-    chip.hidden = true;
-  }
+  if (chip) chip.hidden = true;
   document.body.classList.toggle("is-filed", st === "filed");
   const filedLine = $("case-filed");
-  filedLine.hidden = st !== "filed";
-  if (st === "filed") {
-    const n = (inc.notes || "").trim();
-    $("case-filed-copy").textContent =
-      n && !n.startsWith("Canonical")
-        ? n
-        : "In the library. Command not sent.";
-  }
+  if (filedLine) filedLine.hidden = true;
   $("alarm-title").textContent = inc ? alarmTitle(inc.alarm) : "Select a case";
   const when = a?.warn ? clock(a.warn.time_s) : openedClock(inc?.opened_at);
-  const provenance = [];
+  const facts = [];
   if (inc) {
-    provenance.push(a?.warn ? `First warn ${when}` : when ? `Opened ${when}` : "");
-    provenance.push(`Entry ${alarm}`);
-    if (inc.run_id) provenance.push(`Tape ${inc.run_id}`);
+    if (a?.warn) facts.push({ k: "First warn", v: when, tone: "warn" });
+    else if (when) facts.push({ k: "Opened", v: when });
+    facts.push({ k: "Entry", v: alarm });
+    if (inc.run_id) facts.push({ k: "Tape", v: tapeCopy({ id: inc.run_id }).title, sub: inc.run_id });
   }
-  $("case-meta").textContent = provenance.filter(Boolean).join("  ·  ");
+  $("case-meta").innerHTML = facts
+    .map(
+      (f) => `<div class="fact ${f.tone ? `is-${f.tone}` : ""}">
+        <dt>${escapeHtml(f.k)}</dt>
+        <dd>${escapeHtml(f.v)}${f.sub ? `<span class="sub">${escapeHtml(f.sub)}</span>` : ""}</dd>
+      </div>`
+    )
+    .join("");
+  renderCaseNext(inc);
+  const guess = $("case-guess");
+  const g = workingGuess(a);
+  if (guess) {
+    if (!inc || !a || !g) {
+      guess.hidden = true;
+      guess.innerHTML = "";
+    } else {
+      guess.hidden = false;
+      guess.innerHTML = `<p class="guess-kicker">Working hypothesis</p>
+        <div class="guess-row">
+          <span class="gk">Suspect</span>
+          <span class="gv">${escapeHtml(g.suspect)}</span>
+        </div>
+        <div class="guess-row ${g.decoy ? "is-decoy" : ""}">
+          <span class="gk">Last command</span>
+          <span class="gv">${escapeHtml(g.last)}${g.decoy ? `<em> decoy</em>` : ""}</span>
+        </div>
+        <div class="guess-row is-act">
+          <span class="gk">Recommend</span>
+          <span class="gv">${escapeHtml(g.recommend)} <i>not sent</i></span>
+        </div>`;
+    }
+  }
   if (!a) {
     $("alarm-lede").textContent = "Open a case from an alarm you already have. ORBIT does not detect anomalies.";
-    $("alarm-value").textContent = "—";
-    $("alarm-unit").textContent = "";
-    $("alarm-limit").textContent = "";
+    $("alarm-lede").hidden = false;
+    $("hero-readout").hidden = true;
     hero.classList.remove("is-warn", "is-ok");
     return;
   }
   const v = a.warn?.value_num ?? sampleAt(series(alarm), a.t)?.value_num;
   const ch = meta(alarm);
   const crossed = Boolean(a.warn);
-  $("alarm-lede").textContent = crossed
-    ? `${alarmTitle(alarm)} crossed warn at ${clock(a.warn.time_s)} (${fmt(v, 2)} ${ch.unit || ""}).`
-    : `No ${alarmTitle(alarm)} warn in this telemetry. Entry still stands — you opened from an alarm you already had.`;
+  const unit = ch.unit || "";
+  $("alarm-lede").hidden = true;
+  $("alarm-lede").textContent = "";
+  $("hero-readout").hidden = false;
+  $("alarm-ch").textContent = alarm;
   $("alarm-value").textContent = fmt(v, 2);
-  $("alarm-unit").textContent = ch.unit || "";
-  $("alarm-limit").textContent = crossed
-    ? `WARN  ${clock(a.warn.time_s)}  ·  limit ${fmt(ch.warn_limit, 1)} ${ch.unit || ""}`
-    : ch.warn_limit != null
-      ? `limit ${fmt(ch.warn_limit, 1)} ${ch.unit || ""}`
-      : "";
+  $("alarm-unit").textContent = unit;
+  renderAlarmMargin(v, ch);
+  $("alarm-limit").innerHTML = `${
+    crossed ? `<span class="flag">Warn ${escapeHtml(clock(a.warn.time_s))}</span>` : ""
+  }<span class="lim">limit ${fmt(ch.warn_limit, 1)} ${escapeHtml(unit)}</span>`;
   hero.classList.toggle("is-warn", crossed);
   hero.classList.toggle("is-ok", !crossed);
+}
+
+/* Same 62% tick as the overview meters: the limit always lands in the same place,
+   so the bar reads as distance from the limit rather than an absolute value. */
+function renderAlarmMargin(value, ch) {
+  const el = $("alarm-meter");
+  if (!el) return;
+  const limit = ch.warn_limit == null ? null : Number(ch.warn_limit);
+  if (value == null || limit == null || !Number.isFinite(limit) || limit === 0) {
+    el.hidden = true;
+    return;
+  }
+  const below = ch.limit_direction === "below";
+  const ratio = value / limit;
+  const fill = Math.min(100, (below ? 1 / Math.max(ratio, 1e-6) : ratio) * 62);
+  const past = below ? limit - value : value - limit;
+  const pct = Math.abs(past / limit) * 100;
+  el.hidden = false;
+  el.querySelector("i").style.width = `${fill.toFixed(0)}%`;
+  el.querySelector(".pct").textContent = `${pct.toFixed(pct < 10 ? 1 : 0)}% ${past > 0 ? "past warn" : "margin"}`;
+}
+
+function renderCaseNext(inc) {
+  const el = $("case-next");
+  if (!el) return;
+  if (!inc) {
+    el.hidden = true;
+    el.innerHTML = "";
+    return;
+  }
+  const cta = rowCta(inc);
+  el.hidden = false;
+  if (cta.jump === "closeout") {
+    const n = (inc.notes || "").trim();
+    const note = n && !n.startsWith("Canonical") ? n : "Filed. Command was not sent.";
+    el.innerHTML = `<button type="button" class="btn" data-case-jump="closeout">Read close-out</button>
+      <span class="case-next-note">${escapeHtml(note)}</span>`;
+    return;
+  }
+  if (cta.jump === "action") {
+    el.innerHTML = `<button type="button" class="btn" data-case-jump="action">File · not sent</button>
+      <span class="case-next-note">Ready to file. Command stays on the ground.</span>`;
+    return;
+  }
+  el.innerHTML = `<button type="button" class="btn" data-case-jump="walk">Walk</button>
+    <span class="case-next-note">Start at evidence. Decision is last.</span>`;
 }
 
 function renderCompare(a) {
@@ -1441,19 +1604,28 @@ function renderTimeline(a) {
     root.innerHTML = "";
     return;
   }
-  const items = [
-    ...a.windowEvents.map((e) => ({
+  const lastCmd = a.windowEvents.reduce((best, e) => (!best || e.time_s >= best.time_s ? e : best), null);
+  const suspectDetail = a.suspect ? "HEATER_B_ENABLE" : a.payloadSuspect ? "SCIENCE_MODE" : "";
+  const items = a.windowEvents.map((e) => {
+    const mode = e.detail === "SCIENCE_MODE" || e.event_type === "mode_change";
+    return {
       t: e.time_s,
       title: e.detail,
-      sub: `${e.event_type} · ${e.channel || ""}`,
+      sub: `${e.event_type} · ${e.channel || ""}`.trim(),
+      kind: mode ? "mode" : "command",
+      suspect: suspectDetail && e.detail === suspectDetail,
+      last: lastCmd && e.detail === lastCmd.detail && Math.abs(e.time_s - lastCmd.time_s) < 1,
       warn: false,
-    })),
-  ];
+    };
+  });
   if (a.warn) {
     items.push({
       t: a.warn.time_s,
       title: `${alarmChannel()} WARN`,
-      sub: `${fmt(a.warn.value_num, 2)} V · first crossing`,
+      sub: `${fmt(a.warn.value_num, 2)} ${meta(alarmChannel()).unit || ""} · first crossing`,
+      kind: "warn",
+      suspect: false,
+      last: false,
       warn: true,
     });
   }
@@ -1462,16 +1634,20 @@ function renderTimeline(a) {
   root.innerHTML = items
     .map((item) => {
       const on = pin != null && Math.abs(pin - item.t) < 3;
-      return `<li>
-        <span class="t-clock">${clock(item.t)}</span>
-        <span class="t-dot ${item.warn ? "warn" : ""}"></span>
-        <button type="button" class="t-card ${on ? "is-on" : ""}" data-t="${item.t}">
+      const tags = [
+        item.suspect ? `<span class="crumb-tag is-suspect">Suspect</span>` : "",
+        item.last && !item.suspect ? `<span class="crumb-tag is-last">Last</span>` : "",
+        item.warn ? `<span class="crumb-tag is-warn">Warn</span>` : "",
+      ].join("");
+      return `<li class="crumb kind-${item.kind} ${item.warn ? "is-warn" : ""} ${item.suspect ? "is-suspect" : ""} ${item.last && !item.suspect ? "is-last" : ""} ${on ? "is-on" : ""}" data-t="${item.t}">
+        <button type="button" class="t-card ${on ? "is-on" : ""}">
+          <span class="t-clock">${clock(item.t)}</span>
           <strong>${escapeHtml(item.title)}</strong>
-          <span>${escapeHtml(item.sub)}</span>
+          ${tags}
         </button>
       </li>`;
     })
-    .join("") || `<li><span class="t-clock"></span><span class="t-dot"></span><p class="empty">No commands in the window.</p></li>`;
+    .join("") || `<li><p class="empty">No commands in the window.</p></li>`;
 }
 
 function renderMode(a) {
@@ -1668,6 +1844,18 @@ function renderCase() {
   renderProc(a);
   renderDecision(a);
   renderFindings();
+}
+
+async function openIncident(incidentId, jump) {
+  await loadIncident(incidentId);
+  if (jump === "action") {
+    $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (state.incident?.status === "recommended") openFileSlip();
+  } else if (jump === "closeout") {
+    openDoc(incidentId);
+  } else if (jump === "findings") {
+    $("findings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 }
 
 async function loadIncident(incidentId) {
@@ -2122,7 +2310,7 @@ function bind() {
       return;
     }
     const btn = ev.target.closest("[data-open-case]");
-    if (btn) loadIncident(btn.dataset.openCase);
+    if (btn) openIncident(btn.dataset.openCase, btn.dataset.jump);
   });
   $("incidents-desk").addEventListener("click", (ev) => {
     if (ev.target.closest("[data-open-slip]")) {
@@ -2136,7 +2324,14 @@ function bind() {
       return;
     }
     const btn = ev.target.closest("[data-open-case]");
-    if (btn) loadIncident(btn.dataset.openCase);
+    if (btn) openIncident(btn.dataset.openCase, btn.dataset.jump);
+  });
+  $("incidents-desk").addEventListener("keydown", (ev) => {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    const row = ev.target.closest("[data-open-case]");
+    if (!row || ev.target !== row) return;
+    ev.preventDefault();
+    openIncident(row.dataset.openCase, row.dataset.jump);
   });
   initSpine();
   $("library-form").addEventListener("submit", (ev) => {
@@ -2184,17 +2379,29 @@ function bind() {
   });
   $("new-incident").addEventListener("submit", createIncident);
   $("timeline").addEventListener("click", (ev) => {
-    const btn = ev.target.closest("[data-t]");
-    if (!btn) return;
-    state.pinT = Number(btn.dataset.t);
-    renderCase();
+    const node = ev.target.closest("[data-t]");
+    if (!node) return;
+    pinTape(node.dataset.t, { scroll: true });
+  });
+  $("case-desk").addEventListener("click", (ev) => {
+    const jump = ev.target.closest("[data-case-jump]");
+    if (!jump) return;
+    const where = jump.dataset.caseJump;
+    if (where === "closeout") {
+      if (state.incidentId) openDoc(state.incidentId);
+      return;
+    }
+    if (where === "action") {
+      $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (state.incident?.status === "recommended") openFileSlip();
+      return;
+    }
+    $("compare")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   $("findings-body").addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-t]");
     if (!btn) return;
-    state.pinT = Number(btn.dataset.t);
-    renderCase();
-    $("traces").scrollIntoView({ behavior: "smooth", block: "start" });
+    pinTape(btn.dataset.t, { scroll: true });
   });
   document.querySelector(".seg").addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-window]");
