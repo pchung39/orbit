@@ -184,6 +184,78 @@ function sortTapes(runs) {
   });
 }
 
+function renderTapeTrigger() {
+  const run = state.runs.find((r) => r.id === state.deskRunId);
+  const copy = run ? tapeCopy(run) : { kind: "Tape", title: state.deskRunId || "—" };
+  if ($("tape-trigger-kind")) $("tape-trigger-kind").textContent = copy.kind;
+  if ($("tape-trigger-title")) $("tape-trigger-title").textContent = copy.title;
+  const n = state.runs.length;
+  if ($("tape-trigger-count")) $("tape-trigger-count").textContent = n ? `${n} tapes` : "";
+}
+
+function tapeItem(run, query) {
+  const copy = tapeCopy(run);
+  const on = run.id === state.deskRunId ? "is-on" : "";
+  return `<button type="button" class="tape-row ${on}" role="option" aria-selected="${on ? "true" : "false"}" data-tape="${escapeHtml(run.id)}">
+    <span class="tape-row-kind">${escapeHtml(copy.kind)}</span>
+    <span class="tape-row-title">${highlightTerms(copy.title, query)}</span>
+    ${copy.note ? `<span class="tape-row-note">${highlightTerms(copy.note, query)}</span>` : ""}
+  </button>`;
+}
+
+function tapeGroup(title, html) {
+  if (!html) return "";
+  return `<section class="tape-palette-group">
+    <p class="family-head">${escapeHtml(title)}</p>${html}
+  </section>`;
+}
+
+function renderTapePalette() {
+  const list = $("tape-palette-list");
+  if (!list) return;
+  const q = state.tapePaletteQuery.trim().toLowerCase();
+  const tapes = sortTapes(state.runs).filter((run) => {
+    if (!q) return true;
+    const copy = tapeCopy(run);
+    return `${copy.kind} ${copy.title} ${copy.note || ""} ${run.id}`.toLowerCase().includes(q);
+  });
+  if (!tapes.length) {
+    list.innerHTML = `<p class="lib-hint">Nothing matched “${escapeHtml(state.tapePaletteQuery.trim())}”.</p>`;
+    return;
+  }
+  const groups = new Map();
+  for (const run of tapes) {
+    const kind = tapeCopy(run).kind;
+    if (!groups.has(kind)) groups.set(kind, []);
+    groups.get(kind).push(run);
+  }
+  list.innerHTML = [...groups.entries()]
+    .map(([kind, runs]) => tapeGroup(`${kind} · ${runs.length}`, runs.map((r) => tapeItem(r, q)).join("")))
+    .join("");
+}
+
+function openTapePalette() {
+  state.tapePaletteOpen = true;
+  state.tapePaletteQuery = "";
+  const wrap = $("tape-palette");
+  const q = $("tape-palette-q");
+  const trigger = $("tape-trigger");
+  if (wrap) wrap.hidden = false;
+  if (trigger) trigger.setAttribute("aria-expanded", "true");
+  if (q) q.value = "";
+  renderTapePalette();
+  q?.focus();
+}
+
+function closeTapePalette() {
+  state.tapePaletteOpen = false;
+  const wrap = $("tape-palette");
+  const trigger = $("tape-trigger");
+  if (wrap) wrap.hidden = true;
+  if (trigger) trigger.setAttribute("aria-expanded", "false");
+  trigger?.focus();
+}
+
 const PROC_BOOK = {
   "EPS-17": {
     title: "EPS low-voltage response",
@@ -248,6 +320,8 @@ const state = {
   workspace: null,
   desk: null,
   deskRunId: "eps204",
+  tapePaletteOpen: false,
+  tapePaletteQuery: "",
   incidentFilter: "all",
   window: "focus",
   pinT: null,
@@ -1278,18 +1352,7 @@ function renderDesk() {
     $("focus-clock").textContent = desk?.clock || "--:--:--";
   }
 
-  const tapes = $("home-tapes");
-  if (tapes) {
-    tapes.innerHTML = sortTapes(state.runs)
-      .map((run) => {
-        const copy = tapeCopy(run);
-        const on = run.id === state.deskRunId ? "is-on" : "";
-        return `<button type="button" class="tape-pill ${on}" data-tape="${escapeHtml(run.id)}" role="tab" aria-selected="${on ? "true" : "false"}">
-          <span class="kind">${escapeHtml(copy.kind)}</span>${escapeHtml(copy.title)}
-        </button>`;
-      })
-      .join("");
-  }
+  renderTapeTrigger();
 
   const channels = $("home-channels");
   if (channels) {
@@ -2296,9 +2359,23 @@ function bind() {
   $("tab-incidents").addEventListener("click", () => goIncidents());
   $("back-incidents").addEventListener("click", () => goIncidents());
   $("go-home-brand").addEventListener("click", () => goHome());
-  $("home-tapes").addEventListener("click", (ev) => {
+  $("tape-trigger").addEventListener("click", () => {
+    if (state.tapePaletteOpen) closeTapePalette();
+    else openTapePalette();
+  });
+  $("tape-palette-close").addEventListener("click", closeTapePalette);
+  $("tape-palette").addEventListener("click", (ev) => {
+    if (ev.target.id === "tape-palette") closeTapePalette();
+  });
+  $("tape-palette-q").addEventListener("input", (ev) => {
+    state.tapePaletteQuery = ev.target.value;
+    renderTapePalette();
+  });
+  $("tape-palette-list").addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-tape]");
-    if (btn) loadDesk(btn.dataset.tape);
+    if (!btn) return;
+    loadDesk(btn.dataset.tape);
+    closeTapePalette();
   });
   $("home").addEventListener("click", (ev) => {
     if (ev.target.closest("[data-go-incidents]")) {
@@ -2437,6 +2514,10 @@ function bind() {
       return;
     }
     if (ev.key !== "Escape") return;
+    if (state.tapePaletteOpen) {
+      closeTapePalette();
+      return;
+    }
     if (!$("slip").hidden) {
       closeSlip();
       return;
