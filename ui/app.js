@@ -8,16 +8,32 @@ const TRACE_CATALOG = [
   { id: "EPS.solar_array_current", title: "Solar array current", color: "var(--mute)" },
 ];
 
+const TAPE_ORDER = ["eps204", "fault1", "pay002", "batt003", "nominal", "inc0187", "inc0191", "inc0162"];
+
 const RUN_COPY = {
-  eps204: { kicker: "Canonical incident", title: "EPS-204", note: "Heater overcurrent + SCIENCE_MODE confounder" },
-  fault1: { kicker: "Control", title: "Heater only", note: "Same fault, payload stays STANDBY" },
-  inc0187: { kicker: "Prior day", title: "INC-0187 source", note: "Historical match for the heater search" },
-  pay002: { kicker: "Contrast", title: "Payload spike", note: "FAULT-002 — payload is actually guilty" },
-  inc0191: { kicker: "Prior day", title: "INC-0191 source", note: "Historical match for the payload search" },
-  batt003: { kicker: "Contrast", title: "Pack IR sag", note: "FAULT-003 — heater current is healthy" },
-  inc0162: { kicker: "Prior day", title: "INC-0162 source", note: "Historical match for the battery search" },
-  nominal: { kicker: "Control", title: "Healthy science", note: "SCIENCE_MODE at ~0.9 A, no warn" },
+  eps204: { kind: "Demo", title: "Heater + confounder", note: "Heater 3×. SCIENCE_MODE makes the payload look guilty." },
+  fault1: { kind: "Control", title: "Heater only", note: "Same heater fault. Payload stayed STANDBY." },
+  pay002: { kind: "Contrast", title: "Payload spike", note: "Payload 3× on SCIENCE_MODE. Do not inhibit the heater." },
+  batt003: { kind: "Contrast", title: "Pack IR sag", note: "Battery sagged. Heater current is healthy." },
+  nominal: { kind: "Healthy", title: "Science pass", note: "SCIENCE_MODE at ~0.9 A. No warn on this tape." },
+  inc0187: { kind: "Prior", title: "INC-0187 source", note: "Library match for the heater close." },
+  inc0191: { kind: "Prior", title: "INC-0191 source", note: "Library match for the payload close." },
+  inc0162: { kind: "Prior", title: "INC-0162 source", note: "Library match for the pack-IR close." },
 };
+
+function tapeCopy(run) {
+  return RUN_COPY[run.id] || { kind: "Tape", title: run.id, note: run.notes || "Telemetry tape" };
+}
+
+function sortTapes(runs) {
+  return [...runs].sort((a, b) => {
+    const ia = TAPE_ORDER.indexOf(a.id);
+    const ib = TAPE_ORDER.indexOf(b.id);
+    const ra = ia === -1 ? 100 : ia;
+    const rb = ib === -1 ? 100 : ib;
+    return ra - rb || a.id.localeCompare(b.id);
+  });
+}
 
 const PROC_BOOK = {
   "EPS-17": {
@@ -601,19 +617,24 @@ function fillCreateForm() {
   $("slip-id").textContent = nextIncidentPreview();
   $("incident-alarm").innerHTML = state.alarms
     .map(
-      (ch) => `<button type="button" class="pick" data-pick="alarm" data-value="${escapeHtml(ch.id)}">
+      (ch) => `<button type="button" class="pick pick-alarm" data-pick="alarm" data-value="${escapeHtml(ch.id)}">
         <span class="k">${escapeHtml(ch.id)}</span>
-        <span class="note">${ch.warn_limit} ${ch.unit || ""}</span>
+        <span class="note">warn ${ch.warn_limit} ${ch.unit || ""}</span>
       </button>`
     )
     .join("");
-  $("incident-run").innerHTML = state.runs
-    .map(
-      (run) => `<button type="button" class="pick" data-pick="run" data-value="${escapeHtml(run.id)}">
-        <span class="k">${escapeHtml(run.id)}</span>
-        <span class="note">${escapeHtml(run.notes || "Telemetry tape")}</span>
-      </button>`
-    )
+  $("incident-run").innerHTML = sortTapes(state.runs)
+    .map((run) => {
+      const copy = tapeCopy(run);
+      return `<button type="button" class="pick pick-tape" data-pick="run" data-value="${escapeHtml(run.id)}">
+        <span class="pick-top">
+          <span class="kind">${escapeHtml(copy.kind)}</span>
+          <span class="k">${escapeHtml(run.id)}</span>
+        </span>
+        <span class="title">${escapeHtml(copy.title)}</span>
+        <span class="note">${escapeHtml(copy.note)}</span>
+      </button>`;
+    })
     .join("");
   const alarm = $("incident-alarm-value").value || ALARM;
   const run = $("incident-run-value").value || (state.runs.find((r) => r.id === "eps204") || state.runs[0])?.id || "";

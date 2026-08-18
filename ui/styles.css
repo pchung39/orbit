@@ -595,7 +595,7 @@ h1 { font-size: 28px; font-weight: 500; }
 .slip {
   display: flex;
   flex-direction: column;
-  width: min(640px, 100%);
+  width: min(720px, 100%);
   max-height: calc(100vh - 40px);
   overflow: auto;
   background: var(--paper);
@@ -651,29 +651,62 @@ h1 { font-size: 28px; font-weight: 500; }
 .slip-body { padding: 12px 18px 16px; }
 .picks { display: grid; gap: 6px; margin: 8px 0 0; }
 .picks-alarms { grid-template-columns: 1fr 1fr; }
-.picks-row { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.picks-tapes { grid-template-columns: 1fr 1fr; }
 .pick {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   width: 100%;
+  min-width: 0;
   text-align: left;
   background: var(--bg);
   border: 1px solid var(--line-2);
   color: inherit;
   font: inherit;
-  padding: 7px 10px;
+  padding: 9px 11px;
   cursor: pointer;
 }
 .pick:hover { border-color: var(--ink); }
 .pick.is-on {
   background: var(--paper);
   border-color: var(--ink);
-  box-shadow: inset 3px 0 0 var(--warn);
 }
-.pick .k { font-family: var(--mono); font-size: 12px; }
-.pick .note { color: var(--mute); font-size: 11px; font-family: var(--mono); white-space: nowrap; }
+.pick-alarm.is-on { box-shadow: inset 3px 0 0 var(--warn); }
+.pick-tape.is-on { box-shadow: inset 3px 0 0 var(--accent); }
+.pick .k {
+  font-family: var(--mono);
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.pick .note {
+  color: var(--mute);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: normal;
+}
+.pick-alarm { flex-direction: column; gap: 2px; }
+.pick-tape { gap: 4px; padding: 10px 12px; min-height: 92px; }
+.pick-tape .pick-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+.pick-tape .kind {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--accent);
+}
+.pick-tape .title {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+.pick-tape .note { font-size: 12px; }
 .pick-label {
   margin: 12px 0 0;
   font-size: 11px;
@@ -757,7 +790,8 @@ h1 { font-size: 28px; font-weight: 500; }
   .filed-banner, .case-head { display: block; }
   .filed-banner .stamp { display: inline-block; margin-bottom: 8px; }
   .slip::before, .slip::after { display: none; }
-  .picks-alarms { grid-template-columns: 1fr; }
+  .picks-alarms,
+  .picks-tapes { grid-template-columns: 1fr; }
   .slip-stub, .slip-foot { display: block; }
   .slip-stub-note { text-align: left; max-width: none; margin-top: 8px; }
   .slip-foot .form-actions { margin-top: 12px; }
