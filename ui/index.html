@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=libtab2" />
+    <link rel="stylesheet" href="/static/styles.css?v=trust1" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -27,13 +27,14 @@
         <button type="button" class="app-tab is-on" id="tab-home">Overview</button>
         <button type="button" class="app-tab" id="tab-incidents">Incidents<span class="n" id="tab-incidents-n"></span></button>
         <button type="button" class="app-tab" id="tab-library">Library</button>
+        <button type="button" class="app-tab" id="tab-trust">Trust</button>
       </nav>
       <div class="appbar-actions">
-        <p class="craft-chip" id="store-status">
+        <button type="button" class="craft-chip" id="store-status" aria-label="Open trust and data sources">
           <span class="pulse"></span>
           <span class="name">AURORA-1</span>
           <span class="st">LINKING</span>
-        </p>
+        </button>
         <span class="clock" id="focus-clock">--:--:--</span>
         <button type="button" class="icon-btn theme-btn" id="theme-toggle" aria-label="Switch colour theme" title="Switch colour theme">
           <svg class="i-moon" viewBox="0 0 16 16" aria-hidden="true">
@@ -151,6 +152,33 @@
               </div>
             </article>
           </div>
+        </section>
+
+        <section class="trust-desk" id="trust-desk" aria-label="Trust and data sources">
+          <header class="trust-head" id="trust-head"></header>
+          <div class="trust-boundary" id="trust-boundary"></div>
+          <div class="trust-grid" id="trust-grid"></div>
+          <section class="trust-panel" aria-labelledby="trust-tapes-title">
+            <header class="trust-panel-head">
+              <div>
+                <p class="panel-kicker">Tape catalog</p>
+                <h2 id="trust-tapes-title">Ingested runs</h2>
+                <p class="trust-panel-lede">Each tape is a simulator replay in Postgres. Overview shows the last sample — not live telemetry.</p>
+              </div>
+            </header>
+            <div class="trust-tapes" id="trust-tapes"></div>
+          </section>
+          <section class="trust-panel" aria-labelledby="trust-library-title">
+            <header class="trust-panel-head">
+              <div>
+                <p class="panel-kicker">Library index</p>
+                <h2 id="trust-library-title">Searchable sources</h2>
+                <p class="trust-panel-lede">Procedures and prior incidents embedded locally for semantic search during investigation.</p>
+              </div>
+            </header>
+            <div class="trust-sources" id="trust-sources"></div>
+          </section>
+          <footer class="trust-foot" id="trust-foot"></footer>
         </section>
 
         <div class="case-desk" id="case-desk">
@@ -364,6 +392,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=libtab2" type="module"></script>
+    <script src="/static/app.js?v=trust1" type="module"></script>
   </body>
 </html>

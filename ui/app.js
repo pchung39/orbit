@@ -338,6 +338,8 @@ const state = {
   libraryVisibleIds: [],
   openDocId: null,
   openDoc: null,
+  trust: null,
+  trustLoading: false,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -1085,13 +1087,213 @@ function closeFileSlip() {
   $("file-slip").hidden = true;
 }
 
-function setStoreStatus(ok) {
+function setStoreStatus(ok, detail) {
   const el = $("store-status");
   if (!el) return;
   el.classList.toggle("is-on", ok);
   el.classList.toggle("is-empty", !ok);
   const st = el.querySelector(".st");
-  if (st) st.textContent = ok ? "STORE OK" : "NO STORE";
+  if (st) st.textContent = detail || (ok ? "STORE OK" : "NO STORE");
+}
+
+function trustTone(ok, warn) {
+  if (ok) return "ok";
+  if (warn) return "warn";
+  return "bad";
+}
+
+function trustStatusLabel(tone) {
+  if (tone === "ok") return "Ready";
+  if (tone === "warn") return "Partial";
+  return "Offline";
+}
+
+async function loadTrust() {
+  state.trustLoading = true;
+  renderTrust();
+  try {
+    const res = await fetch("/trust");
+    if (!res.ok) throw new Error(`trust ${res.status}`);
+    state.trust = await res.json();
+    setStoreStatus(state.trust.store?.linked, state.trust.store?.linked ? "STORE OK" : "NO STORE");
+  } catch (err) {
+    state.trust = null;
+    setStoreStatus(false, "NO STORE");
+    if ($("trust-head")) {
+      $("trust-head").innerHTML = `<h1>Trust</h1><p class="trust-head-lede">${escapeHtml(err.message)}</p>`;
+    }
+  } finally {
+    state.trustLoading = false;
+    renderTrust();
+  }
+}
+
+function renderTrust() {
+  const t = state.trust;
+  const head = $("trust-head");
+  const boundary = $("trust-boundary");
+  const grid = $("trust-grid");
+  const tapes = $("trust-tapes");
+  const sources = $("trust-sources");
+  const foot = $("trust-foot");
+  if (!head || !boundary || !grid || !tapes || !sources || !foot) return;
+
+  if (state.trustLoading && !t) {
+    head.innerHTML = `<h1>Trust</h1><p class="trust-head-lede">Checking data sources…</p>`;
+    grid.innerHTML = "";
+    tapes.innerHTML = `<p class="trust-empty">Loading…</p>`;
+    sources.innerHTML = "";
+    foot.textContent = "";
+    return;
+  }
+  if (!t) {
+    head.innerHTML = `<h1>Trust</h1><p class="trust-head-lede">Could not load store status. Is Postgres running?</p>`;
+    boundary.innerHTML = "";
+    grid.innerHTML = "";
+    tapes.innerHTML = `<p class="trust-empty">Run <code>docker compose up -d</code> and <code>python -m storage ingest</code>, then refresh.</p>`;
+    sources.innerHTML = "";
+    foot.textContent = "";
+    return;
+  }
+
+  const storeTone = trustTone(t.store?.linked);
+  const libraryTone = trustTone(t.library?.ready, t.library?.documents > 0 && !t.library?.ready);
+  const investigatorTone = "ok";
+
+  const openN = t.incidents?.by_status?.open || 0;
+  const readyN = t.incidents?.by_status?.recommended || 0;
+  const filedN = t.incidents?.by_status?.filed || 0;
+
+  head.innerHTML = `
+    <h1>Can I trust this console?</h1>
+    <p class="trust-head-lede">Where ORBIT's numbers come from, what is ingested, and what the product will never do on its own.</p>
+    <div class="trust-summary">
+      <span class="trust-pill is-${storeTone}"><span class="dot"></span>Telemetry store</span>
+      <span class="trust-pill is-${libraryTone}"><span class="dot"></span>Library index</span>
+      <span class="trust-pill is-ok"><span class="dot"></span>Rules investigator</span>
+      <span class="trust-pill is-${storeTone}"><span class="dot"></span>${escapeHtml(t.mission || "Aurora-1")}</span>
+    </div>`;
+
+  boundary.innerHTML = `
+    <h2>Product boundaries</h2>
+    <ul>${(t.boundaries || [])
+      .map((line) => `<li>${escapeHtml(line)}</li>`)
+      .join("")}</ul>`;
+
+  grid.innerHTML = `
+    <article class="trust-card is-${storeTone}">
+      <div class="trust-card-head">
+        <div>
+          <p class="trust-card-kicker">Data plane</p>
+          <h3>Telemetry store</h3>
+        </div>
+        <span class="trust-status ${storeTone}">${trustStatusLabel(storeTone)}</span>
+      </div>
+      <div class="trust-metrics">
+        <div class="trust-metric"><span class="k">Tapes ingested</span><span class="v">${t.store?.runs ?? 0}</span></div>
+        <div class="trust-metric"><span class="k">Samples</span><span class="v">${(t.store?.telemetry_samples ?? 0).toLocaleString()}</span></div>
+        <div class="trust-metric"><span class="k">Channels in spec</span><span class="v">${t.store?.channels_in_spec ?? 0}</span></div>
+        <div class="trust-metric"><span class="k">Warn channels</span><span class="v">${t.store?.warn_channels ?? 0}</span></div>
+      </div>
+      <p class="trust-note">Postgres replay of simulator CSVs. Overview and case tape views read the last sample on the selected run — not a live downlink.</p>
+      <div class="trust-card-actions">
+        <button type="button" class="btn-ghost btn" data-trust-overview>Overview</button>
+      </div>
+    </article>
+    <article class="trust-card is-${libraryTone}">
+      <div class="trust-card-head">
+        <div>
+          <p class="trust-card-kicker">Knowledge plane</p>
+          <h3>Library index</h3>
+        </div>
+        <span class="trust-status ${libraryTone}">${trustStatusLabel(libraryTone)}</span>
+      </div>
+      <div class="trust-metrics">
+        <div class="trust-metric"><span class="k">Documents</span><span class="v">${t.library?.documents ?? 0}</span></div>
+        <div class="trust-metric"><span class="k">Embedded</span><span class="v">${t.library?.embedded ?? 0}</span></div>
+        <div class="trust-metric"><span class="k">Model</span><span class="v" style="font-size:11px">${escapeHtml(t.library?.embedding_model || "local")}</span></div>
+        <div class="trust-metric"><span class="k">Dims</span><span class="v">${t.library?.embedding_dims ?? "—"}</span></div>
+      </div>
+      <p class="trust-note">Semantic search during investigation uses local embeddings — not a paid API. Rebuild with <code>python -m storage ingest</code>.</p>
+      <div class="trust-card-actions">
+        <button type="button" class="btn-ghost btn" data-trust-library>Open library</button>
+      </div>
+    </article>
+    <article class="trust-card is-${investigatorTone}">
+      <div class="trust-card-head">
+        <div>
+          <p class="trust-card-kicker">Investigation</p>
+          <h3>Report assembly</h3>
+        </div>
+        <span class="trust-status ok">Rules</span>
+      </div>
+      <div class="trust-metrics">
+        <div class="trust-metric"><span class="k">UI provider</span><span class="v">${escapeHtml(t.investigator?.provider_ui || "rules")}</span></div>
+        <div class="trust-metric"><span class="k">CLI providers</span><span class="v" style="font-size:11px">rules · LLM</span></div>
+        <div class="trust-metric"><span class="k">Open cases</span><span class="v">${openN}</span></div>
+        <div class="trust-metric"><span class="k">Ready / filed</span><span class="v">${readyN} / ${filedN}</span></div>
+      </div>
+      <p class="trust-note">Assemble report writes tagged markdown from rules over the store. Paid models stay on the CLI unless you opt in there.</p>
+      <div class="trust-card-actions">
+        <button type="button" class="btn-ghost btn" data-trust-incidents>Open incidents</button>
+      </div>
+    </article>
+    <article class="trust-card is-ok">
+      <div class="trust-card-head">
+        <div>
+          <p class="trust-card-kicker">Validation</p>
+          <h3>Eval harness</h3>
+        </div>
+        <span class="trust-status ok">${t.eval?.cases ?? 4} cases</span>
+      </div>
+      <div class="trust-metrics">
+        <div class="trust-metric"><span class="k">Fault families</span><span class="v">${t.spec?.fault_families ?? 3}</span></div>
+        <div class="trust-metric"><span class="k">Procedures</span><span class="v">${t.spec?.procedures ?? 3}</span></div>
+        <div class="trust-metric"><span class="k">Prior incidents</span><span class="v">${t.spec?.historical_incidents ?? 3}</span></div>
+        <div class="trust-metric"><span class="k">Default</span><span class="v">${escapeHtml(t.eval?.provider_default || "rules")}</span></div>
+      </div>
+      <p class="trust-note">Regression gate for investigation closes: heater, payload, and battery families. Run <code>${escapeHtml(t.eval?.command || "python -m eval")}</code> locally.</p>
+    </article>`;
+
+  const runRows = (t.runs || []).map((run) => {
+    const copy = tapeCopy(run);
+    const on = run.id === state.deskRunId ? "is-on" : "";
+    const span =
+      run.clock_start && run.clock_end ? `${run.clock_start} → ${run.clock_end}` : "—";
+    return `<div class="trust-row ${on}">
+      <span class="id">${escapeHtml(run.id)}</span>
+      <div>
+        <strong>${escapeHtml(copy.title)}</strong>
+        <p class="meta">${escapeHtml(copy.note || run.notes || "")}</p>
+      </div>
+      <span class="kind">${escapeHtml(copy.kind)}</span>
+      <span class="n">${span}</span>
+      <span class="n">${(run.samples || 0).toLocaleString()}</span>
+      <span class="act"><button type="button" class="text-btn" data-trust-tape="${escapeHtml(run.id)}">${run.id === state.deskRunId ? "Selected" : "View tape"}</button></span>
+    </div>`;
+  });
+  tapes.innerHTML =
+    runRows.length > 0
+      ? `<div class="trust-cols"><span>Run</span><span>Title</span><span>Kind</span><span>Span</span><span>Samples</span><span></span></div>${runRows.join("")}`
+      : `<p class="trust-empty">No tapes ingested yet.</p>`;
+
+  const docRows = (t.documents || []).map((doc) => {
+    const kindCls = doc.kind === "procedure" ? "kind-procedure" : "kind-incident";
+    return `<div class="trust-source">
+      <span class="id ${kindCls}">${escapeHtml(doc.id)}</span>
+      <div>
+        <strong>${escapeHtml(doc.title || doc.id)}</strong>
+        <p class="path">${escapeHtml(doc.path || "")}</p>
+      </div>
+      <button type="button" class="text-btn" data-trust-doc="${escapeHtml(doc.id)}">Open</button>
+    </div>`;
+  });
+  sources.innerHTML =
+    docRows.length > 0
+      ? docRows.join("")
+      : `<p class="trust-empty">No library documents embedded. Run ingest to index procedures and priors.</p>`;
+
+  foot.textContent = `Spec: ${t.spec?.fault_families ?? 0} fault families · ${t.store?.events ?? 0} scripted events in store · Health endpoint /health`;
 }
 
 function setView(view) {
@@ -1100,9 +1302,11 @@ function setView(view) {
   document.body.classList.toggle("view-incidents", view === "incidents");
   document.body.classList.toggle("view-case", view === "case");
   document.body.classList.toggle("view-library", view === "library");
+  document.body.classList.toggle("view-trust", view === "trust");
   $("tab-home")?.classList.toggle("is-on", view === "home");
   $("tab-incidents")?.classList.toggle("is-on", view === "incidents");
   $("tab-library")?.classList.toggle("is-on", view === "library");
+  $("tab-trust")?.classList.toggle("is-on", view === "trust");
   const skip = $("skip");
   if (skip) {
     skip.href =
@@ -1112,7 +1316,9 @@ function setView(view) {
           ? "#stage"
           : view === "library"
             ? "#library-desk"
-            : "#home";
+            : view === "trust"
+              ? "#trust-desk"
+              : "#home";
     skip.textContent =
       view === "incidents"
         ? "Skip to incidents"
@@ -1120,7 +1326,9 @@ function setView(view) {
           ? "Skip to case"
           : view === "library"
             ? "Skip to library"
-            : "Skip to overview";
+            : view === "trust"
+              ? "Skip to trust"
+              : "Skip to overview";
   }
 }
 
@@ -1148,6 +1356,16 @@ function enterLibrary() {
   setView("library");
   renderLibrary();
   $("stage").scrollTop = 0;
+}
+
+function enterTrust() {
+  setView("trust");
+  loadTrust();
+  $("stage").scrollTop = 0;
+}
+
+async function goTrust() {
+  enterTrust();
 }
 
 /* Case spine: the six steps of the walk, kept in sync with the scroll position. */
@@ -1268,11 +1486,12 @@ function orbitSvg(orbit) {
   const y = (cy + ry * Math.sin(theta)).toFixed(1);
   const sun = orbit.illumination === "sun";
   const mark = sun ? "#7ff0d4" : "#f2a33c";
-  /* Teal arc is the sunlit half of the ring; the craft dot takes the colour of where it is now. */
+  /* Sun sits at the orbit focus; teal arc is the sunlit half; craft dot colour = current illumination. */
   return `<svg class="orbit-map" viewBox="0 0 320 148" aria-hidden="true">
     <defs>
       <radialGradient id="orbit-sun">
-        <stop offset="0%" stop-color="#ffe08a" stop-opacity="0.75" />
+        <stop offset="0%" stop-color="#ffe08a" stop-opacity="0.85" />
+        <stop offset="55%" stop-color="#ffe08a" stop-opacity="0.22" />
         <stop offset="100%" stop-color="#ffe08a" stop-opacity="0" />
       </radialGradient>
       <radialGradient id="orbit-earth" cx="34%" cy="30%">
@@ -1280,8 +1499,8 @@ function orbitSvg(orbit) {
         <stop offset="100%" stop-color="#0b141d" />
       </radialGradient>
     </defs>
-    <circle cx="288" cy="28" r="32" fill="url(#orbit-sun)" />
-    <circle cx="288" cy="28" r="6.5" fill="#ffe08a" />
+    <circle cx="${cx}" cy="${cy}" r="46" fill="url(#orbit-sun)" />
+    <circle cx="${cx}" cy="${cy}" r="8" fill="#ffe08a" opacity="0.95" />
     <g transform="rotate(-20 ${cx} ${cy})">
       <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="#22323f" stroke-width="1.2" />
       <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(127,240,212,0.45)"
@@ -2542,6 +2761,8 @@ function bind() {
   $("tab-home").addEventListener("click", () => goHome());
   $("tab-incidents").addEventListener("click", () => goIncidents());
   $("tab-library").addEventListener("click", () => goLibrary());
+  $("tab-trust").addEventListener("click", () => goTrust());
+  $("store-status").addEventListener("click", () => goTrust());
   $("back-incidents").addEventListener("click", () => goIncidents());
   $("go-home-brand").addEventListener("click", () => goHome());
   $("tape-trigger").addEventListener("click", () => {
@@ -2646,6 +2867,33 @@ function bind() {
     }
     const btn = ev.target.closest("[data-doc]");
     if (btn) openDoc(btn.dataset.doc);
+  });
+  $("trust-desk").addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-trust-overview]")) {
+      goHome();
+      return;
+    }
+    if (ev.target.closest("[data-trust-library]")) {
+      goLibrary();
+      return;
+    }
+    if (ev.target.closest("[data-trust-incidents]")) {
+      goIncidents();
+      return;
+    }
+    const tape = ev.target.closest("[data-trust-tape]");
+    if (tape) {
+      loadDesk(tape.dataset.trustTape).then(() => {
+        if (state.view === "trust") renderTrust();
+        goHome();
+      });
+      return;
+    }
+    const doc = ev.target.closest("[data-trust-doc]");
+    if (doc) {
+      goLibrary();
+      openDoc(doc.dataset.trustDoc);
+    }
   });
   $("theme-toggle").addEventListener("click", () => {
     setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");

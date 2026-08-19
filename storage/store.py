@@ -414,6 +414,99 @@ def list_documents(conn: psycopg.Connection) -> list[dict[str, Any]]:
     )
 
 
+def store_trust_snapshot(conn: psycopg.Connection, spec: dict[str, Any]) -> dict[str, Any]:
+    """Counts and health signals for the trust / data-sources console."""
+    runs = list_runs(conn)
+    run_ids = [row["id"] for row in runs]
+
+    telemetry_n = int(conn.execute("SELECT COUNT(*) AS n FROM telemetry").fetchone()["n"])
+    events_n = int(conn.execute("SELECT COUNT(*) AS n FROM events").fetchone()["n"])
+    docs = list_documents(conn)
+    embedded_n = int(
+        conn.execute("SELECT COUNT(*) AS n FROM documents WHERE embedding IS NOT NULL").fetchone()["n"]
+    )
+
+    incidents = list_incidents(conn)
+    inc_counts: dict[str, int] = {}
+    for row in incidents:
+        key = str(row.get("status") or "open")
+        inc_counts[key] = inc_counts.get(key, 0) + 1
+
+    channels = spec.get("channels") or {}
+    warn_channels = sum(1 for meta in channels.values() if meta.get("warn_limit") is not None)
+
+    run_rows: list[dict[str, Any]] = []
+    for run in runs:
+        rid = run["id"]
+        samples = int(
+            conn.execute("SELECT COUNT(*) AS n FROM telemetry WHERE run_id = %s", (rid,)).fetchone()["n"]
+        )
+        ev_n = int(
+            conn.execute("SELECT COUNT(*) AS n FROM events WHERE run_id = %s", (rid,)).fetchone()["n"]
+        )
+        span = conn.execute(
+            "SELECT MIN(time_s) AS t0, MAX(time_s) AS t1 FROM telemetry WHERE run_id = %s",
+            (rid,),
+        ).fetchone()
+        t0 = span["t0"]
+        t1 = span["t1"]
+        run_rows.append(
+            {
+                "id": rid,
+                "scenario": run.get("scenario"),
+                "started_at": run.get("started_at"),
+                "notes": run.get("notes") or "",
+                "samples": samples,
+                "events": ev_n,
+                "clock_start": format_clock(float(t0)) if t0 is not None else None,
+                "clock_end": format_clock(float(t1)) if t1 is not None else None,
+            }
+        )
+
+    store_ok = len(runs) > 0 and telemetry_n > 0
+    library_ok = len(docs) > 0 and embedded_n >= len(docs)
+
+    return {
+        "mission": spec.get("mission", {}).get("name") or "Aurora-1",
+        "store": {
+            "linked": store_ok,
+            "runs": len(runs),
+            "telemetry_samples": telemetry_n,
+            "events": events_n,
+            "channels_in_spec": len(channels),
+            "warn_channels": warn_channels,
+        },
+        "library": {
+            "documents": len(docs),
+            "embedded": embedded_n,
+            "ready": library_ok,
+            "embedding_model": "BAAI/bge-small-en-v1.5",
+            "embedding_dims": 384,
+        },
+        "incidents": {
+            "total": len(incidents),
+            "by_status": inc_counts,
+        },
+        "spec": {
+            "fault_families": len(spec.get("fault_library") or {}),
+            "procedures": len(spec.get("procedures_referenced") or {}),
+            "historical_incidents": len(spec.get("historical_incidents_to_author") or []),
+        },
+        "investigator": {
+            "provider_ui": "rules",
+            "provider_cli": "rules | anthropic | openai",
+            "paid_llm_in_ui": False,
+        },
+        "eval": {
+            "cases": 4,
+            "command": "python -m eval",
+            "provider_default": "rules",
+        },
+        "runs": run_rows,
+        "documents": [dict(row) for row in docs],
+    }
+
+
 def get_document(conn: psycopg.Connection, doc_id: str) -> dict[str, Any] | None:
     return conn.execute(
         "SELECT id, kind, title, path, body FROM documents WHERE id = %s", (doc_id,)

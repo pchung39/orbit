@@ -33,6 +33,7 @@ from storage.store import (
     query_channel,
     query_events,
     search_documents,
+    store_trust_snapshot,
 )
 
 UI_DIR = Path(__file__).resolve().parent.parent / "ui"
@@ -208,6 +209,22 @@ def _channel_card(spec: dict[str, Any], name: str) -> dict[str, Any]:
 @app.get("/health")
 def health() -> dict[str, bool]:
     return {"ok": True}
+
+
+@app.get("/trust")
+def trust() -> dict[str, Any]:
+    """Data-plane health for the trust console. Read-only."""
+    spec = load_and_validate()
+    with _conn() as conn:
+        ensure_demo_incident(conn)
+        snapshot = store_trust_snapshot(conn, spec)
+    snapshot["boundaries"] = [
+        "ORBIT replays ingested telemetry tapes — not a live downlink.",
+        "ORBIT does not detect anomalies or open alarms on its own.",
+        "ORBIT assembles tagged reports; it does not command the spacecraft.",
+        "Investigation in this console uses rules only — no paid LLM.",
+    ]
+    return snapshot
 
 
 @app.get("/desk")
