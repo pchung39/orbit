@@ -323,6 +323,7 @@ const state = {
   tapePaletteOpen: false,
   tapePaletteQuery: "",
   incidentFilter: "all",
+  incidentQuery: "",
   window: "focus",
   pinT: null,
   hoverT: null,
@@ -340,6 +341,16 @@ const state = {
   openDoc: null,
   trust: null,
   trustLoading: false,
+  inspector: {
+    open: false,
+    runId: null,
+    channel: null,
+    alarm: null,
+    window: "focus",
+    pinClock: null,
+    loading: false,
+    data: null,
+  },
 };
 
 const $ = (id) => document.getElementById(id);
@@ -871,6 +882,65 @@ const INC_FILTERS = [
   { id: "filed", label: "Filed", match: (item) => item.status === "filed" },
 ];
 
+const INC_CATEGORY_ORDER = ["bus", "payload", "battery", "other"];
+
+const INC_CATEGORY_LABELS = {
+  bus: "Bus voltage",
+  payload: "Payload current",
+  battery: "Battery voltage",
+  other: "Other",
+};
+
+function incidentCategoryOf(item) {
+  return incidentTone(item);
+}
+
+function incidentSearchText(item, all) {
+  const copy = tapeCopy({ id: item.run_id });
+  const cta = rowCta(item);
+  return [
+    item.id,
+    item.title,
+    item.alarm,
+    alarmTitle(item.alarm),
+    alarmShort(item.alarm),
+    copy.title,
+    copy.kind,
+    familyLine(item, all),
+    statusLabel(item.status),
+    caseAction(item),
+    cta.label,
+    item.notes,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function filterIncidents(all) {
+  const status = INC_FILTERS.find((f) => f.id === state.incidentFilter) || INC_FILTERS[0];
+  const q = (state.incidentQuery || "").trim().toLowerCase();
+  return all.filter((item) => {
+    if (!status.match(item)) return false;
+    if (q && !incidentSearchText(item, all).includes(q)) return false;
+    return true;
+  });
+}
+
+function groupIncidentsByCategory(rows) {
+  const groups = new Map();
+  for (const item of rows) {
+    const key = incidentCategoryOf(item);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+  }
+  return INC_CATEGORY_ORDER.filter((key) => groups.has(key)).map((key) => ({
+    key,
+    label: INC_CATEGORY_LABELS[key],
+    items: groups.get(key),
+  }));
+}
+
 function renderIncidents() {
   const byTime = (a, b) =>
     statusRank(a.status) - statusRank(b.status) || String(b.opened_at || "").localeCompare(String(a.opened_at || ""));
@@ -879,6 +949,7 @@ function renderIncidents() {
   const nOpen = count("open");
   const nReady = count("ready");
   const nFiled = count("filed");
+  const rows = filterIncidents(all);
 
   const tabN = $("tab-incidents-n");
   if (tabN) tabN.textContent = nOpen + nReady ? String(nOpen + nReady) : "";
@@ -907,97 +978,66 @@ function renderIncidents() {
     <button type="button" class="btn" data-open-slip>Open case</button>`;
   }
 
-  const bar = $("inc-bar");
-  if (bar) {
-    bar.innerHTML = `<div class="inc-filters" role="group" aria-label="Filter cases">${INC_FILTERS.map(
-      (f) =>
-        `<button type="button" class="inc-filter ${f.id === state.incidentFilter ? "is-on" : ""}" data-filter="${f.id}">${f.label}<span class="n">${count(f.id)}</span></button>`
-    ).join("")}</div>`;
+  const meta = $("inc-meta");
+  if (meta) {
+    const q = (state.incidentQuery || "").trim();
+    const statusNote =
+      state.incidentFilter !== "all"
+        ? INC_FILTERS.find((f) => f.id === state.incidentFilter)?.label || ""
+        : "";
+    meta.textContent = `${rows.length} case${rows.length === 1 ? "" : "s"}${q ? ` matching “${q}”` : ""}${statusNote ? ` · ${statusNote}` : ""}`;
   }
 
-  renderIncidentSide(all);
+  renderIncReady(all);
+  renderIncidentList(rows, all);
+}
 
+function renderIncidentList(rows, all) {
   const list = $("inc-list");
   if (!list) return;
-  const active = INC_FILTERS.find((f) => f.id === state.incidentFilter) || INC_FILTERS[0];
-  const rows = all.filter(active.match);
   if (!rows.length) {
-    list.innerHTML = `<p class="inc-empty">No cases in this view. Open one from an alarm you already have.</p>`;
+    list.innerHTML = `<p class="inc-empty">No cases match. Try another filter or clear your search.</p>`;
     return;
   }
+
   const cols = `<div class="inc-cols" aria-hidden="true">
     <span>Case</span><span>Signature</span><span>Next</span>
   </div>`;
-  list.innerHTML = `<div class="inc-table">${cols}${rows.map((item) => incRow(item, all)).join("")}</div>`;
+  list.innerHTML = groupIncidentsByCategory(rows)
+    .map(
+      (group) => `<section class="inc-group tone-${group.key}">
+        <header class="inc-group-head">
+          <h2 class="inc-group-title">${escapeHtml(group.label)}</h2>
+          <span class="inc-group-n">${group.items.length} case${group.items.length === 1 ? "" : "s"}</span>
+        </header>
+        <div class="inc-group-body">${cols}${group.items.map((item) => incRow(item, all)).join("")}</div>
+      </section>`
+    )
+    .join("");
 }
 
-/* A case list shows cases. This rail shows the craft: what is waiting on you,
-   and which faults keep coming back with what they closed on last time. */
-function renderIncidentSide(all) {
-  const side = $("inc-side");
-  if (!side) return;
-
+/* Ready-to-file queue — inline band above the categorized list. */
+function renderIncReady(all) {
+  const root = $("inc-ready");
+  if (!root) return;
   const ready = all.filter((item) => item.status === "recommended");
-  const queue = ready.length
-    ? `<section class="side-card is-queue">
-        <p class="panel-kicker">Next up</p>
-        <h3>${ready.length} ready to file</h3>
-        <p class="hint">Walked and stamped. One step from the record — still not sent.</p>
-        ${ready
-          .slice(0, 3)
-          .map(
-            (item) => `<button type="button" class="queue-case" data-open-case="${escapeHtml(item.id)}">
-              <span class="id">${escapeHtml(item.id)}</span>
-              <span class="act">${escapeHtml(caseAction(item) || "Review the report")}</span>
-              <span class="why">${escapeHtml(alarmTitle(item.alarm))} · decision not filed</span>
-            </button>`
-          )
-          .join("")}
-      </section>`
-    : `<section class="side-card">
-        <p class="panel-kicker">Next up</p>
-        <h3>Nothing ready to file</h3>
-        <p class="hint">Walk an open case through to the tagged report, then file the decision.</p>
-      </section>`;
-
-  const groups = new Map();
-  for (const item of all) {
-    const key = item.alarm || "other";
-    const g = groups.get(key) || { key, n: 0, filed: 0, closes: new Map() };
-    g.n += 1;
-    if (item.status === "filed") {
-      g.filed += 1;
-      const act = caseAction(item);
-      if (act) g.closes.set(act, (g.closes.get(act) || 0) + 1);
-    }
-    groups.set(key, g);
+  if (!ready.length) {
+    root.hidden = true;
+    root.innerHTML = "";
+    return;
   }
-  const rows = [...groups.values()].sort((a, b) => b.n - a.n || b.filed - a.filed);
-  const max = Math.max(1, ...rows.map((r) => r.n));
-  const sig = `<section class="side-card">
-    <p class="panel-kicker">Signatures</p>
-    <h3>What recurs on this craft</h3>
-    <p class="hint">Every case on Aurora-1, grouped by the alarm it was opened from.</p>
-    <ul class="sig-list">${rows
-      .map((r) => {
-        const top = [...r.closes.entries()].sort((a, b) => b[1] - a[1])[0];
-        return `<li class="tone-${incidentTone({ alarm: r.key })}">
-          <span class="sig-top">
-            <span class="sig-name">${escapeHtml(alarmTitle(r.key))}</span>
-            <span class="sig-n">${r.n} case${r.n === 1 ? "" : "s"}</span>
-          </span>
-          <span class="sig-bar"><i style="width:${((r.n / max) * 100).toFixed(0)}%"></i></span>
-          <span class="sig-close">${
-            top
-              ? `${r.filed} filed → <strong>${escapeHtml(top[0])}</strong>`
-              : `<span class="none">No precedent filed yet</span>`
-          }</span>
-        </li>`;
-      })
-      .join("")}</ul>
-  </section>`;
-
-  side.innerHTML = queue + sig;
+  root.hidden = false;
+  root.innerHTML = `
+    <p class="inc-ready-label">${ready.length} ready to file</p>
+    ${ready
+      .map(
+        (item) => `<button type="button" class="inc-ready-item" data-open-case="${escapeHtml(item.id)}" data-jump="action">
+          <span class="id">${escapeHtml(item.id)}</span>
+          <span class="act">${escapeHtml(caseAction(item) || "Review report")}</span>
+          <span class="why">${escapeHtml(alarmTitle(item.alarm))}</span>
+        </button>`
+      )
+      .join("")}`;
 }
 
 function incRow(item, all) {
@@ -1269,7 +1309,7 @@ function renderTrust() {
       <span class="kind">${escapeHtml(copy.kind)}</span>
       <span class="n">${span}</span>
       <span class="n">${(run.samples || 0).toLocaleString()}</span>
-      <span class="act"><button type="button" class="text-btn" data-trust-tape="${escapeHtml(run.id)}">${run.id === state.deskRunId ? "Selected" : "View tape"}</button></span>
+      <span class="act trust-row-actions"><button type="button" class="text-btn" data-trust-inspect="${escapeHtml(run.id)}">Inspect</button><button type="button" class="text-btn" data-trust-tape="${escapeHtml(run.id)}">${run.id === state.deskRunId ? "Selected" : "View"}</button></span>
     </div>`;
   });
   tapes.innerHTML =
@@ -1294,6 +1334,177 @@ function renderTrust() {
       : `<p class="trust-empty">No library documents embedded. Run ingest to index procedures and priors.</p>`;
 
   foot.textContent = `Spec: ${t.spec?.fault_families ?? 0} fault families · ${t.store?.events ?? 0} scripted events in store · Health endpoint /health`;
+}
+
+function defaultInspectForRun(runId) {
+  if (runId === "pay002" || runId === "inc0191") {
+    return { channel: "PAY.payload_current", alarm: "PAY.payload_current" };
+  }
+  if (runId === "batt003" || runId === "inc0162") {
+    return { channel: "EPS.battery_voltage", alarm: "EPS.battery_voltage" };
+  }
+  return { channel: "THM.heater_b_current", alarm: "EPS.bus_voltage" };
+}
+
+function inspectSampleValue(row) {
+  if (row.value_text != null && row.value_text !== "") return row.value_text;
+  if (row.value_num != null) return fmt(row.value_num, 3);
+  return "—";
+}
+
+function inspectUnit(data) {
+  const ch = (data?.channels || []).find((row) => row.id === data?.channel);
+  return ch?.unit || "";
+}
+
+function openInspector(opts = {}) {
+  const runId = opts.runId || state.runId || state.deskRunId;
+  if (!runId) return;
+  const defaults = defaultInspectForRun(runId);
+  const fromCase = state.view === "case" && state.runId === runId;
+  const a = analysis();
+  const pinT = opts.pinTimeS ?? state.pinT ?? a?.t ?? null;
+  state.inspector = {
+    open: true,
+    runId,
+    channel: opts.channel || (fromCase ? alarmChannel() : defaults.channel),
+    alarm: opts.alarm || (fromCase ? alarmChannel() : defaults.alarm),
+    window: opts.window || (fromCase ? state.window : "focus") || "focus",
+    pinClock: opts.pinClock || (pinT != null ? clock(pinT) : null),
+    loading: true,
+    data: null,
+  };
+  $("tape-inspector")?.removeAttribute("hidden");
+  document.body.classList.add("inspector-open");
+  loadInspector();
+}
+
+function closeInspector() {
+  state.inspector.open = false;
+  $("tape-inspector")?.setAttribute("hidden", "");
+  document.body.classList.remove("inspector-open");
+}
+
+async function loadInspector() {
+  const ins = state.inspector;
+  if (!ins.open || !ins.runId || !ins.channel) return;
+  ins.loading = true;
+  renderInspector();
+  const params = new URLSearchParams({
+    channel: ins.channel,
+    window: ins.window,
+  });
+  if (ins.alarm) params.set("alarm", ins.alarm);
+  if (ins.pinClock) params.set("pin_clock", ins.pinClock);
+  try {
+    const res = await fetch(`/runs/${encodeURIComponent(ins.runId)}/inspect?${params}`);
+    if (!res.ok) throw new Error(`inspect ${res.status}`);
+    ins.data = await res.json();
+  } catch (err) {
+    ins.data = { error: err.message };
+  } finally {
+    ins.loading = false;
+    renderInspector();
+  }
+}
+
+function renderInspector() {
+  const wrap = $("tape-inspector");
+  if (!wrap || !state.inspector.open) return;
+  const ins = state.inspector;
+  const data = ins.data;
+  const copy = tapeCopy({ id: ins.runId });
+  $("inspector-title").textContent = `${ins.runId} · ${copy.title}`;
+  $("inspector-lede").textContent =
+    "Sample-by-sample rows from the ingested store. Verify clocks and magnitudes against the report.";
+
+  const channelOpts = (data?.channels || TRACE_CATALOG.map((ch) => ({ id: ch.id, title: ch.title })))
+    .map(
+      (ch) =>
+        `<option value="${escapeHtml(ch.id)}" ${ch.id === ins.channel ? "selected" : ""}>${escapeHtml(ch.title || ch.id)}</option>`
+    )
+    .join("");
+  $("inspector-controls").innerHTML = `
+    <label>Channel
+      <select id="inspector-channel">${channelOpts}</select>
+    </label>
+    <div class="seg" role="group" aria-label="Inspector window">
+      <button type="button" data-inspector-window="focus" class="${ins.window === "focus" ? "is-on" : ""}">Warn ± 8 min</button>
+      <button type="button" data-inspector-window="full" class="${ins.window === "full" ? "is-on" : ""}">Full run</button>
+    </div>`;
+
+  const meta = $("inspector-meta");
+  const eventsRoot = $("inspector-events");
+  const samplesRoot = $("inspector-samples");
+  if (ins.loading && !data) {
+    meta.textContent = "Loading samples…";
+    eventsRoot.innerHTML = "";
+    samplesRoot.innerHTML = "";
+    return;
+  }
+  if (data?.error) {
+    meta.textContent = data.error;
+    eventsRoot.innerHTML = `<p class="trust-empty">${escapeHtml(data.error)}</p>`;
+    samplesRoot.innerHTML = "";
+    return;
+  }
+
+  const parts = [
+    `${data.from_clock} → ${data.to_clock}`,
+    `${data.sample_count} samples`,
+  ];
+  if (data.crossing) {
+    parts.push(
+      `<span class="tag-cross">first warn ${escapeHtml(data.crossing.channel)} @ ${escapeHtml(data.crossing.clock)} · ${escapeHtml(String(data.crossing.value_num ?? data.crossing.value_text ?? ""))}</span>`
+    );
+  }
+  if (data.pin) {
+    parts.push(`<span class="tag-pin">pin ${escapeHtml(data.pin.clock)}</span>`);
+  }
+  meta.innerHTML = parts.join(" · ");
+
+  const events = data.events || [];
+  eventsRoot.innerHTML =
+    events.length > 0
+      ? `<ul class="tape-inspector-events-list">${events
+          .map(
+            (ev) => `<li>
+              <p class="t">${escapeHtml(ev.clock)}</p>
+              <p class="d">${escapeHtml(ev.detail)} · ${escapeHtml(ev.event_type || "")}</p>
+            </li>`
+          )
+          .join("")}</ul>`
+      : `<p class="trust-empty">No commands or mode changes in this window.</p>`;
+
+  const unit = inspectUnit(data);
+  const crossT = data.crossing?.time_s;
+  const pinT = data.pin?.time_s;
+  const rows = (data.samples || [])
+    .map((row) => {
+      const t = row.time_s;
+      const isCross = crossT != null && Math.abs(t - crossT) < 2.6;
+      const isPin = pinT != null && Math.abs(t - pinT) < 2.6;
+      const cls = `${isCross ? "is-cross" : ""} ${isPin ? "is-pin" : ""}`.trim();
+      const val = inspectSampleValue(row);
+      const showUnit = row.value_text == null && unit && val !== "—";
+      return `<div class="inspector-row ${cls}" data-inspect-t="${t}">
+        <span>${escapeHtml(row.clock)}</span>
+        <span class="val">${escapeHtml(val)}${showUnit ? `<span class="unit">${escapeHtml(unit)}</span>` : ""}</span>
+        <span>${escapeHtml(data.channel.split(".").pop() || "")}</span>
+      </div>`;
+    })
+    .join("");
+  samplesRoot.innerHTML = rows
+    ? `<div class="inspector-cols"><span>Clock</span><span>Value</span><span>Ch</span></div>${rows}`
+    : `<p class="trust-empty">No samples in this window.</p>`;
+
+  const targetT = pinT ?? crossT;
+  if (targetT != null && rows) {
+    const rowEl = [...samplesRoot.querySelectorAll("[data-inspect-t]")].find(
+      (el) => Math.abs(Number(el.dataset.inspectT) - targetT) < 2.6
+    );
+    rowEl?.scrollIntoView({ block: "center" });
+  }
 }
 
 function setView(view) {
@@ -1555,12 +1766,6 @@ function marginMeter(ch) {
   </p>`;
 }
 
-function pickFeatured() {
-  const onTape = state.incidents.filter((item) => item.run_id === state.deskRunId && item.status !== "filed");
-  const ready = onTape.filter((item) => item.status === "recommended");
-  return ready[0] || onTape.find((item) => item.id === "INC-0204") || onTape[0] || null;
-}
-
 function sitrep() {
   const chans = state.desk?.channels || [];
   const orbit = state.desk?.orbit;
@@ -1636,38 +1841,6 @@ function renderDesk() {
     posture.innerHTML = `<span class="dot"></span>
       <span class="k">${escapeHtml(sit.label)}</span>
       <span class="v">${escapeHtml(sit.headline)}</span>`;
-  }
-
-  const featured = pickFeatured();
-  const next = $("home-next");
-  if (next) {
-    const nOpen = state.incidents.filter((item) => item.status !== "filed").length;
-    const walk = featured
-      ? `<button type="button" class="btn btn-ghost" data-open-case="${escapeHtml(featured.id)}">Walk ${escapeHtml(featured.id)}</button>`
-      : "";
-    next.className = `home-next ${sit.warn ? "is-warn" : "is-ok"}`;
-    next.innerHTML = `<p class="panel-kicker">Assessment · last sample</p>
-      <h2>${escapeHtml(sit.title)}</h2>
-      <p class="lede">${escapeHtml(sit.lede)}</p>
-      <div class="form-actions sit-actions">
-        <button type="button" class="btn" data-open-slip>Open case</button>
-        ${walk}
-        <button type="button" class="text-btn" data-go-incidents>${nOpen ? `${nOpen} open on this craft` : "All incidents"}</button>
-      </div>`;
-  }
-
-  const log = $("home-log");
-  if (log) {
-    const events = desk?.events || [];
-    const rows = events.length
-      ? `<ol class="tape-events">${events
-          .map(
-            (ev) =>
-              `<li><span class="t">${escapeHtml(ev.clock || clock(ev.time_s))}</span><span class="d">${escapeHtml(ev.detail || ev.event_type)}</span></li>`
-          )
-          .join("")}</ol>`
-      : `<p class="hint">No commands on this recording.</p>`;
-    log.innerHTML = `<p class="panel-kicker">Command log</p><h2>On this recording</h2>${rows}`;
   }
 }
 
@@ -2833,6 +3006,24 @@ function bind() {
     followThisCase();
     $("library-q").focus();
   });
+  $("inc-search-form")?.addEventListener("submit", (ev) => ev.preventDefault());
+  $("inc-q")?.addEventListener("input", () => {
+    state.incidentQuery = $("inc-q").value;
+    const clear = $("inc-clear");
+    if (clear) clear.hidden = !state.incidentQuery.trim();
+    renderIncidents();
+  });
+  $("inc-clear")?.addEventListener("click", () => {
+    state.incidentQuery = "";
+    const input = $("inc-q");
+    if (input) {
+      input.value = "";
+      input.focus();
+    }
+    const clear = $("inc-clear");
+    if (clear) clear.hidden = true;
+    renderIncidents();
+  });
   $("library-kinds").addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-kind]");
     if (!btn) return;
@@ -2889,10 +3080,45 @@ function bind() {
       });
       return;
     }
+    const inspect = ev.target.closest("[data-trust-inspect]");
+    if (inspect) {
+      openInspector({ runId: inspect.dataset.trustInspect });
+      return;
+    }
     const doc = ev.target.closest("[data-trust-doc]");
     if (doc) {
       goLibrary();
       openDoc(doc.dataset.trustDoc);
+    }
+  });
+  $("inspect-tape-btn")?.addEventListener("click", () => {
+    if (!state.runId && !state.incident) return;
+    openInspector({
+      runId: state.runId,
+      channel: alarmChannel(),
+      alarm: alarmChannel(),
+      window: state.window,
+    });
+  });
+  $("inspector-close")?.addEventListener("click", closeInspector);
+  $("tape-inspector")?.addEventListener("click", (ev) => {
+    if (ev.target.id === "tape-inspector") closeInspector();
+    const win = ev.target.closest("[data-inspector-window]");
+    if (win) {
+      state.inspector.window = win.dataset.inspectorWindow;
+      loadInspector();
+    }
+  });
+  $("tape-inspector")?.addEventListener("change", (ev) => {
+    if (ev.target.id === "inspector-channel") {
+      state.inspector.channel = ev.target.value;
+      loadInspector();
+    }
+  });
+  document.addEventListener("keydown", (ev) => {
+    if (ev.key === "Escape" && state.inspector.open) {
+      ev.preventDefault();
+      closeInspector();
     }
   });
   $("theme-toggle").addEventListener("click", () => {

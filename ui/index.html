@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=trust1" />
+    <link rel="stylesheet" href="/static/styles.css?v=inc4" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -94,18 +94,25 @@
             </div>
           </header>
           <section class="home-channels" id="home-channels" aria-label="Last samples on this tape"></section>
-          <div class="home-split">
-            <section class="home-log" id="home-log"></section>
-            <section class="home-next" id="home-next"></section>
-          </div>
         </section>
 
         <section class="incidents-desk" id="incidents-desk">
           <header class="inc-head" id="inc-head"></header>
-          <div class="inc-bar" id="inc-bar"></div>
-          <div class="inc-grid">
+          <div class="inc-tools">
+            <form class="inc-search" id="inc-search-form">
+              <label class="sr-only" for="inc-q">Search cases</label>
+              <svg class="inc-ico" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.5" />
+                <path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+              </svg>
+              <input id="inc-q" name="q" type="search" placeholder="Search by case ID, signature, tape…" autocomplete="off" />
+              <button type="button" class="inc-clear" id="inc-clear" aria-label="Clear search" hidden>×</button>
+            </form>
+            <p class="inc-meta" id="inc-meta"></p>
+          </div>
+          <div class="inc-panel">
+            <div class="inc-ready" id="inc-ready" hidden></div>
             <div class="inc-list" id="inc-list"></div>
-            <aside class="inc-side" id="inc-side" aria-label="Craft patterns"></aside>
           </div>
         </section>
 
@@ -248,6 +255,7 @@
                     <button type="button" data-window="focus" class="is-on">Warn ± 8 min</button>
                     <button type="button" data-window="full">Full run</button>
                   </div>
+                  <button type="button" class="btn-ghost btn" id="inspect-tape-btn">Inspect samples</button>
                 </div>
                 <div class="mode-strip" id="mode-strip"></div>
                 <div class="traces" id="trace-stack"></div>
@@ -392,6 +400,31 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=trust1" type="module"></script>
+    <div class="tape-inspector-wrap" id="tape-inspector" hidden>
+      <div class="tape-inspector" role="dialog" aria-modal="true" aria-labelledby="inspector-title">
+        <header class="tape-inspector-head">
+          <div>
+            <p class="panel-kicker">Tape inspector</p>
+            <h2 id="inspector-title">Samples</h2>
+            <p class="tape-inspector-lede" id="inspector-lede"></p>
+          </div>
+          <button type="button" class="tape-palette-close" id="inspector-close" aria-label="Close">Esc</button>
+        </header>
+        <div class="tape-inspector-controls" id="inspector-controls"></div>
+        <div class="tape-inspector-meta" id="inspector-meta"></div>
+        <div class="tape-inspector-body">
+          <section class="tape-inspector-events" aria-labelledby="inspector-events-title">
+            <h3 id="inspector-events-title">Events in window</h3>
+            <div id="inspector-events"></div>
+          </section>
+          <section class="tape-inspector-table-wrap" aria-labelledby="inspector-samples-title">
+            <h3 id="inspector-samples-title">Samples</h3>
+            <div class="tape-inspector-scroll" id="inspector-samples"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/app.js?v=inc4" type="module"></script>
   </body>
 </html>

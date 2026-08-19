@@ -63,7 +63,7 @@ The UI uses a deterministic rules path. No paid model in the browser.
 | **Incidents** | Filterable case table, clickable stat filters, **Next up** queue, **Signatures** precedent rail |
 | **Case** | Six-step spine, compare grid, command timeline, shared-axis traces, procedure satisfaction, tagged report, file decision |
 | **Library** | Full-page book: `/` search, kind + signature filters, index + reading column; close-outs and procedures open here |
-| **Trust** | Store + library status, product boundaries, tape catalog (span / sample counts), indexed sources; click **AURORA-1** chip or **Trust** tab |
+| **Trust** | Store + library status, product boundaries, tape catalog (span / sample counts), **Inspect** opens sample-level verification |
 | **Theme** | Dark default, light optional — hero and incidents header stay night-side in both |
 
 <p align="center">
@@ -93,16 +93,18 @@ Open **Trust** (tab or the **AURORA-1** chip) to verify the telemetry store and 
 
 Local DB is `orbit` / `orbit` in `docker-compose.yml` — not a production secret. `.env` is for optional CLI keys only; do not commit it.
 
-### Peek at raw telemetry (CLI)
+### Peek at raw telemetry
 
-The console charts tapes; the store CLI prints sample rows for audit:
+**Tape inspector** (UI): **Trust → Inspect** on any tape, or **Inspect samples** on Case → Tape. Shows sample rows and events for a scoped window (warn ± 8 min or full run). Highlights first warn crossing and pinned time.
+
+CLI/API for scripts:
 
 ```bash
 python -m storage channel eps204 THM.heater_b_current --from-clock 14:29:00 --to-clock 14:33:00
 python -m storage events eps204
 ```
 
-HTTP: `GET /runs/{run_id}/channels/{channel}?from_clock=&to_clock=` and `GET /runs/{run_id}/events`.
+HTTP: `GET /runs/{run_id}/inspect?channel=&alarm=&window=focus|full`, plus channel/events routes.
 
 ### Regenerate screenshots
 

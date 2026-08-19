@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 from agent.closeout import build_closeout
 from agent.investigate import investigate_rules
+from agent.tools import Tools
 from simulator.scenarios import clock_to_s, format_clock
 from simulator.simulate import load_and_validate
 from storage.store import (
@@ -63,9 +64,13 @@ DESK_TITLES = {
     "EPS.bus_current": "Bus current",
     "THM.heater_b_current": "Heater B",
     "PAY.mode": "Payload mode",
+    "PAY.payload_current": "Payload current",
     "EPS.battery_voltage": "Battery voltage",
     "EPS.solar_array_current": "Solar array",
 }
+
+INSPECT_CHANNELS = WORKSPACE_CHANNELS
+INSPECT_FOCUS_PAD_S = 8 * 60
 
 class IncidentIn(BaseModel):
     run_id: str
@@ -454,6 +459,96 @@ def channel(
         if not rows and not any(r["id"] == run_id for r in list_runs(conn)):
             raise HTTPException(404, f"unknown run {run_id}")
         return [_row(row) for row in rows]
+
+
+@app.get("/runs/{run_id}/inspect")
+def inspect_tape(
+    run_id: str,
+    channel: str = Query(..., description="Telemetry channel to list sample-by-sample"),
+    alarm: str | None = Query(default=None, description="Alarm channel for first-warn anchor"),
+    window: str = Query(default="focus", pattern="^(focus|full)$"),
+    pin_clock: str | None = Query(default=None),
+) -> dict[str, Any]:
+    """Scoped sample table + events for human verification. Not raw SQL."""
+    spec = load_and_validate()
+    if channel not in spec["channels"]:
+        raise HTTPException(400, f"unknown channel {channel}")
+    alarm_ch = alarm if alarm and alarm in spec["channels"] else channel
+    with _conn() as conn:
+        if not any(row["id"] == run_id for row in list_runs(conn)):
+            raise HTTPException(404, f"unknown run {run_id}")
+        tools = Tools(conn, spec)
+        crossing_row = tools.first_warn(run_id, alarm_ch)
+        pin_s = clock_to_s(pin_clock) if pin_clock else None
+
+        all_rows = query_channel(conn, run_id, channel)
+        if not all_rows:
+            raise HTTPException(404, f"no telemetry for {run_id} {channel}")
+        t0_full = float(all_rows[0]["time_s"])
+        t1_full = float(all_rows[-1]["time_s"])
+
+        anchor = pin_s
+        if anchor is None and crossing_row is not None:
+            anchor = float(crossing_row["time_s"])
+        if anchor is None:
+            anchor = t1_full
+
+        if window == "full":
+            start_s, end_s = t0_full, t1_full
+        else:
+            start_s = max(t0_full, anchor - INSPECT_FOCUS_PAD_S)
+            end_s = min(t1_full, anchor + INSPECT_FOCUS_PAD_S)
+
+        samples = [_row(row) for row in query_channel(conn, run_id, channel, start_s, end_s)]
+        events = [
+            _row(row)
+            for row in query_events(conn, run_id)
+            if start_s <= float(row["time_s"]) <= end_s
+        ]
+
+        crossing = None
+        if crossing_row is not None:
+            c = _row(crossing_row)
+            crossing = {
+                "channel": alarm_ch,
+                "clock": c["clock"],
+                "time_s": c["time_s"],
+                "value_num": c.get("value_num"),
+                "value_text": c.get("value_text"),
+            }
+
+        pin = None
+        if pin_s is not None:
+            pin = {"time_s": pin_s, "clock": format_clock(pin_s)}
+
+        channel_options = [
+            {
+                "id": name,
+                "title": DESK_TITLES.get(name, name),
+                "subsystem": spec["channels"][name].get("subsystem"),
+                "unit": spec["channels"][name].get("unit"),
+            }
+            for name in INSPECT_CHANNELS
+            if name in spec["channels"]
+        ]
+
+    return {
+        "run_id": run_id,
+        "channel": channel,
+        "alarm": alarm_ch,
+        "window": window,
+        "from_clock": format_clock(start_s),
+        "to_clock": format_clock(end_s),
+        "from_time_s": start_s,
+        "to_time_s": end_s,
+        "sample_count": len(samples),
+        "crossing": crossing,
+        "pin": pin,
+        "samples": samples,
+        "events": events,
+        "channels": channel_options,
+        "scope": "Ingested telemetry replay. ORBIT does not downlink or detect.",
+    }
 
 
 @app.get("/documents")
