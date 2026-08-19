@@ -463,7 +463,7 @@ def document(doc_id: str) -> dict[str, Any]:
 @app.get("/search")
 def search(
     q: str = Query(..., min_length=1),
-    limit: int = Query(default=8, ge=1, le=20),
+    limit: int = Query(default=20, ge=1, le=40),
 ) -> list[dict[str, Any]]:
     """Semantic library search. Local embeddings, not a paid model."""
     with _conn() as conn:

@@ -7,10 +7,10 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=tape-picker1" />
+    <link rel="stylesheet" href="/static/styles.css?v=libtab2" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -26,6 +26,7 @@
       <nav class="app-nav" aria-label="Sections">
         <button type="button" class="app-tab is-on" id="tab-home">Overview</button>
         <button type="button" class="app-tab" id="tab-incidents">Incidents<span class="n" id="tab-incidents-n"></span></button>
+        <button type="button" class="app-tab" id="tab-library">Library</button>
       </nav>
       <div class="appbar-actions">
         <p class="craft-chip" id="store-status">
@@ -104,6 +105,51 @@
           <div class="inc-grid">
             <div class="inc-list" id="inc-list"></div>
             <aside class="inc-side" id="inc-side" aria-label="Craft patterns"></aside>
+          </div>
+        </section>
+
+        <section class="library-desk" id="library-desk">
+          <header class="lib-hero">
+            <div class="lib-hero-copy">
+              <p class="craft-kicker" id="library-kicker">Aurora-1 · book</p>
+              <h1>Library</h1>
+              <p class="inc-lede">Procedures, similar cases, and filed close-outs. Search ranks by meaning. ORBIT does not uplink from here.</p>
+            </div>
+            <form class="lib-search" id="library-form">
+              <label class="sr-only" for="library-q">Search the library</label>
+              <svg class="lib-ico" viewBox="0 0 16 16" aria-hidden="true">
+                <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.5" />
+                <path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+              </svg>
+              <input id="library-q" name="q" type="search" placeholder="Search procedures, cases, close-outs…" autocomplete="off" />
+              <span class="kbd" id="library-kbd">/</span>
+              <button type="button" class="lib-clear" id="library-clear" aria-label="Clear search" hidden>×</button>
+            </form>
+            <div class="lib-suggest" id="library-suggest"></div>
+            <div class="lib-toolbar">
+              <div class="lib-kinds" id="library-kinds" role="group" aria-label="Filter by kind"></div>
+              <div class="lib-families" id="library-families" role="group" aria-label="Filter by signature"></div>
+            </div>
+          </header>
+          <div class="lib-work">
+            <aside class="lib-index" aria-label="Documents">
+              <p class="lib-status" id="library-status"></p>
+              <p class="lib-count" id="library-count" hidden></p>
+              <div class="lib-scroll" id="library-body"></div>
+            </aside>
+            <article class="lib-page" id="library-reader" aria-label="Reader">
+              <div class="lib-shelf" id="library-shelf"></div>
+              <div class="lib-article" id="library-article" hidden>
+                <button type="button" class="text-btn lib-back" id="reader-close">Close</button>
+                <header class="lib-page-head">
+                  <p class="eyebrow" id="reader-kind"></p>
+                  <h2 id="reader-title"></h2>
+                  <p class="lib-reader-why" id="reader-why"></p>
+                  <div class="lib-page-actions" id="reader-actions"></div>
+                </header>
+                <div class="reader-body md" id="reader-body"></div>
+              </div>
+            </article>
           </div>
         </section>
 
@@ -249,42 +295,6 @@
           </div>
         </div>
       </main>
-
-      <button type="button" class="lib-handle" id="library-toggle" aria-expanded="false" aria-controls="library" aria-label="Show library">
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M10.2 3.2 5.5 8l4.7 4.8" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" />
-        </svg>
-      </button>
-      <aside class="library rail" id="library" aria-label="Library">
-        <header class="lib-head">
-          <p class="nav-label" id="library-kicker">Library</p>
-          <p class="lib-count" id="library-count"></p>
-        </header>
-        <form class="lib-search" id="library-form">
-          <label class="sr-only" for="library-q">Search the library</label>
-          <svg class="lib-ico" viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.5" />
-            <path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-          </svg>
-          <input id="library-q" name="q" type="search" placeholder="Search the library" autocomplete="off" />
-          <span class="kbd" id="library-kbd">/</span>
-          <button type="button" class="lib-clear" id="library-clear" aria-label="Clear search" hidden>×</button>
-        </form>
-        <div class="lib-kinds" id="library-kinds" role="group" aria-label="Filter by kind"></div>
-        <p class="lib-status" id="library-status"></p>
-        <div class="lib-scroll" id="library-body"></div>
-        <section class="lib-reader" id="library-reader" hidden>
-          <button type="button" class="text-btn lib-back" id="reader-close">Back to library</button>
-          <header>
-            <div>
-              <p class="eyebrow" id="reader-kind"></p>
-              <h2 id="reader-title"></h2>
-            </div>
-          </header>
-          <p class="lib-reader-why" id="reader-why"></p>
-          <div class="reader-body md" id="reader-body"></div>
-        </section>
-      </aside>
     </div>
 
     <div class="slip-wrap" id="slip" hidden>
@@ -354,6 +364,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=tape-picker1" type="module"></script>
+    <script src="/static/app.js?v=libtab2" type="module"></script>
   </body>
 </html>

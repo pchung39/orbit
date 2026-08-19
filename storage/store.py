@@ -420,31 +420,64 @@ def get_document(conn: psycopg.Connection, doc_id: str) -> dict[str, Any] | None
     ).fetchone()
 
 
-def search_documents(conn: psycopg.Connection, query: str, limit: int = 8) -> list[dict[str, Any]]:
-    """Semantic search over procedures/incidents. Local embeddings, not a paid API."""
+def search_documents(conn: psycopg.Connection, query: str, limit: int = 20) -> list[dict[str, Any]]:
+    """Hybrid search: semantic rank plus id / title / body boosts. Local embeddings, not a paid API."""
     from storage.embed import as_pgvector, embed_texts
 
-    snippet = "left(regexp_replace(body, '\\s+', ' ', 'g'), 180) AS snippet"
+    q = query.strip()
+    q_lower = q.lower()
+    snippet = "left(regexp_replace(body, '\\s+', ' ', 'g'), 220) AS snippet"
+    ranked: dict[str, dict[str, Any]] = {}
+
+    def take(row: Any, score: float) -> None:
+        item = dict(row)
+        item["score"] = float(score)
+        prev = ranked.get(item["id"])
+        if prev is None or float(item["score"]) > float(prev.get("score") or 0):
+            ranked[item["id"]] = item
+
+    like = f"%{q}%"
+    for row in conn.execute(
+        f"SELECT id, kind, title, path, {snippet} FROM documents "
+        "WHERE id ILIKE %s OR title ILIKE %s OR body ILIKE %s",
+        (like, like, like),
+    ).fetchall():
+        ident = str(row["id"]).lower()
+        title = str(row["title"] or "").lower()
+        if ident == q_lower:
+            bonus = 10.0
+        elif q_lower in ident:
+            bonus = 2.0
+        elif q_lower in title:
+            bonus = 1.0
+        else:
+            bonus = 0.12
+        take(row, 0.45 + bonus)
+
     n_embedded = conn.execute(
         "SELECT COUNT(*) AS n FROM documents WHERE embedding IS NOT NULL"
     ).fetchone()["n"]
     if n_embedded:
-        vec = as_pgvector(embed_texts([query])[0])
-        return list(
-            conn.execute(
-                f"SELECT id, kind, title, path, 1 - (embedding <=> %s::vector) AS score, {snippet} "
-                "FROM documents WHERE embedding IS NOT NULL "
-                "ORDER BY embedding <=> %s::vector LIMIT %s",
-                (vec, vec, limit),
-            ).fetchall()
-        )
-    return list(
-        conn.execute(
-            f"SELECT id, kind, title, path, NULL AS score, {snippet} FROM documents "
-            "WHERE body ILIKE %s ORDER BY kind, id LIMIT %s",
-            (f"%{query}%", limit),
-        ).fetchall()
-    )
+        vec = as_pgvector(embed_texts([q])[0])
+        for row in conn.execute(
+            f"SELECT id, kind, title, path, 1 - (embedding <=> %s::vector) AS score, {snippet} "
+            "FROM documents WHERE embedding IS NOT NULL "
+            "ORDER BY embedding <=> %s::vector LIMIT %s",
+            (vec, vec, max(limit, 16)),
+        ).fetchall():
+            ident = str(row["id"]).lower()
+            title = str(row["title"] or "").lower()
+            bonus = 0.0
+            if ident == q_lower:
+                bonus = 10.0
+            elif q_lower in ident:
+                bonus = 2.0
+            elif q_lower in title:
+                bonus = 1.0
+            take(row, float(row["score"] or 0) + bonus)
+
+    rows = sorted(ranked.values(), key=lambda item: (-float(item.get("score") or 0), item["id"]))
+    return rows[:limit]
 
 
 RUN_GENERATORS = {

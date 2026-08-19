@@ -334,7 +334,8 @@ const state = {
   libraryHits: null,
   librarySearching: false,
   libraryKind: "all",
-  libraryOpen: false,
+  libraryFamily: "all",
+  libraryVisibleIds: [],
   openDocId: null,
   openDoc: null,
 };
@@ -490,11 +491,12 @@ function inlineMd(text) {
   return stampTags(s);
 }
 
-function renderMd(src) {
+function renderMd(src, opts = {}) {
   const lines = src.replaceAll("\r\n", "\n").split("\n");
   const out = [];
   let i = 0;
   let list = null;
+  let skippedTitle = false;
   const flushList = () => {
     if (!list) return;
     out.push(`<${list.tag}>${list.items.join("")}</${list.tag}>`);
@@ -510,13 +512,24 @@ function renderMd(src) {
     }
     if (line.startsWith("# ")) {
       flushList();
-      out.push(`<h3>${inlineMd(line.slice(2))}</h3>`);
+      if (opts.skipTitle && !skippedTitle) {
+        skippedTitle = true;
+        i += 1;
+        continue;
+      }
+      out.push(`<h2>${inlineMd(line.slice(2))}</h2>`);
       i += 1;
       continue;
     }
     if (line.startsWith("## ")) {
       flushList();
-      out.push(`<h3>${inlineMd(line.slice(3))}</h3>`);
+      out.push(`<h2>${inlineMd(line.slice(3))}</h2>`);
+      i += 1;
+      continue;
+    }
+    if (line.startsWith("### ")) {
+      flushList();
+      out.push(`<h3>${inlineMd(line.slice(4))}</h3>`);
       i += 1;
       continue;
     }
@@ -1086,13 +1099,28 @@ function setView(view) {
   document.body.classList.toggle("view-home", view === "home");
   document.body.classList.toggle("view-incidents", view === "incidents");
   document.body.classList.toggle("view-case", view === "case");
+  document.body.classList.toggle("view-library", view === "library");
   $("tab-home")?.classList.toggle("is-on", view === "home");
   $("tab-incidents")?.classList.toggle("is-on", view === "incidents");
+  $("tab-library")?.classList.toggle("is-on", view === "library");
   const skip = $("skip");
   if (skip) {
-    skip.href = view === "incidents" ? "#incidents-desk" : view === "case" ? "#stage" : "#home";
+    skip.href =
+      view === "incidents"
+        ? "#incidents-desk"
+        : view === "case"
+          ? "#stage"
+          : view === "library"
+            ? "#library-desk"
+            : "#home";
     skip.textContent =
-      view === "incidents" ? "Skip to incidents" : view === "case" ? "Skip to case" : "Skip to overview";
+      view === "incidents"
+        ? "Skip to incidents"
+        : view === "case"
+          ? "Skip to case"
+          : view === "library"
+            ? "Skip to library"
+            : "Skip to overview";
   }
 }
 
@@ -1114,6 +1142,12 @@ function enterCase() {
   setView("case");
   renderIncidents();
   setSpine("compare");
+}
+
+function enterLibrary() {
+  setView("library");
+  renderLibrary();
+  $("stage").scrollTop = 0;
 }
 
 /* Case spine: the six steps of the walk, kept in sync with the scroll position. */
@@ -1348,7 +1382,7 @@ function renderDesk() {
     $("home-orbit-meta").textContent = orbit ? `${orbit.period_min} min orbit` : "";
   }
   if ($("home-orbit")) $("home-orbit").innerHTML = orbitSvg(orbit);
-  if ($("focus-clock") && (state.view === "home" || state.view === "incidents")) {
+  if ($("focus-clock") && (state.view === "home" || state.view === "incidents" || state.view === "library")) {
     $("focus-clock").textContent = desk?.clock || "--:--:--";
   }
 
@@ -1469,16 +1503,16 @@ async function loadDesk(runId) {
 }
 
 async function goHome() {
-  setLibraryOpen(false);
-  browseLibrary();
   enterHome();
   if (!state.desk) await loadDesk(state.deskRunId);
 }
 
 async function goIncidents() {
-  setLibraryOpen(false);
-  browseLibrary();
   enterIncidents();
+}
+
+function goLibrary() {
+  enterLibrary();
 }
 
 function renderAlarm(a) {
@@ -1929,8 +1963,6 @@ async function loadIncident(incidentId) {
   state.pinT = null;
   state.hoverT = null;
   enterCase();
-  /* Below the breakpoint the drawer overlays the case instead of sitting beside it. */
-  setLibraryOpen(window.innerWidth > 900);
   $("stage").scrollTop = 0;
   renderIncidents();
   const res = await fetch(`/incidents/${encodeURIComponent(incidentId)}/workspace`);
@@ -2048,25 +2080,29 @@ async function openDoc(id) {
   state.openDocId = doc.id;
   state.openDoc = doc;
   const kind = libraryKind(doc);
-  document.body.classList.add("lib-reading");
+  const close = libraryClose(doc);
   $("reader-kind").textContent = libraryKindLabel(doc);
   $("reader-title").textContent = doc.title;
-  const close = libraryClose(doc);
   $("reader-why").textContent = close ? `${libraryUse(doc)} · ${close}` : libraryUse(doc);
-  $("reader-body").innerHTML = renderMd(doc.body);
+  $("reader-body").innerHTML = renderMd(doc.body, { skipTitle: true });
+  const actions = $("reader-actions");
+  const listed = state.incidents.find((item) => item.id === doc.id);
+  if (actions) {
+    actions.innerHTML = listed
+      ? `<button type="button" class="btn-bar" data-open-listed="${escapeHtml(doc.id)}">Open case</button>`
+      : "";
+  }
   const reader = $("library-reader");
-  reader.hidden = false;
-  reader.className = `lib-reader kind-${kind}`;
-  setLibraryOpen(true);
-  renderLibrary();
+  if (reader) reader.className = `lib-page kind-${kind}`;
+  enterLibrary();
+  reader?.scrollTo?.(0, 0);
 }
 
 function closeReader() {
-  $("library-reader").hidden = true;
-  $("library-reader").className = "lib-reader";
   state.openDocId = null;
   state.openDoc = null;
-  document.body.classList.remove("lib-reading");
+  const reader = $("library-reader");
+  if (reader) reader.className = "lib-page";
   renderLibrary();
 }
 
@@ -2104,6 +2140,18 @@ function libraryClose(doc) {
   return "";
 }
 
+function libraryFamily(doc) {
+  if (LIB_COPY[doc.id]?.family) return LIB_COPY[doc.id].family;
+  const inc = state.incidents.find((item) => item.id === doc.id);
+  if (inc?.alarm === "PAY.payload_current") return "payload";
+  if (inc?.alarm === "EPS.battery_voltage") return "battery";
+  if (inc?.alarm === "EPS.bus_voltage") return "heater";
+  if (doc.id === "EPS-09") return "battery";
+  if (String(doc.id).startsWith("PAY")) return "payload";
+  if (String(doc.id).startsWith("EPS")) return "heater";
+  return "other";
+}
+
 function likeThisQuery() {
   const inc = state.incident;
   const a = analysis();
@@ -2124,15 +2172,21 @@ const LIB_KINDS = [
   { id: "filed", label: "Filed" },
 ];
 
-function setLibraryOpen(open) {
-  state.libraryOpen = open;
-  document.body.classList.toggle("lib-open", open);
-  const btn = $("library-toggle");
-  if (btn) {
-    btn.setAttribute("aria-expanded", open ? "true" : "false");
-    btn.setAttribute("aria-label", open ? "Hide library" : "Show library");
-  }
-}
+const LIB_FAMILIES = [
+  { id: "all", label: "All signatures" },
+  { id: "heater", label: "Heater" },
+  { id: "payload", label: "Payload" },
+  { id: "battery", label: "Pack" },
+];
+
+const LIB_SUGGEST = [
+  { q: "heater 3× overcurrent EPS-17", label: "Heater 3×" },
+  { q: "SCIENCE_MODE payload current", label: "Science mode" },
+  { q: "battery internal resistance eclipse", label: "Pack IR" },
+  { q: "EPS-17 low voltage load", label: "EPS-17" },
+];
+
+const KIND_RANK = { procedure: 0, history: 1, filed: 2 };
 
 function escapeRx(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -2207,62 +2261,123 @@ function libGroup(title, html, extra = "") {
 }
 
 function renderLibrary() {
-  const reading = Boolean(state.openDocId);
   const kicker = $("library-kicker");
-  if (kicker) kicker.textContent = reading ? state.openDocId : "Library";
-  const form = $("library-form");
+  if (kicker) kicker.textContent = state.openDocId ? `${state.openDocId} · book` : "Aurora-1 · book";
   const kindsRoot = $("library-kinds");
+  const famRoot = $("library-families");
   const status = $("library-status");
   const root = $("library-body");
   const count = $("library-count");
-  if (form) form.hidden = reading;
-  if (kindsRoot) kindsRoot.hidden = reading;
-  if (status) status.hidden = reading;
-  if (root) root.hidden = reading;
-  if (count) count.textContent = reading ? "" : `${state.docs.length} docs`;
   const clear = $("library-clear");
+  const suggest = $("library-suggest");
   if (clear) clear.hidden = !state.libraryQuery;
-  if (reading || !root) return;
+  if (count) count.textContent = `${state.docs.length} docs`;
 
   const query = state.libraryQuery;
   const kind = state.libraryKind || "all";
+  const family = state.libraryFamily || "all";
   const inKind = (doc) => kind === "all" || libraryKind(doc) === kind;
+  const inFam = (doc) => family === "all" || libraryFamily(doc) === family;
+  const visible = (doc) => inKind(doc) && inFam(doc);
 
   const base = query && state.libraryHits ? state.libraryHits : state.docs;
-  const counts = { all: base.length, procedure: 0, history: 0, filed: 0 };
-  for (const doc of base) counts[libraryKind(doc)] = (counts[libraryKind(doc)] || 0) + 1;
+  const kindCounts = { all: 0, procedure: 0, history: 0, filed: 0 };
+  const famCounts = { all: 0, heater: 0, payload: 0, battery: 0 };
+  for (const doc of base) {
+    if (!inFam(doc)) continue;
+    kindCounts.all += 1;
+    kindCounts[libraryKind(doc)] = (kindCounts[libraryKind(doc)] || 0) + 1;
+  }
+  for (const doc of base) {
+    if (!inKind(doc)) continue;
+    famCounts.all += 1;
+    const fam = libraryFamily(doc);
+    if (famCounts[fam] != null) famCounts[fam] += 1;
+  }
   if (kindsRoot) {
     kindsRoot.innerHTML = LIB_KINDS.map(
       (k) =>
-        `<button type="button" class="lib-kind kind-${k.id} ${k.id === kind ? "is-on" : ""}" data-kind="${k.id}">${k.label}<span class="n">${counts[k.id] || 0}</span></button>`
+        `<button type="button" class="lib-kind kind-${k.id} ${k.id === kind ? "is-on" : ""}" data-kind="${k.id}">${k.label}<span class="n">${kindCounts[k.id] || 0}</span></button>`
     ).join("");
   }
+  if (famRoot) {
+    famRoot.innerHTML = LIB_FAMILIES.map(
+      (f) =>
+        `<button type="button" class="lib-fam fam-${f.id} ${f.id === family ? "is-on" : ""}" data-family="${f.id}">${f.label}<span class="n">${famCounts[f.id] || 0}</span></button>`
+    ).join("");
+  }
+  if (suggest) {
+    const chips = LIB_SUGGEST.map(
+      (s) =>
+        `<button type="button" class="lib-chip ${query === s.q ? "is-on" : ""}" data-suggest="${escapeHtml(s.q)}">${escapeHtml(s.label)}</button>`
+    );
+    if (state.incidentId) {
+      chips.unshift(
+        `<button type="button" class="lib-chip ${!query ? "is-on" : ""}" data-for-case="1">For ${escapeHtml(state.incidentId)}</button>`
+      );
+    }
+    suggest.innerHTML = chips.join("");
+  }
+
+  const shelf = $("library-shelf");
+  const article = $("library-article");
+  const reader = $("library-reader");
+  const reading = Boolean(state.openDocId && state.openDoc);
+  if (shelf) shelf.hidden = reading;
+  if (article) article.hidden = !reading;
+  if (reader && !reading) reader.className = "lib-page";
+  $("library-desk")?.classList.toggle("is-reading", reading);
+  if (suggest) suggest.hidden = reading;
+
+  if (!root) return;
+  state.libraryVisibleIds = [];
+
+  const remember = (docs) => {
+    for (const doc of docs) {
+      if (!state.libraryVisibleIds.includes(doc.id)) state.libraryVisibleIds.push(doc.id);
+    }
+  };
 
   if (state.librarySearching) {
     if (status) status.textContent = "Searching";
     root.innerHTML = `<p class="lib-hint">Searching the library…</p>`;
+    if (shelf && !reading) shelf.innerHTML = `<p class="lib-hint">Searching the library…</p>`;
     return;
   }
 
   if (query) {
-    const hits = (state.libraryHits || []).filter(inKind);
+    const hits = (state.libraryHits || []).filter(visible);
+    remember(hits);
     if (status) status.textContent = `${hits.length} result${hits.length === 1 ? "" : "s"} · “${query}”`;
     if (!hits.length) {
-      root.innerHTML = `<p class="lib-hint">Nothing matched “${escapeHtml(query)}”. Try a shorter search, or clear the kind filter.</p>`;
+      root.innerHTML = `<p class="lib-hint">Nothing matched “${escapeHtml(query)}”. Try a shorter search, or clear a filter.</p>`;
+      if (shelf && !reading) {
+        shelf.innerHTML = `<p class="eyebrow">Search</p><h2>Nothing matched</h2><p class="lib-shelf-lede">“${escapeHtml(query)}” is not in this filter. Try a shorter phrase, or clear kind / signature.</p>`;
+      }
       return;
     }
     const scale = matchScaler(hits);
     root.innerHTML = hits.map((hit) => libItem(hit, { query, match: scale(hit) })).join("");
+    if (shelf && !reading) renderLibraryShelf(hits, { query, scale, searching: true });
+    root.querySelector(".lib-item.is-on")?.scrollIntoView({ block: "nearest" });
     return;
   }
 
-  const ground = groundedDocs().filter((g) => inKind(g.doc));
+  const ground = groundedDocs().filter((g) => visible(g.doc));
   const groundIds = new Set(ground.map((g) => g.doc.id));
-  const related = (state.libraryHits || []).filter((doc) => inKind(doc) && !groundIds.has(doc.id));
+  const related = (state.libraryHits || []).filter((doc) => visible(doc) && !groundIds.has(doc.id));
   const relatedIds = new Set(related.map((doc) => doc.id));
-  const rest = state.docs.filter((doc) => inKind(doc) && !groundIds.has(doc.id) && !relatedIds.has(doc.id));
+  const rest = state.docs
+    .filter((doc) => visible(doc) && !groundIds.has(doc.id) && !relatedIds.has(doc.id))
+    .sort(
+      (a, b) =>
+        (KIND_RANK[libraryKind(a)] ?? 9) - (KIND_RANK[libraryKind(b)] ?? 9) || String(a.id).localeCompare(String(b.id))
+    );
+    remember(ground.map((g) => g.doc));
+    remember(related);
+    remember(rest);
 
-  const shown = ground.length + related.length + rest.length;
+    const shown = ground.length + related.length + rest.length;
   if (status) {
     status.textContent = state.incidentId
       ? `${shown} document${shown === 1 ? "" : "s"} · ranked for ${state.incidentId}`
@@ -2270,6 +2385,7 @@ function renderLibrary() {
   }
   if (!shown) {
     root.innerHTML = `<p class="lib-hint">Nothing in this filter.</p>`;
+    if (shelf && !reading) shelf.innerHTML = `<p class="lib-hint">Nothing in this filter.</p>`;
     return;
   }
   const scale = related.length ? matchScaler(related) : null;
@@ -2280,6 +2396,65 @@ function renderLibrary() {
       related.map((doc) => libItem(doc, { match: scale ? scale(doc) : null })).join("")
     ) +
     libGroup(state.incidentId ? "Everything else" : "All documents", rest.map((doc) => libItem(doc)).join(""));
+  if (shelf && !reading) {
+    renderLibraryShelf(
+      [...ground.map((g) => g.doc), ...related, ...rest],
+      { grounded: ground }
+    );
+  }
+  root.querySelector(".lib-item.is-on")?.scrollIntoView({ block: "nearest" });
+}
+
+function libCard(doc, opts = {}) {
+  const kind = libraryKind(doc);
+  const close = libraryClose(doc);
+  return `<button type="button" class="lib-card kind-${kind}" data-doc="${escapeHtml(doc.id)}">
+    <span class="kind-chip kind-${kind}">${escapeHtml(libraryKindLabel(doc))}</span>
+    <span class="id">${escapeHtml(doc.id)}</span>
+    <span class="use">${escapeHtml(libraryUse(doc))}</span>
+    ${close ? `<span class="close-line">${escapeHtml(close)}</span>` : ""}
+    ${opts.why ? `<span class="lib-why">${escapeHtml(opts.why)}</span>` : ""}
+  </button>`;
+}
+
+function renderLibraryShelf(docs, opts = {}) {
+  const shelf = $("library-shelf");
+  if (!shelf) return;
+  if (opts.searching) {
+    shelf.innerHTML = `<p class="eyebrow">Search</p>
+      <h2>${docs.length} match${docs.length === 1 ? "" : "es"}</h2>
+      <p class="lib-shelf-lede">Pick a document in the index — procedures, similar cases, and filed close-outs stay on the same page.</p>
+      <div class="lib-shelf-grid">${docs.map((doc) => libCard(doc)).join("")}</div>`;
+    return;
+  }
+  const byKind = { procedure: [], history: [], filed: [] };
+  const whyFor = new Map((opts.grounded || []).map((g) => [g.doc.id, g.why]));
+  for (const doc of docs) byKind[libraryKind(doc)]?.push(doc);
+  const groups = [
+    { id: "procedure", title: "Procedures", lede: "The book. What to check before you guess." },
+    { id: "history", title: "Similar cases", lede: "Prior signatures on this craft. Same fault family, already closed." },
+    { id: "filed", title: "Filed close-outs", lede: "Decisions recorded here. The command was not sent." },
+  ];
+  const head = state.incidentId
+    ? `<p class="eyebrow">Ranked for ${escapeHtml(state.incidentId)}</p>
+       <h2>What this case is built on</h2>
+       <p class="lib-shelf-lede">Procedure, same signature, and the filed record if it exists. Search above to look past this case.</p>`
+    : `<p class="eyebrow">Aurora-1</p>
+       <h2>The book</h2>
+       <p class="lib-shelf-lede">Read a procedure the way it was written. Compare it to a prior close. Filing still does not uplink.</p>`;
+  shelf.innerHTML =
+    head +
+    groups
+      .map((g) => {
+        const items = byKind[g.id];
+        if (!items.length) return "";
+        return `<section class="lib-shelf-group">
+          <p class="family-head">${escapeHtml(g.title)}</p>
+          <p class="hint">${escapeHtml(g.lede)}</p>
+          <div class="lib-shelf-grid">${items.map((doc) => libCard(doc, { why: whyFor.get(doc.id) })).join("")}</div>
+        </section>`;
+      })
+      .join("");
 }
 
 async function searchLibrary(query, opts = {}) {
@@ -2294,7 +2469,7 @@ async function searchLibrary(query, opts = {}) {
   state.librarySearching = true;
   renderLibrary();
   try {
-    const res = await fetch(`/search?q=${encodeURIComponent(q)}&limit=12`);
+    const res = await fetch(`/search?q=${encodeURIComponent(q)}&limit=20`);
     if (!res.ok) throw new Error(`search ${res.status}`);
     state.libraryHits = await res.json();
   } catch (err) {
@@ -2325,13 +2500,22 @@ function browseLibrary() {
 }
 
 function focusLibrarySearch() {
-  setLibraryOpen(true);
-  if (state.openDocId) closeReader();
+  enterLibrary();
   const input = $("library-q");
   if (input) {
     input.focus();
     input.select();
   }
+}
+
+function moveLibrarySelection(delta) {
+  const ids = state.libraryVisibleIds || [];
+  if (!ids.length) return;
+  const cur = ids.indexOf(state.openDocId);
+  const idx =
+    cur < 0 ? (delta > 0 ? 0 : ids.length - 1) : Math.max(0, Math.min(ids.length - 1, cur + delta));
+  const next = ids[idx];
+  if (next && next !== state.openDocId) openDoc(next);
 }
 
 let libraryTimer = 0;
@@ -2357,6 +2541,7 @@ async function refreshDocs() {
 function bind() {
   $("tab-home").addEventListener("click", () => goHome());
   $("tab-incidents").addEventListener("click", () => goIncidents());
+  $("tab-library").addEventListener("click", () => goLibrary());
   $("back-incidents").addEventListener("click", () => goIncidents());
   $("go-home-brand").addEventListener("click", () => goHome());
   $("tape-trigger").addEventListener("click", () => {
@@ -2433,13 +2618,37 @@ function bind() {
     state.libraryKind = btn.dataset.kind;
     renderLibrary();
   });
-  $("library-toggle").addEventListener("click", () => setLibraryOpen(!state.libraryOpen));
-  $("theme-toggle").addEventListener("click", () => {
-    setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
+  $("library-families").addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-family]");
+    if (!btn) return;
+    state.libraryFamily = btn.dataset.family;
+    renderLibrary();
   });
-  $("library").addEventListener("click", (ev) => {
+  $("library-suggest").addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-for-case]")) {
+      window.clearTimeout(libraryTimer);
+      followThisCase();
+      return;
+    }
+    const chip = ev.target.closest("[data-suggest]");
+    if (!chip) return;
+    window.clearTimeout(libraryTimer);
+    const q = chip.dataset.suggest;
+    const input = $("library-q");
+    if (input) input.value = q;
+    searchLibrary(q);
+  });
+  $("library-desk").addEventListener("click", (ev) => {
+    const listed = ev.target.closest("[data-open-listed]");
+    if (listed) {
+      openIncident(listed.dataset.openListed);
+      return;
+    }
     const btn = ev.target.closest("[data-doc]");
     if (btn) openDoc(btn.dataset.doc);
+  });
+  $("theme-toggle").addEventListener("click", () => {
+    setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light");
   });
   $("new-incident-btn").addEventListener("click", openSlip);
   $("cancel-incident").addEventListener("click", closeSlip);
@@ -2513,6 +2722,11 @@ function bind() {
       focusLibrarySearch();
       return;
     }
+    if ((ev.key === "ArrowDown" || ev.key === "ArrowUp") && state.view === "library" && (!typing || ev.target?.id === "library-q")) {
+      ev.preventDefault();
+      moveLibrarySelection(ev.key === "ArrowDown" ? 1 : -1);
+      return;
+    }
     if (ev.key !== "Escape") return;
     if (state.tapePaletteOpen) {
       closeTapePalette();
@@ -2533,9 +2747,7 @@ function bind() {
     if (state.libraryQuery) {
       window.clearTimeout(libraryTimer);
       followThisCase();
-      return;
     }
-    if (state.libraryOpen) setLibraryOpen(false);
   });
 }
 
@@ -2564,7 +2776,6 @@ function initTheme() {
 async function boot() {
   initTheme();
   bind();
-  setLibraryOpen(false);
   const [runsRes, incidentRes, alarmRes, docsRes] = await Promise.all([
     fetch("/runs"),
     fetch("/incidents"),

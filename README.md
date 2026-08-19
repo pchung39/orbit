@@ -41,7 +41,7 @@ That confounder is the whole point. Last command is not automatically the cause.
 1. **Overview** — last samples on any ingested tape, orbit context, limit-margin meters, and a posture readout before you open a case.
 2. **Incidents** — a case queue with craft-level signatures: what recurs on Aurora-1, and what filed cases actually closed on.
 3. **Case walkthrough** — evidence, commands, tape, procedure, tagged report, and decision — with a sticky spine so you always know where you are.
-4. **Library** — grounded pins for the open case (procedure, same signature, filed close-out), semantic search with match scores, and kind filters. Press `/` to search.
+4. **Library** — its own tab. Semantic search, kind and signature filters, and a reading column for procedures and close-outs. Press `/` or ⌘K.
 5. **Provenance** — every claim in the report is stamped **OBSERVED**, **DERIVED**, **DOCUMENTED**, or **HYPOTHESIS**.
 
 The UI uses a deterministic rules path. No paid model in the browser.
@@ -51,7 +51,7 @@ The UI uses a deterministic rules path. No paid model in the browser.
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/case-library-dark.png" alt="Case walkthrough for INC-0204 with grounded library drawer" width="920" />
+  <img src="docs/screenshots/library-dark.png" alt="Library tab with search, category filters, document index, and a reading column for EPS-17" width="920" />
 </p>
 
 ## Console (v0.4)
@@ -61,7 +61,7 @@ The UI uses a deterministic rules path. No paid model in the browser.
 | **Overview** | Tape picker, channel tiles with sparklines and margin meters, orbit map, command log, posture chip |
 | **Incidents** | Filterable case table, clickable stat filters, **Next up** queue, **Signatures** precedent rail |
 | **Case** | Six-step spine, compare grid, command timeline, shared-axis traces, procedure satisfaction, tagged report, file decision |
-| **Library** | For this case · Related by search · Everything else; kind chips; `/` and ⌘K to focus search |
+| **Library** | Full-page book: `/` search, kind + signature filters, index + reading column; close-outs and procedures open here |
 | **Theme** | Dark default, light optional — hero and incidents header stay night-side in both |
 
 <p align="center">

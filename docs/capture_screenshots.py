@@ -38,16 +38,17 @@ def main() -> None:
         page.wait_for_timeout(800)
         shot(page, "incidents-dark.png")
 
-        page.click('[data-open-case="INC-0204"]')
+        page.click("#tab-library")
+        page.wait_for_timeout(600)
+        page.click('[data-doc="EPS-17"]')
         page.wait_for_function(
-            "() => document.getElementById('alarm-title')?.textContent === 'Bus voltage'",
-            timeout=15000,
+            "() => document.getElementById('reader-title')?.textContent",
+            timeout=10000,
         )
-        page.wait_for_timeout(1200)
-        page.evaluate("document.body.classList.add('lib-open')")
-        page.wait_for_timeout(300)
-        shot(page, "case-library-dark.png")
+        page.wait_for_timeout(400)
+        shot(page, "library-dark.png")
 
+        page.click("#tab-home")
         page.click("#theme-toggle")
         page.wait_for_timeout(400)
         shot(page, "overview-light.png", full_page=True)
