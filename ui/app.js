@@ -8,10 +8,11 @@ const TRACE_CATALOG = [
   { id: "EPS.solar_array_current", title: "Solar array current", color: "var(--ch-solar)" },
 ];
 
-const TAPE_ORDER = ["eps204", "fault1", "pay002", "batt003", "nominal", "inc0187", "inc0191", "inc0162"];
+const TAPE_ORDER = ["eps204", "marg001", "fault1", "pay002", "batt003", "nominal", "inc0187", "inc0191", "inc0162"];
 
 const RUN_COPY = {
   eps204: { kind: "Demo", title: "Heater + confounder", note: "Heater 3×. SCIENCE_MODE makes the payload look guilty." },
+  marg001: { kind: "Decoy", title: "Marginal loads", note: "Same shape as EPS-204. Heater ~1.7× — hold, do not inhibit." },
   fault1: { kind: "Control", title: "Heater only", note: "Same heater fault. Payload stayed STANDBY." },
   pay002: { kind: "Contrast", title: "Payload spike", note: "Payload 3× on SCIENCE_MODE. Do not inhibit the heater." },
   batt003: { kind: "Contrast", title: "Pack IR sag", note: "Battery sagged. Heater current is healthy." },
@@ -91,6 +92,7 @@ function openedClock(iso) {
 }
 
 function caseAction(item) {
+  if (item.run_id === "marg001") return "Hold · do not command";
   if (item.alarm === "PAY.payload_current") return "Safe payload to STANDBY";
   if (item.alarm === "EPS.battery_voltage") return "No inhibit";
   if (item.alarm === "EPS.bus_voltage") return "Inhibit Heater B";
@@ -144,6 +146,7 @@ function workingGuess(a) {
       last: a.science ? `SCIENCE_MODE at ${clock(a.science.time_s)}` : a.heaterCmd ? "HEATER_B_ENABLE" : "—",
       decoy: Boolean(a.science),
       recommend: "Inhibit Heater B",
+      withheld: false,
     };
   }
   if (a.payloadSuspect) {
@@ -152,6 +155,7 @@ function workingGuess(a) {
       last: a.science ? `SCIENCE_MODE at ${clock(a.science.time_s)}` : "—",
       decoy: Boolean(a.heaterCmd),
       recommend: "Safe payload to STANDBY",
+      withheld: false,
     };
   }
   if (a.batterySuspect) {
@@ -160,6 +164,18 @@ function workingGuess(a) {
       last: a.heaterCmd ? `HEATER_B_ENABLE at ${clock(a.heaterCmd.time_s)}` : "—",
       decoy: Boolean(a.heaterCmd),
       recommend: "Continue EPS-09 · no inhibit",
+      withheld: false,
+    };
+  }
+  if (a.withheld) {
+    return {
+      suspect: a.ratio != null
+        ? `Heater B ${fmt(a.heaterA, 2)} A · ${fmt(a.ratio, 1)}× — below ≥2× bar`
+        : "No load ≥2× healthy",
+      last: a.science ? `SCIENCE_MODE at ${clock(a.science.time_s)}` : a.heaterCmd ? "HEATER_B_ENABLE" : "—",
+      decoy: Boolean(a.science),
+      recommend: "Hold · do not command",
+      withheld: true,
     };
   }
   return {
@@ -167,6 +183,7 @@ function workingGuess(a) {
     last: a.science ? "SCIENCE_MODE" : a.heaterCmd ? "HEATER_B_ENABLE" : "—",
     decoy: false,
     recommend: "Keep reading",
+    withheld: false,
   };
 }
 
@@ -205,8 +222,16 @@ function renderFileSlipFeedback() {
   const root = $("file-feedback");
   if (!root) return;
   const filed = state.incident?.status === "filed";
+  const a = analysis();
   if (filed) {
     root.innerHTML = feedbackFormHtml({ editable: false, compact: true });
+    return;
+  }
+  if (a?.withheld) {
+    root.innerHTML = `<div class="file-fb-summary">
+      <p class="pick-label">Hold</p>
+      <p class="guess-fb-key">No root-cause hypothesis — threshold not met</p>
+    </div>`;
     return;
   }
   if (state.feedback) {
@@ -257,6 +282,13 @@ async function saveFeedback(scopeEl) {
 
 function hypothesisContextHtml(a, g) {
   if (!g) return "";
+  if (g.withheld) {
+    return `<dl class="hyp-context">
+      <div><dt>Status</dt><dd>${escapeHtml(g.suspect)}</dd></div>
+      <div class="${g.decoy ? "is-decoy" : ""}"><dt>Last command</dt><dd>${escapeHtml(g.last)}${g.decoy ? " <em>confounder</em>" : ""}</dd></div>
+      <div class="is-act"><dt>Decision</dt><dd>${escapeHtml(g.recommend)} <i>no command</i></dd></div>
+    </dl>`;
+  }
   return `<dl class="hyp-context">
     <div><dt>Suspect</dt><dd>${escapeHtml(g.suspect)}</dd></div>
     <div class="${g.decoy ? "is-decoy" : ""}"><dt>Last command</dt><dd>${escapeHtml(g.last)}${g.decoy ? " <em>decoy</em>" : ""}</dd></div>
@@ -275,7 +307,8 @@ function renderDecisionContext(a) {
   if (hypRoot) {
     if (showHyp) {
       hypRoot.hidden = false;
-      hypRoot.innerHTML = `<p class="decide-section-kicker">Working hypothesis</p>${hypothesisContextHtml(a, g)}`;
+      const kicker = g.withheld ? "No root cause asserted" : "Working hypothesis";
+      hypRoot.innerHTML = `<p class="decide-section-kicker">${kicker}</p>${hypothesisContextHtml(a, g)}`;
     } else {
       hypRoot.hidden = true;
       hypRoot.innerHTML = "";
@@ -284,7 +317,13 @@ function renderDecisionContext(a) {
 
   if (fbRoot) {
     const showFb = inc && !filed && (inc.status === "recommended" || state.report);
-    if (showFb) {
+    if (showFb && g?.withheld) {
+      fbRoot.hidden = false;
+      fbRoot.innerHTML = `<div class="guess-feedback is-withheld">
+        <p class="guess-kicker">Hypothesis review</p>
+        <p class="hint">ORBIT did not assert a root cause — nothing to confirm or reject. File records the hold.</p>
+      </div>`;
+    } else if (showFb) {
       fbRoot.hidden = false;
       fbRoot.innerHTML = feedbackFormHtml({ editable: true, compact: false, noteId: "decide-feedback-note" });
     } else if (filed && (state.feedback || inc?.feedback)) {
@@ -580,10 +619,23 @@ function analysis() {
   const science = events.find((e) => e.detail === "SCIENCE_MODE");
   const suspect = ratio != null && ratio >= 2;
   const payloadSuspect = !suspect && payloadRatio != null && payloadRatio >= 2;
+  const heaterMarginal = !suspect && ratio != null && ratio >= 1.3 && ratio < 2;
+  const payloadMarginal = !payloadSuspect && payloadRatio != null && payloadRatio >= 1.3 && payloadRatio < 2;
+  const marginal = heaterMarginal || payloadMarginal;
   const battRows = series("EPS.battery_voltage");
   const battMeta = meta("EPS.battery_voltage");
   const battWarn = firstCrossing(battRows, battMeta.warn_limit, battMeta.limit_direction);
-  const batterySuspect = !suspect && !payloadSuspect && (alarm === "EPS.battery_voltage" || Boolean(battWarn));
+  const batterySuspect =
+    !suspect &&
+    !payloadSuspect &&
+    !marginal &&
+    (alarm === "EPS.battery_voltage" || Boolean(battWarn));
+  const withheld =
+    Boolean(warn) &&
+    !suspect &&
+    !payloadSuspect &&
+    !batterySuspect &&
+    (marginal || Boolean(heaterCmd || science));
   return {
     warn,
     t,
@@ -605,6 +657,10 @@ function analysis() {
     payloadSuspect,
     batterySuspect,
     battWarn,
+    marginal,
+    heaterMarginal,
+    payloadMarginal,
+    withheld,
   };
 }
 
@@ -1446,7 +1502,7 @@ function renderTrust() {
         <div class="trust-metric"><span class="k">Prior incidents</span><span class="v">${t.spec?.historical_incidents ?? 3}</span></div>
         <div class="trust-metric"><span class="k">Default</span><span class="v">${escapeHtml(t.eval?.provider_default || "rules")}</span></div>
       </div>
-      <p class="trust-note">Regression gate for investigation closes: heater, payload, and battery families. Run <code>${escapeHtml(t.eval?.command || "python -m eval")}</code> locally.</p>
+      <p class="trust-note">Regression gate for investigation closes: heater, payload, battery, and withheld (no-guess) outcomes. Run <code>${escapeHtml(t.eval?.command || "python -m eval")}</code> locally.</p>
     </article>`;
 
   const runRows = (t.runs || []).map((run) => {
@@ -2156,9 +2212,11 @@ function renderCompare(a) {
       k: "Heater B",
       v: a.heaterA,
       unit: "A",
-      why: `Healthy ON is ${fmt(meta("THM.heater_b_current").nominal_range?.[0], 1)}–${fmt(a.healthyMax, 1)} A.`,
+      why: a.heaterMarginal
+        ? `Elevated (~${fmt(a.ratio, 1)}×) but below EPS-17 prime-suspect bar (≥2×).`
+        : `Healthy ON is ${fmt(meta("THM.heater_b_current").nominal_range?.[0], 1)}–${fmt(a.healthyMax, 1)} A.`,
       ratio: a.ratio != null ? `${fmt(a.ratio, 1)}× healthy max` : "",
-      cls: a.suspect ? "suspect" : "",
+      cls: a.suspect ? "suspect" : a.heaterMarginal ? "marginal" : "",
     },
     {
       k: "Payload",
@@ -2209,6 +2267,7 @@ function renderTimeline(a) {
     return;
   }
   const lastCmd = a.windowEvents.reduce((best, e) => (!best || e.time_s >= best.time_s ? e : best), null);
+  // SUSPECT only when ratio clears ≥2× — not on enable/mode event name alone.
   const suspectDetail = a.suspect ? "HEATER_B_ENABLE" : a.payloadSuspect ? "SCIENCE_MODE" : "";
   const items = a.windowEvents.map((e) => {
     const mode = e.detail === "SCIENCE_MODE" || e.event_type === "mode_change";
@@ -2217,9 +2276,10 @@ function renderTimeline(a) {
       title: e.detail,
       sub: `${e.event_type} · ${e.channel || ""}`.trim(),
       kind: mode ? "mode" : "command",
-      suspect: suspectDetail && e.detail === suspectDetail,
+      suspect: Boolean(suspectDetail && e.detail === suspectDetail),
       last: lastCmd && e.detail === lastCmd.detail && Math.abs(e.time_s - lastCmd.time_s) < 1,
       warn: false,
+      marginal: a.heaterMarginal && e.detail === "HEATER_B_ENABLE",
     };
   });
   if (a.warn) {
@@ -2231,6 +2291,7 @@ function renderTimeline(a) {
       suspect: false,
       last: false,
       warn: true,
+      marginal: false,
     });
   }
   items.sort((x, y) => x.t - y.t);
@@ -2240,10 +2301,11 @@ function renderTimeline(a) {
       const on = pin != null && Math.abs(pin - item.t) < 3;
       const tags = [
         item.suspect ? `<span class="crumb-tag is-suspect">Suspect</span>` : "",
+        item.marginal && !item.suspect ? `<span class="crumb-tag is-marginal">Elevated</span>` : "",
         item.last && !item.suspect ? `<span class="crumb-tag is-last">Last</span>` : "",
         item.warn ? `<span class="crumb-tag is-warn">Warn</span>` : "",
       ].join("");
-      return `<li class="tl-item kind-${item.kind} ${item.warn ? "is-warn" : ""} ${item.suspect ? "is-suspect" : ""} ${item.last && !item.suspect ? "is-last" : ""} ${on ? "is-on" : ""}" data-t="${item.t}">
+      return `<li class="tl-item kind-${item.kind} ${item.warn ? "is-warn" : ""} ${item.suspect ? "is-suspect" : ""} ${item.marginal && !item.suspect ? "is-marginal" : ""} ${item.last && !item.suspect ? "is-last" : ""} ${on ? "is-on" : ""}" data-t="${item.t}">
         <button type="button" class="tl-row ${on ? "is-on" : ""}">
           <span class="tl-time">${clock(item.t)}</span>
           <span class="tl-track" aria-hidden="true"><i class="tl-dot"></i></span>
@@ -2309,21 +2371,23 @@ function renderProc(a) {
   $("proc-applies").textContent = book.applies;
   $("proc-entry").innerHTML = book.entry;
   $("proc-goal").textContent = book.goal;
+  const named = Boolean(a?.suspect || a?.payloadSuspect || a?.batterySuspect);
   const status = {
     confirm: a?.warn ? "Satisfied" : "",
     commands: a?.windowEvents.length ? "Satisfied" : "",
     currents: a?.heaterA != null || a?.payloadA != null ? "Satisfied" : "",
-    ratio: a?.suspect || a?.payloadSuspect || a?.batterySuspect ? "Satisfied" : "",
+    ratio: named ? "Satisfied" : a?.withheld ? "Below bar" : "",
     payload: a ? "Satisfied" : "",
-    action: a?.suspect || a?.payloadSuspect || a?.batterySuspect ? "Not sent" : "",
+    action: named ? "Not sent" : a?.withheld ? "Blocked" : "",
   };
   $("proc").innerHTML = book.steps.map((step) => {
     const label = status[step.id];
     const done = label === "Satisfied";
-    const human = step.human && Boolean(label);
-    return `<li class="${done ? "is-done" : ""} ${human ? "is-action" : ""}">
+    const blocked = label === "Blocked" || label === "Below bar";
+    const human = step.human && Boolean(label) && !blocked;
+    return `<li class="${done ? "is-done" : ""} ${human ? "is-action" : ""} ${blocked ? "is-blocked" : ""}">
       <span class="proc-n">${step.n}</span>
-      <span class="proc-text">${escapeHtml(step.label)}</span>
+      <span class="proc-text">${escapeHtml(step.label)}${blocked && step.human ? " <em>Threshold not met — do not command yet</em>" : ""}</span>
       <span class="proc-state">${escapeHtml(label)}</span>
     </li>`;
   }).join("");
@@ -2413,6 +2477,18 @@ function renderDecision(a) {
     renderDecisionContext(a);
     return;
   }
+  if (a.withheld) {
+    $("decide-title").textContent = "Hold — do not command";
+    $("decide-sub").textContent =
+      "EPS-17 step 4 not met. Do not inhibit or safe until a load crosses ≥2× or ops authorizes a diagnostic.";
+    status.textContent = "No command";
+    if (filed) {
+      $("filed-action-title").textContent = "Hold — do not command";
+      $("filed-action-sub").textContent = "Threshold not met. Recorded in the library. ORBIT did not uplink.";
+    }
+    renderDecisionContext(a);
+    return;
+  }
   $("decide-title").textContent = "Keep reading";
   $("decide-sub").textContent = "No load is ≥2× healthy.";
   status.textContent = "";
@@ -2430,7 +2506,7 @@ function renderFindings() {
     body.innerHTML = sections
       .filter((block) => {
         const title = sectionTitle(block.trim());
-        return !/^tool log$/i.test(title) && !/^hypothesis$/i.test(title) && !/decision/i.test(title);
+        return !/^tool log$/i.test(title) && !/^hypothesis$/i.test(title) && !/recommended human decision/i.test(title);
       })
       .map((raw) => {
         const block = raw.trim();
@@ -3279,7 +3355,7 @@ function bind() {
   $("timeline").addEventListener("click", (ev) => {
     const node = ev.target.closest("[data-t]");
     if (!node) return;
-    pinTape(node.dataset.t, { scroll: true });
+    pinTape(node.dataset.t);
   });
   $("case-desk").addEventListener("click", (ev) => {
     const verdict = ev.target.closest("[data-fb-verdict]");

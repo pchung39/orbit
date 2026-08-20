@@ -12,6 +12,7 @@ from simulator.scenarios import (
     run_inc0162,
     run_inc0187,
     run_inc0191,
+    run_marg001,
     run_nominal_slice,
     run_pay002,
 )
@@ -26,6 +27,7 @@ def parse_args() -> argparse.Namespace:
             "nominal",
             "eps204",
             "fault1",
+            "marg001",
             "inc0187",
             "pay002",
             "inc0191",
@@ -63,6 +65,10 @@ def main() -> None:
         print(summarize(df, spec))
         print(report_eps204(df, spec))
         out = args.out or Path("runs") / "fault1.csv"
+    elif scenario == "marg001":
+        df = run_marg001(spec)
+        print(summarize(df, spec))
+        out = args.out or Path("runs") / "marg001.csv"
     elif scenario == "inc0187":
         df = run_inc0187(spec)
         print(summarize(df, spec))

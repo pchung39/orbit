@@ -295,6 +295,14 @@ fault_library:
       heater or payload; continue battery checkout.
 
 # ---------------------------------------------------------------------------
+# NEGATIVE-CAPABILITY DEMO — not a closed fault family
+# ---------------------------------------------------------------------------
+# marg001 / INC-0212: same command window as EPS-204, heater ~1.7× healthy.
+# Bus voltage still warns, but EPS-17 step 4 (≥2×) is not met. ORBIT must
+# withhold a root-cause hypothesis and recommend hold, not inhibit. Rules
+# that always blame Heater B on a bus-voltage warn fail this case.
+
+# ---------------------------------------------------------------------------
 # PROCEDURES — referenced here, authored as separate markdown docs
 # ---------------------------------------------------------------------------
 

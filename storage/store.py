@@ -26,6 +26,7 @@ from simulator.scenarios import (
     run_inc0162,
     run_inc0187,
     run_inc0191,
+    run_marg001,
     run_nominal_slice,
     run_pay002,
 )
@@ -98,6 +99,11 @@ def _replace_run(conn: psycopg.Connection, run_id: str) -> None:
             "DELETE FROM documents WHERE id = %s AND path LIKE 'filed:%%'",
             (row["id"],),
         )
+    conn.execute(
+        "DELETE FROM hypothesis_feedback WHERE incident_id IN "
+        "(SELECT id FROM incidents WHERE run_id = %s)",
+        (run_id,),
+    )
     conn.execute("DELETE FROM incidents WHERE run_id = %s", (run_id,))
     conn.execute("DELETE FROM events WHERE run_id = %s", (run_id,))
     conn.execute("DELETE FROM telemetry WHERE run_id = %s", (run_id,))
@@ -182,7 +188,7 @@ def ingest_documents(conn: psycopg.Connection, spec: dict[str, Any]) -> int:
 
 
 def events_for_run(spec: dict[str, Any], run_id: str) -> list[tuple[float, str, str, str]]:
-    if run_id in ("eps204", "fault1"):
+    if run_id in ("eps204", "fault1", "marg001"):
         out: list[tuple[float, str, str, str]] = []
         for event in spec["demo_scenario_EPS204"]["script"]:
             if event["event"] not in ("command", "mode_change"):
@@ -306,6 +312,15 @@ SEED_INCIDENTS = (
         "open",
         "2026-08-14T14:32:00Z",
         "Canonical EPS-204 demo. Operator already had the alarm; ORBIT did not detect it.",
+    ),
+    (
+        "INC-0212",
+        "Bus voltage — marginal loads",
+        "marg001",
+        "EPS.bus_voltage",
+        "open",
+        "2026-08-14T14:36:00Z",
+        "Decoy signature. Same shape as EPS-204; correct outcome is hold, not inhibit.",
     ),
     (
         "INC-0205",
@@ -576,7 +591,7 @@ def store_trust_snapshot(conn: psycopg.Connection, spec: dict[str, Any]) -> dict
             "paid_llm_in_ui": False,
         },
         "eval": {
-            "cases": 4,
+            "cases": 5,
             "command": "python -m eval",
             "provider_default": "rules",
         },
@@ -654,6 +669,7 @@ def search_documents(conn: psycopg.Connection, query: str, limit: int = 20) -> l
 RUN_GENERATORS = {
     "eps204": lambda spec: run_eps204(spec, with_science_mode=True),
     "fault1": lambda spec: run_eps204(spec, with_science_mode=False),
+    "marg001": run_marg001,
     "inc0187": run_inc0187,
     "pay002": run_pay002,
     "inc0191": run_inc0191,
@@ -685,6 +701,7 @@ def _ingest_defaults(conn: psycopg.Connection, spec: dict[str, Any]) -> None:
     catalog = (
         ("eps204", "eps204", ROOT / "runs" / "eps204.csv", "demo: heater fault + science-mode confounder"),
         ("fault1", "fault1", ROOT / "runs" / "fault1.csv", "heater fault only"),
+        ("marg001", "marg001", ROOT / "runs" / "marg001.csv", "decoy EPS-204: marginal heater, withhold cause"),
         ("inc0187", "inc0187", ROOT / "runs" / "inc0187.csv", "prior incident source run"),
         ("pay002", "pay002", ROOT / "runs" / "pay002.csv", "payload overcurrent on SCIENCE_MODE"),
         ("inc0191", "inc0191", ROOT / "runs" / "inc0191.csv", "prior payload-spike source run"),

@@ -230,6 +230,7 @@ def trust() -> dict[str, Any]:
         "ORBIT replays ingested telemetry tapes — not a live downlink.",
         "ORBIT does not detect anomalies or open alarms on its own.",
         "ORBIT assembles tagged reports; it does not command the spacecraft.",
+        "Report assembly may omit a root-cause hypothesis when no load meets the procedure bar.",
         "Investigation in this console uses rules only — no paid LLM.",
     ]
     return snapshot

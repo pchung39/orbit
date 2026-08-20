@@ -1,4 +1,4 @@
-"""Eval cases. Heater-always rules must fail FAULT-002 and FAULT-003."""
+"""Eval cases. Heater-always rules must fail FAULT-002, FAULT-003, and withheld."""
 
 from __future__ import annotations
 
@@ -59,5 +59,15 @@ CASES: tuple[Case, ...] = (
         procedure="EPS-09",
         similar="INC-0162",
         action="battery_checkout",
+    ),
+    Case(
+        id="marg001",
+        alarm="EPS.bus_voltage",
+        label="decoy EPS-204 signature — marginal loads",
+        root_cause="withheld",
+        confounder="SCIENCE_MODE",
+        procedure="EPS-17",
+        similar="INC-0187",
+        action="hold",
     ),
 )

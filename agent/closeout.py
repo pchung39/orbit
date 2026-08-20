@@ -10,6 +10,15 @@ from typing import Any
 
 def _feedback_section(feedback: dict[str, Any]) -> list[str]:
     key = feedback.get("hypothesis_key") or "UNKNOWN"
+    if key == "WITHHELD":
+        note = (feedback.get("note") or "").strip()
+        line = (
+            "No root-cause hypothesis asserted — EPS-17 step 4 threshold not met. "
+            "**[DOCUMENTED]**"
+        )
+        if note:
+            line = f"{line} Operator note: {note} **[OBSERVED — operator]**"
+        return ["## Operator review", "", line, ""]
     verdict = feedback.get("verdict") or ""
     note = (feedback.get("note") or "").strip()
     if verdict == "confirmed":

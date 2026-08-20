@@ -12,6 +12,8 @@ from agent.tools import Tools
 from simulator.simulate import load_and_validate
 from storage.store import connect, init_schema
 
+MARGINAL_MIN = 1.3
+
 
 def _num(row: dict | None) -> float | None:
     if row is None:
@@ -32,9 +34,13 @@ HYPOTHESIS_BY_FAMILY: dict[str, tuple[str, str]] = {
         "BATTERY_RESISTANCE_DEGRADATION",
         "BATTERY_RESISTANCE_DEGRADATION (FAULT-003): pack voltage sagged under a healthy load.",
     ),
+    "withheld": (
+        "WITHHELD",
+        "",
+    ),
     "open": (
-        "UNKNOWN",
-        "Load currents are not ≥2× healthy. Root cause still open.",
+        "OPEN",
+        "No ≥2× load and no withheld signature on this tape.",
     ),
 }
 
@@ -46,34 +52,53 @@ class Hypothesis:
     family: str
 
 
+def _ratios(
+    tools: Tools, spec: dict[str, Any], run_id: str, alarm_channel: str, t_warn: float
+) -> tuple[float | None, float | None, float | None]:
+    events = tools.events_before(run_id, t_warn, window_s=600.0)
+    heater_enable = next((e for e in events if e["detail"] == "HEATER_B_ENABLE"), None)
+    heater_now = tools.sample(run_id, "THM.heater_b_current", t_warn)
+    heater_at_cmd = (
+        tools.sample(run_id, "THM.heater_b_current", heater_enable["time_s"])
+        if heater_enable
+        else None
+    )
+    payload_now = tools.sample(run_id, "PAY.payload_current", t_warn)
+    batt_v = tools.sample(run_id, "EPS.battery_voltage", t_warn)
+
+    heater_healthy_max = spec["channels"]["THM.heater_b_current"]["nominal_range"][1]
+    heater_value = _num(heater_at_cmd) or _num(heater_now)
+    heater_ratio = (heater_value / heater_healthy_max) if heater_value else None
+
+    payload_healthy = spec["channels"]["PAY.payload_current"]["nominal_range"][1]
+    payload_value = _num(payload_now)
+    payload_ratio = (payload_value / payload_healthy) if payload_value else None
+
+    batt_num = _num(batt_v)
+    return heater_ratio, payload_ratio, batt_num
+
+
 def classify_family(tools: Tools, spec: dict[str, Any], run_id: str, alarm_channel: str) -> str:
-    """Same family rules as investigate_rules."""
+    """Same family rules as investigate_rules (including withheld)."""
     crossing = tools.first_warn(run_id, alarm_channel)
     if crossing is None:
         return "open"
 
     t_warn = crossing["time_s"]
-    heater_now = tools.sample(run_id, "THM.heater_b_current", t_warn)
-    payload_now = tools.sample(run_id, "PAY.payload_current", t_warn)
-    batt_v = tools.sample(run_id, "EPS.battery_voltage", t_warn)
-
-    heater_nominal = spec["channels"]["THM.heater_b_current"]["nominal_range"]
-    heater_healthy_max = heater_nominal[1]
-    heater_value = _num(heater_now)
-    heater_ratio = (heater_value / heater_healthy_max) if heater_value else None
-
-    payload_healthy_science = spec["channels"]["PAY.payload_current"]["nominal_range"][1]
-    payload_value = _num(payload_now)
-    payload_ratio = (payload_value / payload_healthy_science) if payload_value else None
+    heater_ratio, payload_ratio, batt_num = _ratios(tools, spec, run_id, alarm_channel, t_warn)
+    events = tools.events_before(run_id, t_warn, window_s=600.0)
 
     heater_guilty = heater_ratio is not None and heater_ratio >= 2
     payload_guilty = (not heater_guilty) and payload_ratio is not None and payload_ratio >= 2
+    heater_marginal = heater_ratio is not None and MARGINAL_MIN <= heater_ratio < 2
+    payload_marginal = payload_ratio is not None and MARGINAL_MIN <= payload_ratio < 2
+    loads_elevated = heater_guilty or payload_guilty or heater_marginal or payload_marginal
     battery_family = (not heater_guilty) and (not payload_guilty) and (
         alarm_channel == "EPS.battery_voltage"
         or (
-            batt_v is not None
-            and _num(batt_v) is not None
-            and _num(batt_v) < spec["channels"]["EPS.battery_voltage"]["warn_limit"]
+            not loads_elevated
+            and batt_num is not None
+            and batt_num < spec["channels"]["EPS.battery_voltage"]["warn_limit"]
         )
     )
 
@@ -83,6 +108,9 @@ def classify_family(tools: Tools, spec: dict[str, Any], run_id: str, alarm_chann
         return "payload"
     if battery_family:
         return "battery"
+
+    if events and (heater_marginal or payload_marginal):
+        return "withheld"
     return "open"
 
 

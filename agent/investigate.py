@@ -91,9 +91,17 @@ def investigate_rules(run_id: str, alarm_channel: str = "EPS.bus_voltage") -> st
 
     heater_guilty = heater_ratio is not None and heater_ratio >= 2
     payload_guilty = (not heater_guilty) and payload_ratio is not None and payload_ratio >= 2
+    heater_marginal = heater_ratio is not None and 1.3 <= heater_ratio < 2
+    payload_marginal = payload_ratio is not None and 1.3 <= payload_ratio < 2
+    loads_elevated = heater_guilty or payload_guilty or heater_marginal or payload_marginal
     battery_family = (not heater_guilty) and (not payload_guilty) and (
         alarm_channel == "EPS.battery_voltage"
-        or (batt_v is not None and _num(batt_v) is not None and _num(batt_v) < spec["channels"]["EPS.battery_voltage"]["warn_limit"])
+        or (
+            not loads_elevated
+            and batt_v is not None
+            and _num(batt_v) is not None
+            and _num(batt_v) < spec["channels"]["EPS.battery_voltage"]["warn_limit"]
+        )
     )
 
     if heater_guilty:
@@ -108,6 +116,10 @@ def investigate_rules(run_id: str, alarm_channel: str = "EPS.bus_voltage") -> st
         procedure_id = "EPS-09"
         family = "battery"
         similar_query, prefer = "battery internal resistance eclipse", "INC-0162"
+    elif events and (heater_marginal or payload_marginal):
+        procedure_id = "EPS-17"
+        family = "withheld"
+        similar_query, prefer = "heater overcurrent", "INC-0187"
     else:
         procedure_id = "EPS-17"
         family = "open"
@@ -155,10 +167,16 @@ def investigate_rules(run_id: str, alarm_channel: str = "EPS.bus_voltage") -> st
         )
         n += 1
         if heater_ratio is not None:
-            lines.append(
-                f"{n}. That is **{heater_ratio:.1f}×** the healthy-max draw. "
-                f"EPS-17 treats ≥2× as the prime suspect. **[DERIVED]**"
-            )
+            if family == "withheld":
+                lines.append(
+                    f"{n}. That is **{heater_ratio:.1f}×** the healthy-max draw — "
+                    f"elevated, but **below** EPS-17's ≥2× prime-suspect bar. **[DERIVED]**"
+                )
+            else:
+                lines.append(
+                    f"{n}. That is **{heater_ratio:.1f}×** the healthy-max draw. "
+                    f"EPS-17 treats ≥2× as the prime suspect. **[DERIVED]**"
+                )
             n += 1
     elif heater_value is not None:
         lines.append(
@@ -184,6 +202,13 @@ def investigate_rules(run_id: str, alarm_channel: str = "EPS.bus_voltage") -> st
                 f"{n}. That is **{payload_ratio:.1f}×** the 0.9 A healthy science draw. "
                 f"PAY-04 treats ≥2× as the prime suspect. Heater current is not ≥2× — "
                 f"do not inhibit Heater B. **[DERIVED / DOCUMENTED]**"
+            )
+            n += 1
+        elif family == "withheld":
+            lines.append(
+                f"{n}. SCIENCE_MODE is a confounder in this window. Payload current "
+                f"({pval:.2f} A) is not ≥2× science and cannot close the case alone. "
+                f"**[DOCUMENTED]**"
             )
             n += 1
         else:
@@ -223,11 +248,20 @@ def investigate_rules(run_id: str, alarm_channel: str = "EPS.bus_voltage") -> st
         n += 1
 
     if similar_id == "INC-0187" and similar and prior_heater and _num(prior_heater) is not None:
-        lines.append(
-            f"{n}. Prior incident **{similar_id}**. "
-            f"Prior heater current after enable was **{_num(prior_heater):.2f} A** — same signature, "
-            f"payload stayed STANDBY. **[DOCUMENTED / OBSERVED]**"
-        )
+        if family == "withheld":
+            prior_r = _num(prior_heater) / heater_healthy_max
+            lines.append(
+                f"{n}. Prior incident **{similar_id}** closed on ~{prior_r:.1f}× heater draw "
+                f"({_num(prior_heater):.2f} A). This tape is **{heater_ratio:.1f}×** — "
+                f"pattern does **not** match; do not treat INC-0187 as confirmation. "
+                f"**[DOCUMENTED / DERIVED]**"
+            )
+        else:
+            lines.append(
+                f"{n}. Prior incident **{similar_id}**. "
+                f"Prior heater current after enable was **{_num(prior_heater):.2f} A** — same signature, "
+                f"payload stayed STANDBY. **[DOCUMENTED / OBSERVED]**"
+            )
     elif similar_id == "INC-0191" and similar and prior_payload and _num(prior_payload) is not None:
         lines.append(
             f"{n}. Prior incident **{similar_id}**. "
@@ -243,6 +277,63 @@ def investigate_rules(run_id: str, alarm_channel: str = "EPS.bus_voltage") -> st
         lines.append(
             f"{n}. Prior incident **{similar_id}**. **[DOCUMENTED]**"
         )
+
+    if family == "withheld":
+        lines += ["", "## What is ruled out", ""]
+        if heater_value is not None and heater_ratio is not None:
+            lines.append(
+                f"- Heater B at **{heater_value:.2f} A** ({heater_ratio:.1f}× healthy) is **below** "
+                f"EPS-17 step 4's ≥2× bar — not the prime suspect. **[DERIVED / DOCUMENTED]**"
+            )
+        if payload_value is not None:
+            lines.append(
+                f"- Payload at **{payload_value:.2f} A** cannot explain a several-amp bus step "
+                f"(EPS-17 step 5). SCIENCE_MODE is a confounder, not a close. **[DOCUMENTED]**"
+            )
+        elif science:
+            lines.append(
+                "- SCIENCE_MODE is in the window — a confounder. Do not close on the payload "
+                "without a ≥2× payload current. **[DOCUMENTED]**"
+            )
+        if similar_id == "INC-0187":
+            lines.append(
+                "- **INC-0187** is a ~3× heater signature. This tape does not match — "
+                "do not use it as confirmation. **[DOCUMENTED]**"
+            )
+        lines.append(
+            "- No FAULT-001 / FAULT-002 / FAULT-003 is established on this evidence. **[DERIVED]**"
+        )
+
+        lines += ["", "## What would change this", ""]
+        lines.append(
+            "- Watch `THM.heater_b_current`: if it reaches **≥2×** healthy (~"
+            f"{2 * heater_healthy_max:.1f} A), EPS-17 step 4 clears and Heater B can be named. **[HYPOTHESIS]**"
+        )
+        lines.append(
+            "- Compare this enable to the last **healthy** `HEATER_B_ENABLE` (~1.0×). "
+            "A stable ~1.7× is a clue, not a close. **[HYPOTHESIS]**"
+        )
+        lines.append(
+            "- If ops authorizes an isolation test and the bus recovers after one load OFF, "
+            "that load can be named. **[HYPOTHESIS]**"
+        )
+
+        lines += ["", "## Recommended human decision", ""]
+        lines.append(
+            "**Hold.** Do **not** inhibit Heater B. Do **not** safe the payload. "
+            "EPS-17 step 4 is not met — no load crossed the ≥2× prime-suspect bar. "
+            "Continue monitoring until a load meets the threshold or ops authorizes a "
+            "diagnostic command. **[DOCUMENTED — not executed]**"
+        )
+        lines += [
+            "",
+            "ORBIT stops here. No root-cause hypothesis was asserted.",
+            "",
+            "## Tool log",
+            "",
+        ]
+        lines.extend(f"- {item}" for item in tools.log)
+        return "\n".join(lines) + "\n"
 
     lines += ["", "## Hypothesis", ""]
     if family == "heater":
@@ -267,7 +358,9 @@ def investigate_rules(run_id: str, alarm_channel: str = "EPS.bus_voltage") -> st
             "load. Do not inhibit Heater B. **[HYPOTHESIS]**"
         )
     else:
-        lines.append("Load currents are not ≥2× healthy. Root cause still open. **[HYPOTHESIS]**")
+        lines.append(
+            "Load currents are not ≥2× healthy. No prime suspect named. **[DERIVED]**"
+        )
 
     lines += ["", "## Recommended human decision", ""]
     if family == "heater":
@@ -286,7 +379,10 @@ def investigate_rules(run_id: str, alarm_channel: str = "EPS.bus_voltage") -> st
             "safe the payload — both currents are healthy. **[HYPOTHESIS — not executed]**"
         )
     else:
-        lines.append("Keep reading. No ≥2× load to inhibit. **[HYPOTHESIS — not executed]**")
+        lines.append(
+            "Hold. No ≥2× load to inhibit. Do not command until evidence clears the bar. "
+            "**[DOCUMENTED — not executed]**"
+        )
 
     lines += [
         "",

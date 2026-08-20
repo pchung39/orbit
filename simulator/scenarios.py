@@ -70,6 +70,17 @@ def battery_ir_fault(spec: dict[str, Any], onset_s: float) -> ActiveFault:
     )
 
 
+def marginal_heater_fault(spec: dict[str, Any], onset_s: float, multiplier: float = 1.75) -> ActiveFault:
+    """Sub-2× heater draw — elevated enough to sag the bus, below EPS-17 prime-suspect bar."""
+    del spec  # same channel shape as FAULT-001; multiplier is intentional, not from the library
+    return ActiveFault(
+        name="MARGINAL_HEATER_DRAW",
+        onset_s=onset_s,
+        channel="THM.heater_b_current",
+        multiplier=float(multiplier),
+    )
+
+
 def run_heater_fault(
     spec: dict[str, Any],
     start_clock: str,
@@ -77,23 +88,27 @@ def run_heater_fault(
     heater_enable: str,
     science_mode: str | None = None,
     epoch: datetime | None = None,
+    *,
+    fault: ActiveFault | None = None,
+    initial_soc_pct: float = 100.0,
 ) -> pd.DataFrame:
     """Heater-overcurrent window. Optional SCIENCE_MODE for the EPS-204 confounder."""
     assumptions = Assumptions(
-        initial_soc_pct=100.0,
+        initial_soc_pct=initial_soc_pct,
         t_batt_init_c=18.0,
         t_heater_init_c=18.0,
         epoch=epoch or Assumptions().epoch,
     )
     start_s = clock_to_s(start_clock)
-    commands = [(clock_to_s(heater_enable), "HEATER_B_ENABLE")]
+    onset = clock_to_s(heater_enable)
+    commands = [(onset, "HEATER_B_ENABLE")]
     if science_mode:
         commands.append((clock_to_s(science_mode), "SCIENCE_MODE"))
     return run_simulation(
         spec,
         duration_s=clock_to_s(end_clock) - start_s,
         assumptions=assumptions,
-        faults=[heater_overcurrent_fault(spec, clock_to_s(heater_enable))],
+        faults=[fault or heater_overcurrent_fault(spec, onset)],
         state=initial_state(assumptions, t_s=start_s),
         commands=commands,
     )
@@ -102,6 +117,24 @@ def run_heater_fault(
 def run_eps204(spec: dict[str, Any], with_science_mode: bool = True) -> pd.DataFrame:
     science = "14:31:52" if with_science_mode else None
     return run_heater_fault(spec, "14:00:00", "14:45:00", "14:29:44", science)
+
+
+def run_marg001(spec: dict[str, Any]) -> pd.DataFrame:
+    """Decoy EPS-204 signature: same clocks, heater ~1.7× — below ≥2× prime-suspect bar.
+
+    Slightly lower SOC so the bus still crosses warn under the marginal load.
+    Correct investigation outcome is hold, not inhibit.
+    """
+    onset = clock_to_s("14:29:44")
+    return run_heater_fault(
+        spec,
+        "14:00:00",
+        "14:50:00",
+        "14:29:44",
+        "14:31:52",
+        fault=marginal_heater_fault(spec, onset, multiplier=1.75),
+        initial_soc_pct=72.0,
+    )
 
 
 def run_inc0187(spec: dict[str, Any]) -> pd.DataFrame:

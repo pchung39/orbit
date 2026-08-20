@@ -1985,6 +1985,8 @@ section { margin-top: 0; padding-top: 0; border-top: 0; }
 }
 .card.suspect { background: linear-gradient(160deg, rgba(255, 122, 110, 0.09), transparent 55%), var(--surface-2); }
 .card.suspect::before { background: var(--ch-heater); }
+.card.marginal { background: linear-gradient(160deg, rgba(242, 163, 60, 0.1), transparent 55%), var(--surface-2); }
+.card.marginal::before { background: var(--warn); }
 .card.suspect-payload { background: linear-gradient(160deg, rgba(95, 157, 255, 0.09), transparent 55%), var(--surface-2); }
 .card.suspect-payload::before { background: var(--ch-payload); }
 .card.suspect-battery { background: linear-gradient(160deg, rgba(42, 211, 168, 0.09), transparent 55%), var(--surface-2); }
@@ -2018,6 +2020,7 @@ section { margin-top: 0; padding-top: 0; border-top: 0; }
   background: var(--raised);
 }
 .card.suspect .ratio { color: var(--ch-heater); background: rgba(255, 122, 110, 0.12); }
+.card.marginal .ratio { color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
 .card.suspect-payload .ratio { color: var(--ch-payload); background: var(--info-soft); }
 .card.suspect-battery .ratio { color: var(--ch-batt); background: var(--signal-soft); }
 .card .why { margin: 10px 0 0; color: var(--text-3); font-size: 12.5px; line-height: 1.5; }
@@ -2047,7 +2050,7 @@ section { margin-top: 0; padding-top: 0; border-top: 0; }
   gap: 0 10px;
   align-items: start;
   width: 100%;
-  padding: 12px 8px 12px 0;
+  padding: 12px 8px 12px 14px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -2111,6 +2114,8 @@ section { margin-top: 0; padding-top: 0; border-top: 0; }
 .tl-row:hover .tl-title { color: var(--signal); }
 .tl-item.is-suspect .tl-dot { background: var(--ch-heater); }
 .tl-item.is-suspect .tl-title { color: var(--ch-heater); }
+.tl-item.is-marginal .tl-dot { background: var(--warn); }
+.tl-item.is-marginal .tl-title { color: var(--warn); }
 .tl-item.is-last .tl-dot { background: var(--hypothesis); }
 .tl-item.is-warn .tl-dot { background: var(--warn); }
 .tl-item.is-warn .tl-title { color: var(--warn); }
@@ -2125,6 +2130,7 @@ section { margin-top: 0; padding-top: 0; border-top: 0; }
   border: 1px solid var(--line-2);
 }
 .crumb-tag.is-suspect { color: var(--ch-heater); border-color: var(--ch-heater); }
+.crumb-tag.is-marginal { color: var(--warn); border-color: var(--warn); }
 .crumb-tag.is-last { color: var(--hypothesis); border-color: var(--hypothesis); }
 .crumb-tag.is-warn { color: var(--warn); border-color: var(--warn); }
 
@@ -2225,6 +2231,16 @@ section { margin-top: 0; padding-top: 0; border-top: 0; }
 .proc li.is-done .proc-state { color: var(--signal); }
 .proc li.is-action { color: var(--text); }
 .proc li.is-action .proc-state { color: var(--warn); }
+.proc li.is-blocked { color: var(--text-2); }
+.proc li.is-blocked .proc-n { color: var(--warn); }
+.proc li.is-blocked .proc-state { color: var(--warn); }
+.proc li.is-blocked .proc-text em {
+  display: block;
+  margin-top: 4px;
+  font-style: normal;
+  font-size: 12px;
+  color: var(--warn);
+}
 
 /* 05 Report */
 .panel-findings { border-left: 3px solid var(--signal); }

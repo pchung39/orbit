@@ -36,6 +36,14 @@ The heater was already wrong.
 
 That confounder is the whole point. Last command is not automatically the cause.
 
+## When ORBIT withholds a cause
+
+**INC-0212** (`marg001`) is the deliberate contrast to INC-0204. Same command window — heater enable, then `SCIENCE_MODE`, then a bus-voltage warn — but Heater B draws only ~1.7× healthy, **below** EPS-17's ≥2× prime-suspect bar.
+
+ORBIT still finishes the bookkeeping (warn time, commands, ratios, confounder named). It does **not** invent a FAULT id. The report omits `## Hypothesis`, states what is ruled out, lists what would change the call, and recommends **Hold — do not command**.
+
+That is intolerance for half-truths: a plausible story is not a cause until the procedure's number is met. `python -m eval` runs **5 cases**; the fifth fails any rules path that always recommends inhibit.
+
 ## What you get
 
 1. **Overview** — last samples on any ingested tape, orbit context, limit-margin meters, and a posture readout before you open a case.
@@ -87,7 +95,7 @@ uvicorn api.app:app --host 127.0.0.1 --port 8000 --reload
 
 Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
 
-**Start here:** Overview → Incidents → open **INC-0204** (heater + confounder). Also try **INC-0205** (heater only), **INC-0210** (payload guilty), **INC-0211** (pack IR).
+**Start here:** Overview → Incidents → open **INC-0204** (heater + confounder). Also try **INC-0212** (same shape, hold — do not inhibit), **INC-0205** (heater only), **INC-0210** (payload guilty), **INC-0211** (pack IR).
 
 Open **Trust** (tab or the **AURORA-1** chip) to verify the telemetry store and library index before you rely on a case.
 
@@ -145,17 +153,17 @@ eval/
 
 ## Eval
 
-Scores a finished report against the matching close. Heater cases still require inhibit Heater B and (on EPS-204) SCIENCE_MODE as a confounder. Payload and battery cases fail any rules path that always blames the heater.
+Scores a finished report against the matching close. Heater cases still require inhibit Heater B and (on EPS-204) SCIENCE_MODE as a confounder. Payload and battery cases fail any rules path that always blames the heater. The fifth case (`marg001`) fails any path that invents a cause or recommends inhibit when loads are below the ≥2× bar.
 
 ```bash
 python -m eval
 ```
 
-Default is `--provider rules` (no paid LLM). Green on this harness is the bar: 4 cases.
+Default is `--provider rules` (no paid LLM). Green on this harness is the bar: **5 cases** (four closes + one withheld).
 
 ### Operator hypothesis feedback
 
-On **Case**, confirm or reject ORBIT's working hypothesis (case header or file slip). Feedback is stored in Postgres, editable until the case is filed, and appended to the close-out when you file. It does not change the recommended action or uplink anything.
+On **Case**, confirm or reject ORBIT's working hypothesis when one was asserted. On withheld cases (INC-0212) there is nothing to confirm — ORBIT did not name a cause. Feedback is stored in Postgres, editable until the case is filed, and appended to the close-out when you file. It does not change the recommended action or uplink anything.
 
 ```bash
 python -m eval --feedback          # adoption summary (confirmed / rejected / eval alignment)

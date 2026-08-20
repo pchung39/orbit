@@ -38,7 +38,10 @@ Rules:
   do not close on a coincidental SCIENCE_MODE without checking heater current,
   search for a similar incident.
 - A payload mode change in the same window is a confounder, not automatic proof.
-- End with a hypothesis and a recommended human decision that is NOT executed.
+- If no load meets the procedure's ≥2× threshold, omit ## Hypothesis. Write
+  ## What is ruled out and ## What would change this. Do not recommend inhibit
+  or safe actions — recommend Hold (do not command).
+- Otherwise end with a hypothesis and a recommended human decision that is NOT executed.
 - Be precise and deterministic. Do not add color that is not in the tools.
 
 Write a markdown investigation report. No preamble before the heading.
