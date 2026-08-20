@@ -1133,6 +1133,14 @@ section { margin-top: 0; padding-top: 0; border-top: 0; }
   color: var(--text-3);
 }
 .trust-card h3 { margin: 6px 0 0; font-size: 18px; letter-spacing: -0.01em; }
+.trust-score-headline {
+  margin: 12px 0 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+.trust-score-metrics { margin-top: 12px; }
 .trust-status {
   font-family: var(--mono);
   font-size: 10px;

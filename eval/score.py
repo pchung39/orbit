@@ -52,8 +52,59 @@ def _safes_payload(text: str) -> bool:
     return bool(re.search(r"(?:safe|standby)\s+(?:the\s+)?payload|payload to standby", text))
 
 
+def _provenance_roles(report: str) -> Check:
+    """Timeline facts stay OBSERVED; causal close (if any) carries HYPOTHESIS."""
+    sections = re.split(r"\n(?=## )", report)
+    by_title: dict[str, str] = {}
+    for block in sections:
+        m = re.match(r"##\s+(.+)", block)
+        if m:
+            by_title[m.group(1).strip().lower()] = block
+
+    timeline = by_title.get("timeline", "")
+    hyp = by_title.get("hypothesis", "")
+    change = by_title.get("what would change this", "")
+
+    timeline_ok = bool(re.search(r"\[OBSERVED", timeline, re.I))
+    if hyp.strip():
+        # Named close: root-cause section must be tagged HYPOTHESIS, not sold as OBSERVED-only.
+        hyp_ok = bool(re.search(r"\[HYPOTHESIS", hyp, re.I))
+        blurred = bool(re.search(r"FAULT-00\d|HEATER_B_OVERCURRENT|PAYLOAD_POWER_SPIKE|BATTERY_RESISTANCE", hyp, re.I)) and not hyp_ok
+    else:
+        # Withheld: no causal hypothesis section is correct; proposed tests may be HYPOTHESIS.
+        hyp_ok = bool(re.search(r"\[HYPOTHESIS", change, re.I)) or bool(
+            re.search(r"\[HYPOTHESIS", report, re.I)
+        )
+        blurred = False
+
+    passed = timeline_ok and hyp_ok and not blurred
+    if passed:
+        detail = "timeline OBSERVED; cause/tests HYPOTHESIS"
+    elif not timeline_ok:
+        detail = "timeline missing OBSERVED"
+    elif blurred or not hyp_ok:
+        detail = "cause language not tagged HYPOTHESIS"
+    else:
+        detail = "fact/inference roles blurred"
+    return Check("provenance_roles", passed, detail)
+
+
 def _score_withheld(report: str, text: str, case: Case, observed: Observed) -> list[Check]:
     checks: list[Check] = []
+
+    def _tagged(name: str) -> bool:
+        return re.search(rf"\[[^\]]*{name}[^\]]*\]", text) is not None
+
+    needed = ("observed", "derived", "documented", "hypothesis")
+    missing = [t for t in needed if not _tagged(t)]
+    checks.append(
+        Check(
+            "tagged_claims",
+            not missing,
+            "all four tags present" if not missing else f"missing {', '.join(missing)}",
+        )
+    )
+    checks.append(_provenance_roles(report))
 
     no_hyp = "## hypothesis" not in text
     checks.append(
@@ -173,17 +224,6 @@ def _score_withheld(report: str, text: str, case: Case, observed: Observed) -> l
         )
     )
 
-    needed = ("observed", "derived", "documented", "hypothesis")
-    missing = [t for t in needed if not re.search(rf"\[[^\]]*{t}[^\]]*\]", text)]
-    checks.insert(
-        0,
-        Check(
-            "tagged_claims",
-            not missing,
-            "all four tags present" if not missing else f"missing {', '.join(missing)}",
-        ),
-    )
-
     stopped = "not executed" in text or "does not command" in text or "no root-cause" in text
     checks.append(
         Check(
@@ -228,6 +268,7 @@ def score(report: str, case: Case, observed: Observed) -> list[Check]:
             "all four tags present" if not missing else f"missing {', '.join(missing)}",
         )
     )
+    checks.append(_provenance_roles(report))
 
     if case.root_cause == "heater":
         heater_ok = ("heater_b_current" in text or "heater b" in text) and _near(report, observed.heater_a)

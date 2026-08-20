@@ -136,7 +136,7 @@ The spec is canonical: [`spec/aurora1_mission_model.yaml`](spec/aurora1_mission_
 | Agent | Tools over the store; `--provider rules` in the UI; Claude/OpenAI CLI-only |
 | Console | FastAPI + instrument UI at `/` |
 | Trust API | `GET /trust` — store, library, and investigator health for the Trust tab |
-| Eval | 4 cases against the matching close (heater, payload, battery) |
+| Eval | Scorecard: diagnosis / withhold / false-inhibit / provenance rates (`python -m eval`) |
 | Feedback | Operator confirm/reject on working hypothesis — stored for adoption metrics |
 
 ```
@@ -153,13 +153,25 @@ eval/
 
 ## Eval
 
-Scores a finished report against the matching close. Heater cases still require inhibit Heater B and (on EPS-204) SCIENCE_MODE as a confounder. Payload and battery cases fail any rules path that always blames the heater. The fifth case (`marg001`) fails any path that invents a cause or recommends inhibit when loads are below the ≥2× bar.
+Scores a finished report against the matching close, then prints a **scorecard** of real rates:
+
+| Metric | Meaning |
+|---|---|
+| **Named closes correct** | Heater / payload / battery cases fully passed |
+| **Withheld when bar not met** | Decoy (`marg001`) refused to invent a cause |
+| **No false Heater B inhibit** | Contrast cases that correctly leave the heater alone |
+| **Fact vs inference clean** | Tags present and timeline OBSERVED kept separate from causal HYPOTHESIS |
 
 ```bash
-python -m eval
+python -m eval                 # run suite, print scorecard, write eval/scorecard.json
+python -m eval --scorecard-only  # show last written scorecard
 ```
 
-Default is `--provider rules` (no paid LLM). Green on this harness is the bar: **5 cases** (four closes + one withheld).
+Default is `--provider rules` (no paid LLM). Green on this harness is the bar: **5 cases** (four closes + one withheld). Trust reads `eval/scorecard.json` so the console shows the same numbers.
+
+**Current rules scorecard (after `python -m eval`):** 4/4 named closes · 1/1 withheld · 3/3 no false Heater B inhibit · 5/5 fact vs inference clean.
+
+Heater cases still require inhibit Heater B and (on EPS-204) SCIENCE_MODE as a confounder. Payload and battery cases fail any rules path that always blames the heater. The fifth case (`marg001`) fails any path that invents a cause or recommends inhibit when loads are below the ≥2× bar.
 
 ### Operator hypothesis feedback
 

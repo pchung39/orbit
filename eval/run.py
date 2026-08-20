@@ -1,7 +1,8 @@
 """Run cases through the investigator and score the reports.
 
 Default provider is rules (no paid LLM). Pass --provider only if you
-explicitly want a live model.
+explicitly want a live model. Always prints a scorecard and writes
+eval/scorecard.json when the full suite runs.
 """
 
 from __future__ import annotations
@@ -16,6 +17,7 @@ from agent.tools import Tools
 from eval.cases import CASES, Case
 from eval.feedback import export_jsonl, load_feedback_rows, print_summary
 from eval.score import Check, Observed, score
+from eval.scorecard import build_scorecard, print_scorecard, write_scorecard
 from simulator.scenarios import format_clock
 from simulator.simulate import load_and_validate
 from storage.store import connect, init_schema
@@ -103,6 +105,11 @@ def main() -> None:
         action="store_true",
         help="with --feedback, write eval/feedback.jsonl",
     )
+    parser.add_argument(
+        "--scorecard-only",
+        action="store_true",
+        help="print the last written eval/scorecard.json without re-running cases",
+    )
     args = parser.parse_args()
 
     if args.feedback:
@@ -113,23 +120,47 @@ def main() -> None:
             print(f"exported {len(rows)} rows → {path}")
         sys.exit(0)
 
+    if args.scorecard_only:
+        from eval.scorecard import load_scorecard
+
+        data = load_scorecard()
+        if not data:
+            print("no eval/scorecard.json — run: python -m eval", file=sys.stderr)
+            sys.exit(1)
+        print(json.dumps(data, indent=2))
+        sys.exit(0 if data.get("ok") else 1)
+
     selected = [c for c in CASES if args.case is None or c.id == args.case]
     results = [run_case(case, args.provider, args.model) for case in selected]
+    card = build_scorecard(results, args.provider)
+
     if args.json:
         print(
             json.dumps(
-                [
-                    {
-                        **{k: v for k, v in asdict(r).items() if k != "checks"},
-                        "checks": [asdict(c) for c in r.checks],
-                    }
-                    for r in results
-                ],
+                {
+                    "scorecard": card.as_dict(),
+                    "results": [
+                        {
+                            **{k: v for k, v in asdict(r).items() if k != "checks"},
+                            "checks": [asdict(c) for c in r.checks],
+                        }
+                        for r in results
+                    ],
+                },
                 indent=2,
             )
         )
     else:
         _print(results)
+        print()
+        print_scorecard(card)
+
+    # Full suite only — don't overwrite the Trust artifact with a single-case run.
+    if args.case is None:
+        path = write_scorecard(card)
+        if not args.json:
+            print(f"wrote {path}")
+
     sys.exit(0 if all(r.ok for r in results) else 1)
 
 

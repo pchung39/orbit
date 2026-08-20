@@ -1430,6 +1430,38 @@ function renderTrust() {
       .map((line) => `<li>${escapeHtml(line)}</li>`)
       .join("")}</ul>`;
 
+  const sc = t.eval?.scorecard;
+  const scoreTone = sc ? (sc.ok ? "ok" : "bad") : "warn";
+  const scoreStatus = sc
+    ? `${sc.cases_ok}/${sc.cases_total} cases`
+    : `${t.eval?.cases ?? 5} cases`;
+  const scoreRates = sc
+    ? [sc.diagnosis, sc.withhold, sc.false_inhibit, sc.provenance].filter(Boolean)
+    : [];
+  const scoreBody = sc
+    ? `<p class="trust-score-headline">${escapeHtml(sc.headline || "")}</p>
+      <div class="trust-metrics trust-score-metrics">
+        ${scoreRates
+          .map(
+            (r) => `<div class="trust-metric" title="${escapeHtml(r.definition || "")}">
+          <span class="k">${escapeHtml(r.label)}</span>
+          <span class="v">${escapeHtml(r.display || `${r.passed}/${r.total}`)}</span>
+        </div>`
+          )
+          .join("")}
+      </div>
+      <p class="trust-note">Last run <code>${escapeHtml(sc.provider || "rules")}</code> · ${escapeHtml(
+        sc.generated_at || "—"
+      )}. Refresh with <code>${escapeHtml(t.eval?.command || "python -m eval")}</code>.</p>`
+    : `<div class="trust-metrics">
+        <div class="trust-metric"><span class="k">Harness cases</span><span class="v">${t.eval?.cases ?? 5}</span></div>
+        <div class="trust-metric"><span class="k">Fault families</span><span class="v">${t.spec?.fault_families ?? 3}</span></div>
+        <div class="trust-metric"><span class="k">Default</span><span class="v">${escapeHtml(t.eval?.provider_default || "rules")}</span></div>
+      </div>
+      <p class="trust-note">No scorecard yet. Run <code>${escapeHtml(
+        t.eval?.command || "python -m eval"
+      )}</code> to write diagnosis, false-inhibit, and provenance rates.</p>`;
+
   grid.innerHTML = `
     <article class="trust-card is-${storeTone}">
       <div class="trust-card-head">
@@ -1488,21 +1520,15 @@ function renderTrust() {
         <button type="button" class="btn-ghost btn" data-trust-incidents>Open incidents</button>
       </div>
     </article>
-    <article class="trust-card is-ok">
+    <article class="trust-card is-${scoreTone}">
       <div class="trust-card-head">
         <div>
           <p class="trust-card-kicker">Validation</p>
-          <h3>Eval harness</h3>
+          <h3>Eval scorecard</h3>
         </div>
-        <span class="trust-status ok">${t.eval?.cases ?? 4} cases</span>
+        <span class="trust-status ${scoreTone}">${escapeHtml(scoreStatus)}</span>
       </div>
-      <div class="trust-metrics">
-        <div class="trust-metric"><span class="k">Fault families</span><span class="v">${t.spec?.fault_families ?? 3}</span></div>
-        <div class="trust-metric"><span class="k">Procedures</span><span class="v">${t.spec?.procedures ?? 3}</span></div>
-        <div class="trust-metric"><span class="k">Prior incidents</span><span class="v">${t.spec?.historical_incidents ?? 3}</span></div>
-        <div class="trust-metric"><span class="k">Default</span><span class="v">${escapeHtml(t.eval?.provider_default || "rules")}</span></div>
-      </div>
-      <p class="trust-note">Regression gate for investigation closes: heater, payload, battery, and withheld (no-guess) outcomes. Run <code>${escapeHtml(t.eval?.command || "python -m eval")}</code> locally.</p>
+      ${scoreBody}
     </article>`;
 
   const runRows = (t.runs || []).map((run) => {

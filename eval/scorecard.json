@@ -1,0 +1,93 @@
+{
+  "provider": "rules",
+  "generated_at": "2026-08-20T17:29:16Z",
+  "ok": true,
+  "cases_ok": 5,
+  "cases_total": 5,
+  "checks_ok": 55,
+  "checks_total": 55,
+  "diagnosis": {
+    "id": "diagnosis",
+    "label": "Named closes correct",
+    "passed": 4,
+    "total": 4,
+    "definition": "Seeded heater / payload / battery faults where the report picks the matching root cause and recommended action.",
+    "pct": 100.0,
+    "display": "4/4"
+  },
+  "withhold": {
+    "id": "withhold",
+    "label": "Withheld when bar not met",
+    "passed": 1,
+    "total": 1,
+    "definition": "Decoy / marginal cases where ORBIT must omit a root-cause hypothesis and recommend hold \u2014 not invent a FAULT id.",
+    "pct": 100.0,
+    "display": "1/1"
+  },
+  "false_inhibit": {
+    "id": "false_inhibit",
+    "label": "No false Heater B inhibit",
+    "passed": 3,
+    "total": 3,
+    "definition": "Contrast cases (payload, battery, withhold) where inhibit Heater B would be wrong. Score is cases that correctly leave the heater alone.",
+    "pct": 100.0,
+    "display": "3/3"
+  },
+  "provenance": {
+    "id": "provenance",
+    "label": "Fact vs inference clean",
+    "passed": 5,
+    "total": 5,
+    "definition": "Reports that stamp OBSERVED / DERIVED / DOCUMENTED / HYPOTHESIS and keep timeline facts separate from causal hypothesis language.",
+    "pct": 100.0,
+    "display": "5/5"
+  },
+  "cases": [
+    {
+      "id": "eps204",
+      "label": "heater overcurrent + SCIENCE_MODE confounder",
+      "root_cause": "heater",
+      "action": "inhibit_heater_b",
+      "ok": true,
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "id": "fault1",
+      "label": "heater overcurrent, payload stays STANDBY",
+      "root_cause": "heater",
+      "action": "inhibit_heater_b",
+      "ok": true,
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "id": "pay002",
+      "label": "payload overcurrent on SCIENCE_MODE; heater off",
+      "root_cause": "payload",
+      "action": "safe_payload_standby",
+      "ok": true,
+      "passed": 10,
+      "total": 10
+    },
+    {
+      "id": "batt003",
+      "label": "pack IR sag; heater current healthy",
+      "root_cause": "battery",
+      "action": "battery_checkout",
+      "ok": true,
+      "passed": 9,
+      "total": 9
+    },
+    {
+      "id": "marg001",
+      "label": "decoy EPS-204 signature \u2014 marginal loads",
+      "root_cause": "withheld",
+      "action": "hold",
+      "ok": true,
+      "passed": 16,
+      "total": 16
+    }
+  ],
+  "headline": "4/4 named closes \u00b7 3/3 no false inhibit \u00b7 5/5 provenance clean"
+}

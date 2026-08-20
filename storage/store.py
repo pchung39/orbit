@@ -10,6 +10,7 @@ Embeddings for documents are local (fastembed), not a paid API.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 from typing import Any
@@ -594,10 +595,23 @@ def store_trust_snapshot(conn: psycopg.Connection, spec: dict[str, Any]) -> dict
             "cases": 5,
             "command": "python -m eval",
             "provider_default": "rules",
+            "scorecard": _load_eval_scorecard(),
         },
         "runs": run_rows,
         "documents": [dict(row) for row in docs],
     }
+
+
+def _load_eval_scorecard() -> dict[str, Any] | None:
+    """Last full-suite scorecard written by `python -m eval` (if present)."""
+    path = ROOT / "eval" / "scorecard.json"
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
 
 
 def get_document(conn: psycopg.Connection, doc_id: str) -> dict[str, Any] | None:
