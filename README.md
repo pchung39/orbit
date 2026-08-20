@@ -129,6 +129,7 @@ The spec is canonical: [`spec/aurora1_mission_model.yaml`](spec/aurora1_mission_
 | Console | FastAPI + instrument UI at `/` |
 | Trust API | `GET /trust` — store, library, and investigator health for the Trust tab |
 | Eval | 4 cases against the matching close (heater, payload, battery) |
+| Feedback | Operator confirm/reject on working hypothesis — stored for adoption metrics |
 
 ```
 spec/aurora1_mission_model.yaml
@@ -151,6 +152,15 @@ python -m eval
 ```
 
 Default is `--provider rules` (no paid LLM). Green on this harness is the bar: 4 cases.
+
+### Operator hypothesis feedback
+
+On **Case**, confirm or reject ORBIT's working hypothesis (case header or file slip). Feedback is stored in Postgres, editable until the case is filed, and appended to the close-out when you file. It does not change the recommended action or uplink anything.
+
+```bash
+python -m eval --feedback          # adoption summary (confirmed / rejected / eval alignment)
+python -m eval --feedback --export # write eval/feedback.jsonl
+```
 
 ## Optional: simulator and LLM CLI
 

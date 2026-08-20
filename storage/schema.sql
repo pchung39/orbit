@@ -57,3 +57,16 @@ CREATE TABLE IF NOT EXISTS incidents (
 
 ALTER TABLE incidents ADD COLUMN IF NOT EXISTS filed_at TEXT;
 ALTER TABLE incidents ADD COLUMN IF NOT EXISTS closeout TEXT;
+
+CREATE TABLE IF NOT EXISTS hypothesis_feedback (
+    incident_id TEXT PRIMARY KEY REFERENCES incidents(id),
+    run_id TEXT NOT NULL,
+    alarm TEXT NOT NULL,
+    hypothesis_key TEXT NOT NULL,
+    hypothesis_label TEXT NOT NULL,
+    verdict TEXT NOT NULL CHECK (verdict IN ('confirmed', 'rejected')),
+    note TEXT,
+    provider TEXT NOT NULL DEFAULT 'rules',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);

@@ -408,6 +408,84 @@ def file_incident(
     return dict(out)
 
 
+_FEEDBACK_COLS = (
+    "incident_id, run_id, alarm, hypothesis_key, hypothesis_label, "
+    "verdict, note, provider, created_at, updated_at"
+)
+
+
+def get_hypothesis_feedback(conn: psycopg.Connection, incident_id: str) -> dict[str, Any] | None:
+    row = conn.execute(
+        f"SELECT {_FEEDBACK_COLS} FROM hypothesis_feedback WHERE incident_id = %s",
+        (incident_id,),
+    ).fetchone()
+    return dict(row) if row else None
+
+
+def list_hypothesis_feedback(conn: psycopg.Connection) -> list[dict[str, Any]]:
+    return list(
+        conn.execute(
+            f"SELECT {_FEEDBACK_COLS} FROM hypothesis_feedback ORDER BY updated_at DESC"
+        ).fetchall()
+    )
+
+
+def upsert_hypothesis_feedback(
+    conn: psycopg.Connection,
+    incident_id: str,
+    *,
+    run_id: str,
+    alarm: str,
+    hypothesis_key: str,
+    hypothesis_label: str,
+    verdict: str,
+    note: str | None = None,
+    provider: str = "rules",
+) -> dict[str, Any]:
+    from datetime import datetime, timezone
+
+    row = get_incident(conn, incident_id)
+    if row is None:
+        raise ValueError(f"unknown incident {incident_id}")
+    if row["status"] == "filed":
+        raise ValueError(f"{incident_id} is already filed")
+
+    if verdict not in ("confirmed", "rejected"):
+        raise ValueError("verdict must be confirmed or rejected")
+
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    existing = get_hypothesis_feedback(conn, incident_id)
+    created_at = existing["created_at"] if existing else now
+    remark = (note or "").strip() or None
+
+    conn.execute(
+        "INSERT INTO hypothesis_feedback "
+        "(incident_id, run_id, alarm, hypothesis_key, hypothesis_label, verdict, note, provider, created_at, updated_at) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) "
+        "ON CONFLICT (incident_id) DO UPDATE SET "
+        "run_id = EXCLUDED.run_id, alarm = EXCLUDED.alarm, "
+        "hypothesis_key = EXCLUDED.hypothesis_key, hypothesis_label = EXCLUDED.hypothesis_label, "
+        "verdict = EXCLUDED.verdict, note = EXCLUDED.note, provider = EXCLUDED.provider, "
+        "updated_at = EXCLUDED.updated_at",
+        (
+            incident_id,
+            run_id,
+            alarm,
+            hypothesis_key,
+            hypothesis_label,
+            verdict,
+            remark,
+            provider,
+            created_at,
+            now,
+        ),
+    )
+    conn.commit()
+    out = get_hypothesis_feedback(conn, incident_id)
+    assert out is not None
+    return out
+
+
 def list_documents(conn: psycopg.Connection) -> list[dict[str, Any]]:
     return list(
         conn.execute("SELECT id, kind, title, path FROM documents ORDER BY kind, id").fetchall()

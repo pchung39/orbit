@@ -15,6 +15,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from agent.closeout import build_closeout
+from agent.hypothesis import hypothesis_for
 from agent.investigate import investigate_rules
 from agent.tools import Tools
 from simulator.scenarios import clock_to_s, format_clock
@@ -25,6 +26,7 @@ from storage.store import (
     ensure_demo_incident,
     file_incident,
     get_document,
+    get_hypothesis_feedback,
     get_incident,
     init_schema,
     list_documents,
@@ -35,6 +37,7 @@ from storage.store import (
     query_events,
     search_documents,
     store_trust_snapshot,
+    upsert_hypothesis_feedback,
 )
 
 UI_DIR = Path(__file__).resolve().parent.parent / "ui"
@@ -317,7 +320,11 @@ def incident(incident_id: str) -> dict[str, Any]:
         row = get_incident(conn, incident_id)
         if row is None:
             raise HTTPException(404, f"unknown incident {incident_id}")
-        return dict(row)
+        out = dict(row)
+        fb = get_hypothesis_feedback(conn, incident_id)
+        if fb:
+            out["feedback"] = dict(fb)
+        return out
 
 
 @app.get("/incidents/{incident_id}/workspace")
@@ -339,6 +346,9 @@ def incident_workspace(incident_id: str) -> dict[str, Any]:
         documents = [dict(item) for item in list_documents(conn)]
     data = workspace_payload(spec, run_id, events, telemetry, documents, extra_channels=[row["alarm"]])
     data["incident"] = dict(row)
+    fb = get_hypothesis_feedback(conn, incident_id)
+    if fb:
+        data["incident"]["feedback"] = dict(fb)
     data["alarm"] = row["alarm"]
     return data
 
@@ -388,6 +398,47 @@ class FileIn(BaseModel):
     note: str | None = Field(default=None)
 
 
+class FeedbackIn(BaseModel):
+    verdict: str = Field(pattern="^(confirmed|rejected)$")
+    note: str | None = Field(default=None)
+
+
+@app.get("/incidents/{incident_id}/feedback")
+def incident_feedback(incident_id: str) -> dict[str, Any] | None:
+    with _conn() as conn:
+        row = get_incident(conn, incident_id)
+        if row is None:
+            raise HTTPException(404, f"unknown incident {incident_id}")
+        fb = get_hypothesis_feedback(conn, incident_id)
+        return dict(fb) if fb else None
+
+
+@app.put("/incidents/{incident_id}/feedback")
+def save_incident_feedback(incident_id: str, body: FeedbackIn) -> dict[str, Any]:
+    with _conn() as conn:
+        row = get_incident(conn, incident_id)
+        if row is None:
+            raise HTTPException(404, f"unknown incident {incident_id}")
+        if row["status"] == "filed":
+            raise HTTPException(409, f"{incident_id} is already filed")
+    hyp = hypothesis_for(row["run_id"], row["alarm"])
+    try:
+        with _conn() as conn:
+            fb = upsert_hypothesis_feedback(
+                conn,
+                incident_id,
+                run_id=row["run_id"],
+                alarm=row["alarm"],
+                hypothesis_key=hyp.key,
+                hypothesis_label=hyp.label,
+                verdict=body.verdict,
+                note=body.note,
+            )
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"feedback": fb, "incident_id": incident_id, "status": row["status"]}
+
+
 @app.post("/incidents/{incident_id}/file")
 def file_open_incident(incident_id: str, body: FileIn | None = None) -> dict[str, Any]:
     """Write a library close-out. Does not command the spacecraft."""
@@ -401,7 +452,9 @@ def file_open_incident(incident_id: str, body: FileIn | None = None) -> dict[str
         if row["status"] == "filed":
             raise HTTPException(409, f"{incident_id} is already filed")
     report = investigate_rules(row["run_id"], alarm_channel=row["alarm"])
-    closeout = build_closeout(dict(row), report, note)
+    with _conn() as conn:
+        feedback = get_hypothesis_feedback(conn, incident_id)
+    closeout = build_closeout(dict(row), report, note, feedback=dict(feedback) if feedback else None)
     try:
         with _conn() as conn:
             filed = file_incident(conn, incident_id, closeout, operator_note=note)

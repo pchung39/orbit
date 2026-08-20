@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 from agent.investigate import investigate
 from agent.tools import Tools
 from eval.cases import CASES, Case
+from eval.feedback import export_jsonl, load_feedback_rows, print_summary
 from eval.score import Check, Observed, score
 from simulator.scenarios import format_clock
 from simulator.simulate import load_and_validate
@@ -92,7 +93,25 @@ def main() -> None:
     )
     parser.add_argument("--model", default=None)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument(
+        "--feedback",
+        action="store_true",
+        help="print operator hypothesis feedback summary (adoption metrics)",
+    )
+    parser.add_argument(
+        "--export",
+        action="store_true",
+        help="with --feedback, write eval/feedback.jsonl",
+    )
     args = parser.parse_args()
+
+    if args.feedback:
+        rows = load_feedback_rows()
+        print_summary(rows)
+        if args.export:
+            path = export_jsonl(rows)
+            print(f"exported {len(rows)} rows → {path}")
+        sys.exit(0)
 
     selected = [c for c in CASES if args.case is None or c.id == args.case]
     results = [run_case(case, args.provider, args.model) for case in selected]

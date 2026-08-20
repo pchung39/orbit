@@ -8,7 +8,28 @@ from __future__ import annotations
 from typing import Any
 
 
-def build_closeout(incident: dict[str, Any], report: str, note: str | None = None) -> str:
+def _feedback_section(feedback: dict[str, Any]) -> list[str]:
+    key = feedback.get("hypothesis_key") or "UNKNOWN"
+    verdict = feedback.get("verdict") or ""
+    note = (feedback.get("note") or "").strip()
+    if verdict == "confirmed":
+        line = f"**{key}** — confirmed by operator."
+    elif verdict == "rejected":
+        line = f"**{key}** — rejected (disagrees with report hypothesis)."
+    else:
+        line = f"**{key}** — operator review recorded."
+    if note:
+        line = f"{line} {note}"
+    line = f"{line} **[OBSERVED — operator]**"
+    return ["## Operator hypothesis review", "", line, ""]
+
+
+def build_closeout(
+    incident: dict[str, Any],
+    report: str,
+    note: str | None = None,
+    feedback: dict[str, Any] | None = None,
+) -> str:
     body = report.split("\n## Tool log")[0].rstrip()
     title = incident.get("title") or incident["id"]
     remark = (note or "").strip()
@@ -40,5 +61,7 @@ def build_closeout(incident: dict[str, Any], report: str, note: str | None = Non
             f"{remark} **[OBSERVED — operator]**",
             "",
         ]
+    if feedback:
+        lines += _feedback_section(feedback)
     lines += [body, ""]
     return "\n".join(lines)

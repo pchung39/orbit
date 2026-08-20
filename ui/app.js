@@ -132,7 +132,7 @@ function familyLine(item, all) {
 
 function rowCta(item) {
   if (item.status === "filed") return { jump: "closeout", label: "Read close-out" };
-  if (item.status === "recommended") return { jump: "action", label: "File · not sent" };
+  if (item.status === "recommended") return { jump: "walk", label: "File · not sent" };
   return { jump: "walk", label: "Walk" };
 }
 
@@ -168,6 +168,157 @@ function workingGuess(a) {
     decoy: false,
     recommend: "Keep reading",
   };
+}
+
+function activeFeedbackVerdict() {
+  return state.feedback?.verdict || "";
+}
+
+function feedbackFormHtml({ editable, compact, noteId = "feedback-note" }) {
+  const fb = state.feedback;
+  const verdict = activeFeedbackVerdict();
+  const note = fb?.note || "";
+  if (!editable) {
+    if (!fb) return "";
+    const label = verdict === "confirmed" ? "Hypothesis confirmed" : "Hypothesis rejected";
+    return `<div class="guess-feedback is-readonly">
+      <p class="guess-kicker">${escapeHtml(label)}</p>
+      <p class="guess-fb-key">${escapeHtml(fb.hypothesis_key || "")}</p>
+      ${note ? `<p class="guess-fb-note">${escapeHtml(note)}</p>` : ""}
+    </div>`;
+  }
+  return `<div class="guess-feedback ${compact ? "is-compact" : ""}">
+    <p class="guess-kicker">Hypothesis review</p>
+    <div class="fb-toggle" role="group" aria-label="Confirm or reject hypothesis">
+      <button type="button" class="fb-opt ${verdict === "confirmed" ? "is-on" : ""}" data-fb-verdict="confirmed">Confirmed</button>
+      <button type="button" class="fb-opt ${verdict === "rejected" ? "is-on" : ""}" data-fb-verdict="rejected">Rejected</button>
+    </div>
+    <label class="fb-note-label">Note <span class="opt">optional</span>
+      <textarea class="feedback-note" id="${noteId}" rows="2" placeholder="Why you agree or disagree…">${escapeHtml(note)}</textarea>
+    </label>
+    ${compact ? "" : '<p class="hint fb-hint">Saved locally for future eval runs. Does not change the recommended action or uplink anything.</p>'}
+    <button type="button" class="btn btn-ghost btn-sm" data-save-feedback ${state.feedbackSaving ? "disabled" : ""}>${state.feedbackSaving ? "Saving…" : fb ? "Update feedback" : "Save feedback"}</button>
+  </div>`;
+}
+
+function renderFileSlipFeedback() {
+  const root = $("file-feedback");
+  if (!root) return;
+  const filed = state.incident?.status === "filed";
+  if (filed) {
+    root.innerHTML = feedbackFormHtml({ editable: false, compact: true });
+    return;
+  }
+  if (state.feedback) {
+    root.innerHTML = `<div class="file-fb-summary">
+      <p class="pick-label">Hypothesis review</p>
+      <p class="guess-fb-key">${escapeHtml(state.feedback.hypothesis_key)} · ${escapeHtml(state.feedback.verdict)}</p>
+      ${state.feedback.note ? `<p class="guess-fb-note">${escapeHtml(state.feedback.note)}</p>` : ""}
+    </div>`;
+    return;
+  }
+  root.innerHTML = feedbackFormHtml({ editable: true, compact: true, noteId: "file-feedback-note" });
+}
+
+async function saveFeedback(scopeEl) {
+  if (!state.incidentId || state.feedbackSaving || state.incident?.status === "filed") return;
+  const scope = scopeEl || $("decide-feedback-root");
+  const on = scope?.querySelector("[data-fb-verdict].is-on");
+  if (!on) {
+    window.alert("Choose confirmed or rejected first.");
+    return;
+  }
+  const noteEl = scope.querySelector(".feedback-note");
+  const note = noteEl?.value.trim() || null;
+  state.feedbackSaving = true;
+  renderDecision(analysis());
+  renderFileSlipFeedback();
+  try {
+    const res = await fetch(`/incidents/${encodeURIComponent(state.incidentId)}/feedback`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ verdict: on.dataset.fbVerdict, note }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `feedback ${res.status}`);
+    }
+    const data = await res.json();
+    state.feedback = data.feedback;
+    if (state.incident) state.incident.feedback = data.feedback;
+  } catch (err) {
+    window.alert(err.message || "Could not save feedback");
+  } finally {
+    state.feedbackSaving = false;
+    renderDecision(analysis());
+    renderFileSlipFeedback();
+  }
+}
+
+function hypothesisContextHtml(a, g) {
+  if (!g) return "";
+  return `<dl class="hyp-context">
+    <div><dt>Suspect</dt><dd>${escapeHtml(g.suspect)}</dd></div>
+    <div class="${g.decoy ? "is-decoy" : ""}"><dt>Last command</dt><dd>${escapeHtml(g.last)}${g.decoy ? " <em>decoy</em>" : ""}</dd></div>
+    <div class="is-act"><dt>Recommend</dt><dd>${escapeHtml(g.recommend)} <i>not sent</i></dd></div>
+  </dl>`;
+}
+
+function renderDecisionContext(a) {
+  const hypRoot = $("decide-hypothesis");
+  const fbRoot = $("decide-feedback-root");
+  const inc = state.incident;
+  const filed = inc?.status === "filed";
+  const g = workingGuess(a);
+  const showHyp = Boolean(a && g && inc && !filed && (inc.status === "recommended" || state.report));
+
+  if (hypRoot) {
+    if (showHyp) {
+      hypRoot.hidden = false;
+      hypRoot.innerHTML = `<p class="decide-section-kicker">Working hypothesis</p>${hypothesisContextHtml(a, g)}`;
+    } else {
+      hypRoot.hidden = true;
+      hypRoot.innerHTML = "";
+    }
+  }
+
+  if (fbRoot) {
+    const showFb = inc && !filed && (inc.status === "recommended" || state.report);
+    if (showFb) {
+      fbRoot.hidden = false;
+      fbRoot.innerHTML = feedbackFormHtml({ editable: true, compact: false, noteId: "decide-feedback-note" });
+    } else if (filed && (state.feedback || inc?.feedback)) {
+      fbRoot.hidden = false;
+      fbRoot.innerHTML = feedbackFormHtml({ editable: false, compact: false });
+    } else {
+      fbRoot.hidden = true;
+      fbRoot.innerHTML = "";
+    }
+  }
+}
+
+function renderCaseRibbon(inc) {
+  const ribbon = $("case-ribbon");
+  if (!ribbon) return;
+  if (!inc) {
+    ribbon.hidden = true;
+    ribbon.innerHTML = "";
+    return;
+  }
+  const st = inc.status || "open";
+  if (st === "recommended") {
+    ribbon.hidden = false;
+    ribbon.innerHTML = `<span class="case-ribbon-text">Report stamped — review and file in step 06.</span>
+      <button type="button" class="text-btn" data-case-jump="action">Go to decision</button>`;
+    return;
+  }
+  if (st === "open") {
+    ribbon.hidden = false;
+    ribbon.innerHTML = `<span class="case-ribbon-text">Walk evidence, then assemble the report before filing.</span>`;
+    return;
+  }
+  ribbon.hidden = true;
+  ribbon.innerHTML = "";
 }
 
 function tapeCopy(run) {
@@ -330,6 +481,8 @@ const state = {
   report: null,
   investigating: false,
   filing: false,
+  feedback: null,
+  feedbackSaving: false,
   docs: [],
   libraryQuery: "",
   libraryHits: null,
@@ -1031,7 +1184,7 @@ function renderIncReady(all) {
     <p class="inc-ready-label">${ready.length} ready to file</p>
     ${ready
       .map(
-        (item) => `<button type="button" class="inc-ready-item" data-open-case="${escapeHtml(item.id)}" data-jump="action">
+        (item) => `<button type="button" class="inc-ready-item" data-open-case="${escapeHtml(item.id)}">
           <span class="id">${escapeHtml(item.id)}</span>
           <span class="act">${escapeHtml(caseAction(item) || "Review report")}</span>
           <span class="why">${escapeHtml(alarmTitle(item.alarm))}</span>
@@ -1119,6 +1272,7 @@ function openFileSlip() {
   $("file-slip-id").textContent = state.incident?.id || "INC-····";
   $("file-slip-action").textContent = $("decide-title").textContent || "Recommended action";
   $("file-note").value = "";
+  renderFileSlipFeedback();
   $("file-slip").hidden = false;
   $("file-note").focus();
 }
@@ -1914,11 +2068,22 @@ function renderAlarm(a) {
   const st = inc?.status || "";
   $("alarm-kicker").textContent = inc ? inc.id : "Case";
   const chip = $("status-chip");
-  if (chip) chip.hidden = true;
+  if (chip) {
+    if (inc && st) {
+      chip.hidden = false;
+      chip.textContent = statusLabel(st);
+      chip.className = `chip chip-${st === "recommended" ? "ready" : st}`;
+    } else {
+      chip.hidden = true;
+      chip.textContent = "";
+      chip.className = "chip";
+    }
+  }
   document.body.classList.toggle("is-filed", st === "filed");
   const filedLine = $("case-filed");
-  if (filedLine) filedLine.hidden = true;
+  if (filedLine) filedLine.hidden = st !== "filed";
   $("alarm-title").textContent = inc ? alarmTitle(inc.alarm) : "Select a case";
+  renderCaseRibbon(inc);
   const when = a?.warn ? clock(a.warn.time_s) : openedClock(inc?.opened_at);
   const facts = [];
   if (inc) {
@@ -1935,30 +2100,6 @@ function renderAlarm(a) {
       </div>`
     )
     .join("");
-  renderCaseNext(inc);
-  const guess = $("case-guess");
-  const g = workingGuess(a);
-  if (guess) {
-    if (!inc || !a || !g) {
-      guess.hidden = true;
-      guess.innerHTML = "";
-    } else {
-      guess.hidden = false;
-      guess.innerHTML = `<p class="guess-kicker">Working hypothesis</p>
-        <div class="guess-row">
-          <span class="gk">Suspect</span>
-          <span class="gv">${escapeHtml(g.suspect)}</span>
-        </div>
-        <div class="guess-row ${g.decoy ? "is-decoy" : ""}">
-          <span class="gk">Last command</span>
-          <span class="gv">${escapeHtml(g.last)}${g.decoy ? `<em> decoy</em>` : ""}</span>
-        </div>
-        <div class="guess-row is-act">
-          <span class="gk">Recommend</span>
-          <span class="gv">${escapeHtml(g.recommend)} <i>not sent</i></span>
-        </div>`;
-    }
-  }
   if (!a) {
     $("alarm-lede").textContent = "Open a case from an alarm you already have. ORBIT does not detect anomalies.";
     $("alarm-lede").hidden = false;
@@ -2002,32 +2143,6 @@ function renderAlarmMargin(value, ch) {
   el.hidden = false;
   el.querySelector("i").style.width = `${fill.toFixed(0)}%`;
   el.querySelector(".pct").textContent = `${pct.toFixed(pct < 10 ? 1 : 0)}% ${past > 0 ? "past warn" : "margin"}`;
-}
-
-function renderCaseNext(inc) {
-  const el = $("case-next");
-  if (!el) return;
-  if (!inc) {
-    el.hidden = true;
-    el.innerHTML = "";
-    return;
-  }
-  const cta = rowCta(inc);
-  el.hidden = false;
-  if (cta.jump === "closeout") {
-    const n = (inc.notes || "").trim();
-    const note = n && !n.startsWith("Canonical") ? n : "Filed. Command was not sent.";
-    el.innerHTML = `<button type="button" class="btn" data-case-jump="closeout">Read close-out</button>
-      <span class="case-next-note">${escapeHtml(note)}</span>`;
-    return;
-  }
-  if (cta.jump === "action") {
-    el.innerHTML = `<button type="button" class="btn" data-case-jump="action">File · not sent</button>
-      <span class="case-next-note">Ready to file. Command stays on the ground.</span>`;
-    return;
-  }
-  el.innerHTML = `<button type="button" class="btn" data-case-jump="walk">Walk</button>
-    <span class="case-next-note">Start at evidence. Decision is last.</span>`;
 }
 
 function renderCompare(a) {
@@ -2128,11 +2243,14 @@ function renderTimeline(a) {
         item.last && !item.suspect ? `<span class="crumb-tag is-last">Last</span>` : "",
         item.warn ? `<span class="crumb-tag is-warn">Warn</span>` : "",
       ].join("");
-      return `<li class="crumb kind-${item.kind} ${item.warn ? "is-warn" : ""} ${item.suspect ? "is-suspect" : ""} ${item.last && !item.suspect ? "is-last" : ""} ${on ? "is-on" : ""}" data-t="${item.t}">
-        <button type="button" class="t-card ${on ? "is-on" : ""}">
-          <span class="t-clock">${clock(item.t)}</span>
-          <strong>${escapeHtml(item.title)}</strong>
-          ${tags}
+      return `<li class="tl-item kind-${item.kind} ${item.warn ? "is-warn" : ""} ${item.suspect ? "is-suspect" : ""} ${item.last && !item.suspect ? "is-last" : ""} ${on ? "is-on" : ""}" data-t="${item.t}">
+        <button type="button" class="tl-row ${on ? "is-on" : ""}">
+          <span class="tl-time">${clock(item.t)}</span>
+          <span class="tl-track" aria-hidden="true"><i class="tl-dot"></i></span>
+          <span class="tl-main">
+            <strong class="tl-title">${escapeHtml(item.title)}</strong>
+            ${tags ? `<span class="tl-tags">${tags}</span>` : ""}
+          </span>
         </button>
       </li>`;
     })
@@ -2223,7 +2341,6 @@ function renderDecision(a) {
   fileBtn.disabled = Boolean(state.filing);
   fileBtn.textContent = state.filing ? "Filing…" : "File decision";
   if (filed) {
-    $("filed-action-title").textContent = $("decide-title").textContent || "Filed";
     const note = (state.incident.notes || "").trim();
     const box = $("operator-note");
     if (note && !note.startsWith("Canonical")) {
@@ -2232,12 +2349,27 @@ function renderDecision(a) {
     } else {
       box.hidden = true;
     }
+    const badge = $("filed-feedback-badge");
+    const fb = state.feedback || state.incident?.feedback;
+    if (badge) {
+      if (fb?.verdict) {
+        badge.hidden = false;
+        badge.textContent =
+          fb.verdict === "confirmed"
+            ? `Hypothesis confirmed · ${fb.hypothesis_key}`
+            : `Hypothesis rejected · ${fb.hypothesis_key}`;
+      } else {
+        badge.hidden = true;
+        badge.textContent = "";
+      }
+    }
   }
   if (!a) {
     $("decide-title").textContent = "None yet";
     $("decide-sub").textContent = "Select a case to see a next step.";
     status.textContent = "";
     fileBtn.hidden = true;
+    renderDecisionContext(null);
     return;
   }
   if (a.suspect) {
@@ -2248,6 +2380,7 @@ function renderDecision(a) {
       $("filed-action-title").textContent = "Inhibit Heater B";
       $("filed-action-sub").textContent = "Recorded in the library. ORBIT did not uplink.";
     }
+    renderDecisionContext(a);
     return;
   }
   if (a.payloadSuspect) {
@@ -2258,6 +2391,7 @@ function renderDecision(a) {
       $("filed-action-title").textContent = "Safe payload to STANDBY";
       $("filed-action-sub").textContent = "Recorded in the library. ORBIT did not uplink.";
     }
+    renderDecisionContext(a);
     return;
   }
   if (a.batterySuspect) {
@@ -2268,6 +2402,7 @@ function renderDecision(a) {
       $("filed-action-title").textContent = "Continue EPS-09";
       $("filed-action-sub").textContent = "Recorded in the library. ORBIT did not uplink.";
     }
+    renderDecisionContext(a);
     return;
   }
   if (!a.warn) {
@@ -2275,12 +2410,14 @@ function renderDecision(a) {
     $("decide-sub").textContent = "No warn on this case.";
     status.textContent = "";
     if (filed) $("filed-action-title").textContent = "No action";
+    renderDecisionContext(a);
     return;
   }
   $("decide-title").textContent = "Keep reading";
   $("decide-sub").textContent = "No load is ≥2× healthy.";
   status.textContent = "";
   if (filed) $("filed-action-title").textContent = "Keep reading";
+  renderDecisionContext(a);
 }
 
 function renderFindings() {
@@ -2337,10 +2474,7 @@ function renderCase() {
 
 async function openIncident(incidentId, jump) {
   await loadIncident(incidentId);
-  if (jump === "action") {
-    $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    if (state.incident?.status === "recommended") openFileSlip();
-  } else if (jump === "closeout") {
+  if (jump === "closeout") {
     openDoc(incidentId);
   } else if (jump === "findings") {
     $("findings")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2350,6 +2484,7 @@ async function openIncident(incidentId, jump) {
 async function loadIncident(incidentId) {
   state.incidentId = incidentId;
   state.incident = state.incidents.find((item) => item.id === incidentId) || null;
+  state.feedback = state.incident?.feedback || null;
   state.runId = state.incident?.run_id || null;
   state.report = null;
   state.pinT = null;
@@ -2360,7 +2495,10 @@ async function loadIncident(incidentId) {
   const res = await fetch(`/incidents/${encodeURIComponent(incidentId)}/workspace`);
   if (!res.ok) throw new Error(`workspace ${res.status}`);
   state.workspace = await res.json();
-  if (state.workspace.incident) state.incident = state.workspace.incident;
+  if (state.workspace.incident) {
+    state.incident = state.workspace.incident;
+    state.feedback = state.incident.feedback || state.feedback;
+  }
   state.runId = state.workspace.run_id;
   const a = analysis();
   state.pinT = a?.warn?.time_s ?? a?.heaterCmd?.time_s ?? null;
@@ -3144,6 +3282,18 @@ function bind() {
     pinTape(node.dataset.t, { scroll: true });
   });
   $("case-desk").addEventListener("click", (ev) => {
+    const verdict = ev.target.closest("[data-fb-verdict]");
+    if (verdict) {
+      verdict.closest(".fb-toggle")?.querySelectorAll("[data-fb-verdict]").forEach((btn) => {
+        btn.classList.toggle("is-on", btn === verdict);
+      });
+      return;
+    }
+    const saveFb = ev.target.closest("[data-save-feedback]");
+    if (saveFb) {
+      saveFeedback(saveFb.closest("#decide-feedback-root, #file-feedback"));
+      return;
+    }
     const jump = ev.target.closest("[data-case-jump]");
     if (!jump) return;
     const where = jump.dataset.caseJump;
@@ -3153,7 +3303,6 @@ function bind() {
     }
     if (where === "action") {
       $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      if (state.incident?.status === "recommended") openFileSlip();
       return;
     }
     $("compare")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -3173,6 +3322,19 @@ function bind() {
   $("assemble").addEventListener("click", assemble);
   $("file-incident").addEventListener("click", openFileSlip);
   $("file-form").addEventListener("submit", fileIncident);
+  $("file-slip").addEventListener("click", (ev) => {
+    const verdict = ev.target.closest("[data-fb-verdict]");
+    if (verdict) {
+      verdict.closest(".fb-toggle")?.querySelectorAll("[data-fb-verdict]").forEach((btn) => {
+        btn.classList.toggle("is-on", btn === verdict);
+      });
+      return;
+    }
+    const saveFb = ev.target.closest("[data-save-feedback]");
+    if (saveFb) {
+      saveFeedback(saveFb.closest("#file-feedback"));
+    }
+  });
   $("cancel-file").addEventListener("click", closeFileSlip);
   $("file-slip").addEventListener("click", (ev) => {
     if (ev.target.id === "file-slip") closeFileSlip();

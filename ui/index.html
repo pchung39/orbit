@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=inc4" />
+    <link rel="stylesheet" href="/static/styles.css?v=case2" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -201,7 +201,7 @@
                   <span class="chip" id="status-chip" hidden></span>
                 </div>
                 <h1 id="alarm-title">Select a case</h1>
-                <div class="guess" id="case-guess" hidden></div>
+                <p class="case-ribbon" id="case-ribbon" hidden></p>
                 <p class="lede" id="alarm-lede"></p>
               </div>
               <aside class="hero-readout" id="hero-readout" aria-label="Alarm reading">
@@ -216,7 +216,6 @@
               <span id="case-filed-copy">In the library. Command not sent.</span>
               <button type="button" class="text-btn" id="open-closeout-case">Read close-out</button>
             </p>
-            <div class="case-next" id="case-next" hidden></div>
           </header>
 
           <div class="case-grid">
@@ -241,7 +240,7 @@
                 <p class="panel-kicker">02 · Lead-up</p>
                 <h2>Before the warn</h2>
                 <p class="hint">Commands, mode changes, and the first crossing on one strip. Last command is a clue, not a verdict. Click a row to pin the tape.</p>
-                <ol class="timeline crumbs" id="timeline"></ol>
+                <ol class="timeline lead-timeline" id="timeline"></ol>
               </section>
 
               <section class="panel panel-traces" id="traces">
@@ -314,6 +313,8 @@
                   <h2 id="decide-title">None yet</h2>
                   <p class="lede" id="decide-sub">Select a case to see a next step.</p>
                   <p class="action-status" id="decide-meta"></p>
+                  <div class="decide-hypothesis" id="decide-hypothesis" hidden></div>
+                  <div class="decide-feedback" id="decide-feedback-root" hidden></div>
                   <div class="form-actions action-row">
                     <button type="button" class="btn" id="file-incident" hidden>File decision</button>
                   </div>
@@ -323,6 +324,7 @@
                   <p class="stamp">Filed · not sent</p>
                   <h2 id="filed-action-title">Inhibit Heater B</h2>
                   <p class="lede" id="filed-action-sub">Recorded in the library. ORBIT did not uplink.</p>
+                  <p class="fb-badge" id="filed-feedback-badge" hidden></p>
                   <blockquote class="operator-note" id="operator-note" hidden></blockquote>
                   <button type="button" class="text-btn" id="open-closeout">Read full close-out</button>
                 </div>
@@ -378,6 +380,7 @@
           <label class="slip-title-field">Operator remark
             <textarea name="note" id="file-note" rows="4" placeholder="Heater was already ~3× before SCIENCE_MODE. Do not safe the payload."></textarea>
           </label>
+          <div class="file-feedback" id="file-feedback"></div>
           <div class="form-actions">
             <button type="button" class="text-btn" id="cancel-file">Cancel</button>
             <button type="submit" class="btn" id="confirm-file">File decision</button>
@@ -425,6 +428,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=inc4" type="module"></script>
+    <script src="/static/app.js?v=case1" type="module"></script>
   </body>
 </html>
