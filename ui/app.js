@@ -361,6 +361,13 @@ function renderCaseRibbon(inc) {
 }
 
 function tapeCopy(run) {
+  if (run?.id && String(run.id).startsWith("sealed_")) {
+    return {
+      kind: "Sealed",
+      title: "Sealed evidence",
+      note: run.notes || "Case evidence package",
+    };
+  }
   return RUN_COPY[run.id] || { kind: "Tape", title: run.id, note: run.notes || "Telemetry tape" };
 }
 
@@ -1549,18 +1556,19 @@ function defaultAlarmTime() {
 function suggestedRunForAlarm(alarm) {
   const ch = state.alarms.find((item) => item.id === alarm);
   const preferred = ch?.bind?.run_id;
-  if (preferred && state.runs.some((r) => r.id === preferred)) return preferred;
+  const archives = archiveRunsOnly();
+  if (preferred && archives.some((r) => r.id === preferred)) return preferred;
   if (alarm === "PAY.payload_current") {
-    const pay = state.runs.find((r) => r.id === "pay002");
+    const pay = archives.find((r) => r.id === "pay002");
     if (pay) return pay.id;
   }
   if (alarm === "EPS.battery_voltage") {
-    const batt = state.runs.find((r) => r.id === "batt003");
+    const batt = archives.find((r) => r.id === "batt003");
     if (batt) return batt.id;
   }
-  const fault = state.runs.find((r) => r.id === "fault1");
+  const fault = archives.find((r) => r.id === "fault1");
   if (fault) return fault.id;
-  return (state.runs.find((r) => r.id === "eps204") || state.runs[0])?.id || "";
+  return (archives.find((r) => r.id === "eps204") || archives[0])?.id || "";
 }
 
 function suggestTapeForAlarm(alarm) {
@@ -1576,18 +1584,22 @@ function updateBindPreview() {
   const ch = state.alarms.find((item) => item.id === alarm);
   const suggested = ch?.bind?.run_id;
   if (!alarm) {
-    el.textContent = "Pick an alarm, then confirm the telemetry tape.";
+    el.textContent = "Pick an alarm, then an archive tape. ORBIT will seal a time window for the case.";
     return;
   }
   if (runId && suggested && runId === suggested) {
-    el.textContent = `Suggested for this alarm: ${runId}${ch?.bind?.label ? ` · ${ch.bind.label}` : ""}. Change the tape if needed.`;
+    el.textContent = `Will seal a window from archive ${runId}${ch?.bind?.label ? ` · ${ch.bind.label}` : ""}. Not a live downlink.`;
     return;
   }
   if (runId) {
-    el.textContent = `Using tape ${runId}. Suggested for this alarm was ${suggested || "any sealed run"}.`;
+    el.textContent = `Will seal a window from archive ${runId}. Suggested archive for this alarm was ${suggested || "any available"}.`;
     return;
   }
-  el.textContent = "Select a telemetry tape for this case.";
+  el.textContent = "Select an archive tape to seal from.";
+}
+
+function archiveRunsOnly() {
+  return (state.runs || []).filter((run) => !String(run.id).startsWith("sealed_"));
 }
 
 function fillCreateForm() {
@@ -1600,7 +1612,8 @@ function fillCreateForm() {
       </button>`
     )
     .join("");
-  $("incident-run").innerHTML = sortTapes(state.runs)
+  const archives = archiveRunsOnly();
+  $("incident-run").innerHTML = sortTapes(archives)
     .map((run) => {
       const copy = tapeCopy(run);
       return `<button type="button" class="pick pick-tape" data-pick="run" data-value="${escapeHtml(run.id)}">
@@ -1811,7 +1824,7 @@ function renderConnectors() {
         <div class="trust-connector-stats ${linked ? "is-live" : ""}">
           <div class="trust-metric"><span class="k">Inventory</span><span class="v">${escapeHtml(label || "—")}</span></div>
           <div class="trust-metric"><span class="k">Last sync</span><span class="v">${escapeHtml(formatSyncAt(c.last_sync_at))}</span></div>
-          <div class="trust-metric"><span class="k">Schedule</span><span class="v">${linked ? "every 15 min" : "paused"}</span></div>
+          <div class="trust-metric"><span class="k">Schedule</span><span class="v">${escapeHtml(c.schedule || (linked ? "on demand" : "paused"))}</span></div>
         </div>
         ${just ? `<p class="trust-connect-flash" role="status">Linked — inventory refreshed below.</p>` : ""}
         <div class="trust-card-actions">${primary}</div>
@@ -2001,16 +2014,20 @@ function renderTrust() {
 
   const runRows = (t.runs || []).map((run) => {
     const copy = tapeCopy(run);
+    const sealed = String(run.id).startsWith("sealed_");
     const on = run.id === state.deskRunId ? "is-on" : "";
     const span =
       run.clock_start && run.clock_end ? `${run.clock_start} → ${run.clock_end}` : "—";
-    return `<div class="trust-row ${on}">
-      <span class="id">${escapeHtml(run.id)}</span>
-      <div>
-        <strong>${escapeHtml(copy.title)}</strong>
-        <p class="meta">${escapeHtml(copy.note || run.notes || "")}</p>
+    const kind = sealed ? "Sealed" : copy.kind;
+    const title = sealed ? "Sealed evidence" : copy.title;
+    const note = copy.note || run.notes || "";
+    return `<div class="trust-row ${on} ${sealed ? "is-sealed" : "is-archive"}">
+      <span class="id" title="${escapeHtml(run.id)}">${escapeHtml(run.id)}</span>
+      <div class="trust-row-copy">
+        <strong>${escapeHtml(title)}</strong>
+        ${note ? `<p class="meta">${escapeHtml(note)}</p>` : ""}
       </div>
-      <span class="kind">${escapeHtml(copy.kind)}</span>
+      <span class="kind">${escapeHtml(kind)}</span>
       <span class="n">${span}</span>
       <span class="n">${(run.samples || 0).toLocaleString()}</span>
       <span class="act trust-row-actions"><button type="button" class="text-btn" data-trust-inspect="${escapeHtml(run.id)}">Inspect</button><button type="button" class="text-btn" data-trust-tape="${escapeHtml(run.id)}">${run.id === state.deskRunId ? "Selected" : "View"}</button></span>
@@ -2019,7 +2036,7 @@ function renderTrust() {
   tapes.innerHTML =
     runRows.length > 0
       ? `<div class="trust-cols"><span>Run</span><span>Title</span><span>Kind</span><span>Span</span><span>Samples</span><span></span></div>${runRows.join("")}`
-      : `<p class="trust-empty">No tapes ingested yet.</p>`;
+      : `<p class="trust-empty">No archive tapes yet. Sync Telemetry archive on Trust.</p>`;
 
   const docRows = (t.documents || []).map((doc) => {
     const kindCls = doc.kind === "procedure" ? "kind-procedure" : "kind-incident";
@@ -3172,7 +3189,7 @@ async function createIncident(ev) {
     return;
   }
   if (!body.run_id) {
-    window.alert("Pick a telemetry tape first.");
+    window.alert("Pick an archive tape first.");
     return;
   }
   const res = await fetch("/incidents", {

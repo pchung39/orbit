@@ -22,10 +22,11 @@ from simulator.scenarios import clock_to_s, format_clock
 from simulator.simulate import load_and_validate
 from storage.sources import (
     bind_preview,
-    bind_run_for_alarm,
     list_activity,
     list_connectors,
     parse_alarm_clock,
+    resolve_archive_run,
+    seal_run_window,
     sync_connector,
 )
 from storage.store import (
@@ -87,6 +88,7 @@ class IncidentIn(BaseModel):
     alarm: str
     alarm_time: str | None = Field(default=None)
     title: str | None = Field(default=None)
+    # Archive source run to seal from (not the final sealed run_id).
     run_id: str | None = Field(default=None)
 
 
@@ -322,30 +324,25 @@ def open_incident(body: IncidentIn) -> dict[str, Any]:
     clock = parse_alarm_clock(body.alarm_time)
     try:
         with _conn() as conn:
-            if body.run_id:
-                runs = {row["id"] for row in list_runs(conn)}
-                if body.run_id not in runs:
-                    raise ValueError(f"unknown run {body.run_id} — connect Telemetry on Trust first")
-                preview = bind_preview(body.alarm)
-                label = (preview or {}).get("label") or body.run_id
-                notes = f"bound from demo-local · run {body.run_id} · {label} · alarm @ {clock}"
-                run_id = body.run_id
-            else:
-                run_id, notes = bind_run_for_alarm(conn, body.alarm, clock)
-            return create_incident(conn, run_id, body.alarm, body.title, notes=notes)
+            source_run_id, _label = resolve_archive_run(conn, body.alarm, body.run_id)
+            sealed_run_id, notes = seal_run_window(conn, source_run_id, body.alarm, clock)
+            return create_incident(conn, sealed_run_id, body.alarm, body.title, notes=notes)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
 
 @app.get("/sources")
 def sources() -> dict[str, Any]:
-    """Demo-local connectors that keep telemetry and library warm."""
+    """Archive adapter + library index. Cases seal a window at open — not a live feed."""
     with _conn() as conn:
         ensure_demo_incident(conn)
         connectors = list_connectors(conn)
     return {
         "adapters": "demo-local",
-        "note": "Auto-sync keeps the store warm. Cases still open from an operator alarm; ORBIT does not detect or command.",
+        "note": (
+            "Cases get a sealed evidence package at open; the archive stays outside the case. "
+            "Library sync rebuilds the search index on demand. ORBIT does not detect or command."
+        ),
         "connectors": connectors,
         "activity": list_activity(),
     }

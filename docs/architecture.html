@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ORBIT · Architecture · Sealed tape</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #111111;
+      --mute: #5a5a5a;
+      --faint: #888888;
+      --line: #e8e8e8;
+      --dash: #c8c8c8;
+      --wash: #fafafa;
+      --paper: #ffffff;
+      --cobalt: #1d4ed8;
+      --cobalt-soft: #eff4ff;
+      --cobalt-line: #93b4f5;
+      --human: #111111;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #e6e6e6;
+      color: var(--ink);
+      font-family: "IBM Plex Sans", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .stage {
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 48px 24px;
+    }
+
+    .poster {
+      width: 920px;
+      background: var(--paper);
+      padding: 48px 52px 44px;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+    }
+
+    .mast {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding-bottom: 28px;
+      border-bottom: 1px solid var(--ink);
+    }
+    .mast p {
+      margin: 0;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+    }
+    .mast .brand { font-weight: 500; letter-spacing: 0.16em; }
+    .mast .mid { color: var(--mute); font-weight: 400; letter-spacing: 0.08em; }
+    .mast .ai { color: var(--cobalt); font-weight: 400; letter-spacing: 0.08em; }
+
+    .title-block {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding: 36px 0 36px;
+    }
+    .title-block h1 {
+      margin: 0;
+      max-width: 18ch;
+      font-size: 48px;
+      font-weight: 500;
+      letter-spacing: -0.03em;
+      line-height: 1.08;
+    }
+    .title-block .lede {
+      margin: 0;
+      max-width: 64ch;
+      font-size: 16px;
+      line-height: 1.5;
+      color: var(--mute);
+    }
+
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .row {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      width: 100%;
+      padding: 16px 20px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+    }
+    .row.outside {
+      align-items: center;
+      justify-content: space-between;
+      border-style: dashed;
+      border-color: var(--dash);
+      background: transparent;
+    }
+    .row.wash { background: var(--wash); }
+    .row.human {
+      background: var(--human);
+      border-color: var(--human);
+      color: #fff;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .row.human .kicker { color: rgba(255, 255, 255, 0.55); }
+    .row.human .name { color: #fff; }
+    .row.human .note { color: rgba(255, 255, 255, 0.7); }
+    .row.human .tag { color: rgba(255, 255, 255, 0.55); }
+
+    .pair {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+    .pair > .cell {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding: 18px 20px;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      min-width: 0;
+    }
+
+    .kicker {
+      margin: 0;
+      width: 88px;
+      flex-shrink: 0;
+      padding-top: 3px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      color: var(--mute);
+    }
+    .outside .kicker { color: var(--faint); width: 88px; padding-top: 0; }
+    .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+    .name {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 500;
+      line-height: 1.25;
+    }
+    .note {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 400;
+      line-height: 1.45;
+      color: var(--mute);
+    }
+    .tag {
+      margin: 0;
+      flex-shrink: 0;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 12px;
+      color: var(--faint);
+      padding-top: 4px;
+    }
+    .outside-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      min-width: 0;
+    }
+    .outside .name { font-size: 16px; }
+    .outside .note { max-width: 42ch; text-align: right; }
+
+    .ai {
+      border: 1.5px solid var(--cobalt);
+      background: var(--cobalt-soft);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .ai-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 4px 4px 8px;
+    }
+    .ai-head .label {
+      margin: 0;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.14em;
+      color: var(--cobalt);
+    }
+    .ai-head .hint {
+      margin: 0;
+      font-size: 13px;
+      color: var(--cobalt);
+      opacity: 0.85;
+      text-align: right;
+      max-width: 42ch;
+    }
+    .ai-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+    .ai-card {
+      background: var(--paper);
+      border: 1px solid var(--cobalt-line);
+      padding: 16px 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 0;
+    }
+    .ai-card .num {
+      margin: 0;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.12em;
+      color: var(--cobalt);
+    }
+    .ai-card .name { font-size: 16px; }
+    .ai-card .note { font-size: 13px; line-height: 1.4; }
+    .tools {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 8px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      color: var(--ink);
+    }
+    .tools li::before { content: none; }
+
+    .foot {
+      margin-top: 28px;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--faint);
+    }
+
+    @media print {
+      body { background: #fff; }
+      .stage { padding: 0; }
+      .poster { box-shadow: none; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="stage">
+    <article class="poster" aria-label="ORBIT architecture poster">
+      <header class="mast">
+        <p class="brand">ORBIT · A1</p>
+        <p class="mid">Architecture · Aurora-1</p>
+        <p class="ai">Sealed tape · AI in cobalt</p>
+      </header>
+
+      <div class="title-block">
+        <h1>The machine stops at a recommendation.</h1>
+        <p class="lede">
+          ORBIT does not detect the alarm and does not uplink a command.
+          Opening a case seals a time window from the archive into durable evidence.
+          The console assembles tape, tools, procedure, and a similar prior so a human can decide why — then files the close.
+        </p>
+      </div>
+
+      <div class="stack">
+        <div class="row outside">
+          <div class="outside-left">
+            <p class="kicker">OUTSIDE</p>
+            <p class="name">Alarm already exists</p>
+          </div>
+          <p class="note">Detection is not ORBIT. The operator opens a case from an alarm they already have.</p>
+        </div>
+
+        <div class="row wash">
+          <p class="kicker">SPEC</p>
+          <div class="body">
+            <p class="name">aurora1_mission_model.yaml</p>
+            <p class="note">Canonical. Channels, limits, faults, and the story the rest of the stack must tell. If code and spec disagree, the spec wins.</p>
+          </div>
+          <p class="tag">11 channels</p>
+        </div>
+
+        <div class="pair">
+          <div class="cell">
+            <p class="kicker" style="width:auto">ARCHIVE</p>
+            <p class="name">Telemetry catalog</p>
+            <p class="note">Demo-local full runs (fault1, eps204, …). Sync refreshes the catalog on demand — not a live downlink.</p>
+          </div>
+          <div class="cell">
+            <p class="kicker" style="width:auto">LIBRARY</p>
+            <p class="name">Search index</p>
+            <p class="note">Procedures and prior close-outs. Sync rebuilds local embeddings on publish — not a live docs feed.</p>
+          </div>
+        </div>
+
+        <div class="row">
+          <p class="kicker">SEAL</p>
+          <div class="body">
+            <p class="name">Open case → sealed evidence package</p>
+            <p class="note">Operator picks archive tape + alarm + time. Backend copies warn crossing (or clock) ± pad into a new <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">sealed_*</span> run. The archive stays outside the case.</p>
+          </div>
+          <p class="tag">± pad</p>
+        </div>
+
+        <div class="row wash">
+          <p class="kicker">STORE</p>
+          <div class="body">
+            <p class="name">Postgres + pgvector</p>
+            <p class="note">Archive runs, sealed runs, incidents, documents. The investigator never reads files — only this store, through tools.</p>
+          </div>
+          <p class="tag">system of work</p>
+        </div>
+
+        <div class="ai">
+          <div class="ai-head">
+            <p class="label">AI SURFACE</p>
+            <p class="hint">Numbers only from tools. Claims are stamped. Commands are never sent.</p>
+          </div>
+          <div class="ai-grid">
+            <div class="ai-card">
+              <p class="num">01 · EMBED</p>
+              <p class="name">Local retrieval</p>
+              <p class="note">BAAI/bge-small-en-v1.5 · 384-d via fastembed. Ingest embeds procedures and incidents into pgvector. Search is cosine. No paid API.</p>
+            </div>
+            <div class="ai-card">
+              <p class="num">02 · TOOLS</p>
+              <p class="name">The only world</p>
+              <ul class="tools">
+                <li>sample</li>
+                <li>first_warn</li>
+                <li>events_before</li>
+                <li>get_doc</li>
+                <li>search_docs</li>
+                <li>channel_meta</li>
+              </ul>
+              <p class="note">Every call is logged. Telemetry is OBSERVED. Documents are DOCUMENTED.</p>
+            </div>
+            <div class="ai-card">
+              <p class="num">03 · INVESTIGATE</p>
+              <p class="name">Two providers, one contract</p>
+              <p class="note">HTTP always uses <span style="font-family:'IBM Plex Mono',monospace;font-size:12px">--provider rules</span>. Claude / OpenAI are CLI-only, same tools, ≤12 turns, temperature 0. Both stop at a tagged report.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <p class="kicker">CONSOLE</p>
+          <div class="body">
+            <p class="name">FastAPI + instrument UI</p>
+            <p class="note">Overview, incidents, six-step case, library, Trust Sources. Assemble report hits /investigate with rules only. The browser never calls Anthropic or OpenAI.</p>
+          </div>
+          <p class="tag">:8000</p>
+        </div>
+
+        <div class="row human">
+          <div class="outside-left">
+            <p class="kicker">HUMAN</p>
+            <p class="name">File the decision. Command stays on the ground.</p>
+          </div>
+          <p class="tag">NOT SENT</p>
+        </div>
+
+        <div class="row outside">
+          <div class="outside-left">
+            <p class="kicker">OUTSIDE</p>
+            <p class="name">No command uplink</p>
+          </div>
+          <p class="note">Eval scores the report against the matching close. Demo path cases stay on pre-seeded runs. Rules path is the bar.</p>
+        </div>
+      </div>
+
+      <footer class="foot">
+        <span>ORBIT · sealed-tape model · demo-local</span>
+        <span>archive → seal on open → case · library index sync</span>
+      </footer>
+    </article>
+  </div>
+</body>
+</html>

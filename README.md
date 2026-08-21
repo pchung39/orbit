@@ -77,10 +77,34 @@ A plausible story is not a cause until the procedure’s number is met. On **INC
 2. **Incidents** — case queue, craft signatures, next-up ordering
 3. **Case** — six-step spine: evidence → lead-up → tape → procedure → **the investigation** → decision
 4. **Library** — semantic search over procedures and close-outs (`/` or ⌘K)
-5. **Trust** — **Sources connectors** (telemetry + library; demo shows them connected), store health, eval scorecard, tape inspect
+5. **Trust** — **Sources** (telemetry archive + library index), store health, eval scorecard, tape inspect
 6. **Demo path** — collapsible guided tour that ends on proof, not prose
 
-**Open case** asks for an alarm, time, and telemetry tape (suggested from the alarm; you can change it). A demo-local adapter records the bind.
+**Open case** asks for an alarm, time, and **archive tape**. ORBIT **seals a time window** (warn ± pad) into a new evidence package for that case — it does not keep a live downlink. Demo path incidents (`INC-0205`, `0210`, …) are pre-seeded and unchanged.
+
+## Architecture (sealed tape)
+
+<p align="center">
+  <img src="docs/screenshots/architecture-sealed-tape.png" alt="ORBIT architecture — sealed tape poster" width="920" />
+</p>
+
+Interactive poster: open [`docs/architecture.html`](docs/architecture.html) in a browser.
+
+```mermaid
+flowchart LR
+  Archive[Archive catalog]
+  Open[Open case]
+  Seal[Seal window]
+  Case[Incident + sealed run]
+  LibSync[Library sync]
+  Index[Search index]
+
+  Archive --> Open
+  Open --> Seal --> Case
+  LibSync --> Index
+```
+
+ORBIT is an investigation workbench, not the mission archive. Upstream (demo-local here) holds full tapes and docs; opening a case materializes a **sealed** telemetry window; Library sync rebuilds the **search index**.
 
 <p align="center">
   <img src="docs/screenshots/incidents-dark.png" alt="Incidents — case table and craft signature rail" width="920" />
@@ -99,10 +123,10 @@ A plausible story is not a cause until the procedure’s number is met. On **INC
 | View | What it shows |
 |---|---|
 | **Overview** | Mission badge, Demo path, tape handoff, channel tiles + sparklines, orbit map |
-| **Incidents** | Filterable table, stats, **Next up**, **Signatures**; **Open case** = alarm + time + telemetry tape |
+| **Incidents** | Filterable table, stats, **Next up**, **Signatures**; **Open case** = alarm + time + archive tape → sealed package |
 | **Case** | Sticky spine, load compare, command lead-up, shared-axis traces, procedure satisfaction, stamped investigation, file decision |
 | **Library** | Full-page book: `/` search, kind + signature filters, index + reader |
-| **Trust** | **Sources** (Telemetry + Library connectors; demo-local sync), store health, scorecard, tape catalog, Inspect |
+| **Trust** | **Sources** (Telemetry archive + Library index; on-demand sync), archive/sealed catalog, scorecard, Inspect |
 | **Theme** | Dark default, light optional |
 
 <p align="center">
@@ -128,7 +152,7 @@ Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
 
 **Start here:** follow the in-product **Demo path** (INC-0205 → INC-0210 → Trust scorecard).
 
-**Sources (Trust):** Telemetry archive and Library start **Not connected**. **Connect** syncs demo-local data and lights up the inventory below; **Sync now** refreshes; **Disconnect** unlinks the UI (data stays in Postgres). Opening a case still needs an operator alarm plus a telemetry tape.
+**Sources (Trust):** Telemetry **archive** and **Library index** connectors. Sync refreshes the archive catalog or rebuilds embeddings on demand (not a live feed). Opening a case seals a time window from an archive tape into a durable `sealed_…` run for that incident.
 
 Local DB is `orbit` / `orbit` in `docker-compose.yml` — not a production secret. `.env` is for optional CLI keys only; do not commit it.
 
@@ -200,7 +224,7 @@ The spec is canonical: [`spec/aurora1_mission_model.yaml`](spec/aurora1_mission_
 ```
 spec/aurora1_mission_model.yaml
 simulator/          physics + scenarios
-storage/            ingest, query, local embeddings, trust snapshot, sources connectors
+storage/            ingest, query, local embeddings, trust snapshot, sources, seal windows
 agent/              investigate (rules | claude | openai)
 api/                HTTP + static console
 ui/                 overview, incidents, case, library, trust, demo path, sources

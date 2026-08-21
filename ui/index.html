@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=sources5" />
+    <link rel="stylesheet" href="/static/styles.css?v=seal2" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -184,12 +184,12 @@
               <div>
                 <p class="panel-kicker">Sources</p>
                 <h2 id="trust-connectors-title">Connectors</h2>
-                <p class="trust-panel-lede">Connect a source to link it into this console. Sync pulls demo-local tapes or re-embeds procedures and priors. Cases still start from an operator alarm.</p>
+                <p class="trust-panel-lede">Archive adapter and library index. Sync refreshes the catalog or rebuilds embeddings on demand. Opening a case seals a time window — ORBIT does not keep a live downlink.</p>
               </div>
             </header>
             <div class="trust-connectors" id="trust-connectors"></div>
             <div class="trust-activity" id="trust-activity" hidden>
-              <p class="trust-activity-kicker">Recent syncs</p>
+              <p class="trust-activity-kicker">Recent activity</p>
               <ul class="trust-activity-list" id="trust-activity-list"></ul>
             </div>
           </section>
@@ -198,8 +198,8 @@
             <header class="trust-panel-head">
               <div>
                 <p class="panel-kicker">Tape catalog</p>
-                <h2 id="trust-tapes-title">Ingested runs</h2>
-                <p class="trust-panel-lede">Each tape is a simulator replay in Postgres. Overview shows the last sample — not live telemetry.</p>
+                <h2 id="trust-tapes-title">Archive and sealed runs</h2>
+                <p class="trust-panel-lede">Archive tapes feed Overview and sealing. Sealed runs are case evidence packages copied at open.</p>
               </div>
             </header>
             <div class="trust-tapes" id="trust-tapes"></div>
@@ -209,7 +209,7 @@
               <div>
                 <p class="panel-kicker">Library index</p>
                 <h2 id="trust-library-title">Searchable sources</h2>
-                <p class="trust-panel-lede">Procedures and prior incidents embedded locally for semantic search during investigation.</p>
+                <p class="trust-panel-lede">Procedures and prior close-outs in the local search index. Sync rebuilds embeddings on publish.</p>
               </div>
             </header>
             <div class="trust-sources" id="trust-sources"></div>
@@ -377,7 +377,7 @@
             <p class="eyebrow" id="slip-title">Open</p>
             <p class="slip-id" id="slip-id">INC-····</p>
           </div>
-          <p class="slip-stub-note">You already have the alarm. Pick the sealed tape — ORBIT does not detect.</p>
+          <p class="slip-stub-note">You already have the alarm. ORBIT seals a time window from the archive — it does not detect.</p>
         </aside>
         <form class="slip-body" id="new-incident">
           <p class="pick-label">Alarm</p>
@@ -387,7 +387,7 @@
           <label class="slip-title-field">Alarm time <span class="opt">UTC clock</span>
             <input name="alarm_time" id="incident-alarm-time" type="text" inputmode="numeric" placeholder="14:32:00" autocomplete="off" spellcheck="false" />
           </label>
-          <p class="pick-label">Telemetry tape</p>
+          <p class="pick-label">Archive tape</p>
           <p class="pick-hint" id="incident-bind-preview" aria-live="polite"></p>
           <div class="picks picks-tapes" id="incident-run"></div>
           <div class="slip-foot">
@@ -467,6 +467,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=sources5" type="module"></script>
+    <script src="/static/app.js?v=seal2" type="module"></script>
   </body>
 </html>
