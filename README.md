@@ -77,8 +77,10 @@ A plausible story is not a cause until the procedure’s number is met. On **INC
 2. **Incidents** — case queue, craft signatures, next-up ordering
 3. **Case** — six-step spine: evidence → lead-up → tape → procedure → **the investigation** → decision
 4. **Library** — semantic search over procedures and close-outs (`/` or ⌘K)
-5. **Trust** — store health, library embeddings, investigator mode, **eval scorecard**, tape inspect
+5. **Trust** — **Sources connectors** (telemetry + library; demo shows them connected), store health, eval scorecard, tape inspect
 6. **Demo path** — collapsible guided tour that ends on proof, not prose
+
+**Open case** asks for an alarm, time, and telemetry tape (suggested from the alarm; you can change it). A demo-local adapter records the bind.
 
 <p align="center">
   <img src="docs/screenshots/incidents-dark.png" alt="Incidents — case table and craft signature rail" width="920" />
@@ -97,10 +99,10 @@ A plausible story is not a cause until the procedure’s number is met. On **INC
 | View | What it shows |
 |---|---|
 | **Overview** | Mission badge, Demo path, tape handoff, channel tiles + sparklines, orbit map |
-| **Incidents** | Filterable table, stats, **Next up**, **Signatures** |
+| **Incidents** | Filterable table, stats, **Next up**, **Signatures**; **Open case** = alarm + time + telemetry tape |
 | **Case** | Sticky spine, load compare, command lead-up, shared-axis traces, procedure satisfaction, stamped investigation, file decision |
 | **Library** | Full-page book: `/` search, kind + signature filters, index + reader |
-| **Trust** | Store + library status, product boundaries, tape catalog, **Inspect**, eval scorecard |
+| **Trust** | **Sources** (Telemetry + Library connectors; demo-local sync), store health, scorecard, tape catalog, Inspect |
 | **Theme** | Dark default, light optional |
 
 <p align="center">
@@ -125,6 +127,8 @@ uvicorn api.app:app --host 127.0.0.1 --port 8000 --reload
 Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
 
 **Start here:** follow the in-product **Demo path** (INC-0205 → INC-0210 → Trust scorecard).
+
+**Sources (Trust):** Telemetry archive and Library start **Not connected**. **Connect** syncs demo-local data and lights up the inventory below; **Sync now** refreshes; **Disconnect** unlinks the UI (data stays in Postgres). Opening a case still needs an operator alarm plus a telemetry tape.
 
 Local DB is `orbit` / `orbit` in `docker-compose.yml` — not a production secret. `.env` is for optional CLI keys only; do not commit it.
 
@@ -196,10 +200,10 @@ The spec is canonical: [`spec/aurora1_mission_model.yaml`](spec/aurora1_mission_
 ```
 spec/aurora1_mission_model.yaml
 simulator/          physics + scenarios
-storage/            ingest, query, local embeddings, trust snapshot
+storage/            ingest, query, local embeddings, trust snapshot, sources connectors
 agent/              investigate (rules | claude | openai)
 api/                HTTP + static console
-ui/                 overview, incidents, case, library, trust, demo path
+ui/                 overview, incidents, case, library, trust, demo path, sources
 procedures/         EPS-17, PAY-04, EPS-09
 incidents/          closed priors (INC-0187, INC-0191, INC-0162, …)
 eval/

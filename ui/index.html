@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=report2" />
+    <link rel="stylesheet" href="/static/styles.css?v=sources5" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -35,7 +35,6 @@
           <span class="name">AURORA-1</span>
           <span class="st">LINKING</span>
         </button>
-        <span class="clock" id="focus-clock">--:--:--</span>
         <button type="button" class="icon-btn theme-btn" id="theme-toggle" aria-label="Switch colour theme" title="Switch colour theme">
           <svg class="i-moon" viewBox="0 0 16 16" aria-hidden="true">
             <path d="M13.2 9.6A5.6 5.6 0 0 1 6.4 2.8a5.6 5.6 0 1 0 6.8 6.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" />
@@ -180,7 +179,20 @@
 
         <section class="trust-desk" id="trust-desk" aria-label="Trust and data sources">
           <header class="trust-head" id="trust-head"></header>
-          <div class="trust-boundary" id="trust-boundary"></div>
+          <section class="trust-panel trust-sources-panel" aria-labelledby="trust-connectors-title">
+            <header class="trust-panel-head">
+              <div>
+                <p class="panel-kicker">Sources</p>
+                <h2 id="trust-connectors-title">Connectors</h2>
+                <p class="trust-panel-lede">Connect a source to link it into this console. Sync pulls demo-local tapes or re-embeds procedures and priors. Cases still start from an operator alarm.</p>
+              </div>
+            </header>
+            <div class="trust-connectors" id="trust-connectors"></div>
+            <div class="trust-activity" id="trust-activity" hidden>
+              <p class="trust-activity-kicker">Recent syncs</p>
+              <ul class="trust-activity-list" id="trust-activity-list"></ul>
+            </div>
+          </section>
           <div class="trust-grid" id="trust-grid"></div>
           <section class="trust-panel" aria-labelledby="trust-tapes-title">
             <header class="trust-panel-head">
@@ -365,14 +377,18 @@
             <p class="eyebrow" id="slip-title">Open</p>
             <p class="slip-id" id="slip-id">INC-····</p>
           </div>
-          <p class="slip-stub-note">You already have the alarm. ORBIT does not detect.</p>
+          <p class="slip-stub-note">You already have the alarm. Pick the sealed tape — ORBIT does not detect.</p>
         </aside>
         <form class="slip-body" id="new-incident">
           <p class="pick-label">Alarm</p>
           <input type="hidden" name="alarm" id="incident-alarm-value" value="" />
           <input type="hidden" name="run_id" id="incident-run-value" value="" />
           <div class="picks picks-alarms" id="incident-alarm"></div>
-          <p class="pick-label">Tape</p>
+          <label class="slip-title-field">Alarm time <span class="opt">UTC clock</span>
+            <input name="alarm_time" id="incident-alarm-time" type="text" inputmode="numeric" placeholder="14:32:00" autocomplete="off" spellcheck="false" />
+          </label>
+          <p class="pick-label">Telemetry tape</p>
+          <p class="pick-hint" id="incident-bind-preview" aria-live="polite"></p>
           <div class="picks picks-tapes" id="incident-run"></div>
           <div class="slip-foot">
             <label class="slip-title-field">Headline <span class="opt">optional</span>
@@ -451,6 +467,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=report2" type="module"></script>
+    <script src="/static/app.js?v=sources5" type="module"></script>
   </body>
 </html>

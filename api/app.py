@@ -20,6 +20,14 @@ from agent.investigate import investigate_rules
 from agent.tools import Tools
 from simulator.scenarios import clock_to_s, format_clock
 from simulator.simulate import load_and_validate
+from storage.sources import (
+    bind_preview,
+    bind_run_for_alarm,
+    list_activity,
+    list_connectors,
+    parse_alarm_clock,
+    sync_connector,
+)
 from storage.store import (
     connect,
     create_incident,
@@ -76,9 +84,10 @@ INSPECT_CHANNELS = WORKSPACE_CHANNELS
 INSPECT_FOCUS_PAD_S = 8 * 60
 
 class IncidentIn(BaseModel):
-    run_id: str
     alarm: str
+    alarm_time: str | None = Field(default=None)
     title: str | None = Field(default=None)
+    run_id: str | None = Field(default=None)
 
 
 def _entry_alarms(spec: dict[str, Any]) -> list[dict[str, Any]]:
@@ -86,14 +95,16 @@ def _entry_alarms(spec: dict[str, Any]) -> list[dict[str, Any]]:
     for name, meta in spec["channels"].items():
         if meta.get("warn_limit") is None:
             continue
-        out.append(
-            {
-                "id": name,
-                "unit": meta.get("unit"),
-                "warn_limit": meta.get("warn_limit"),
-                "physical_meaning": meta.get("physical_meaning"),
-            }
-        )
+        item = {
+            "id": name,
+            "unit": meta.get("unit"),
+            "warn_limit": meta.get("warn_limit"),
+            "physical_meaning": meta.get("physical_meaning"),
+        }
+        preview = bind_preview(name)
+        if preview:
+            item["bind"] = preview
+        out.append(item)
     return out
 
 
@@ -308,12 +319,55 @@ def open_incident(body: IncidentIn) -> dict[str, Any]:
     allowed = {item["id"] for item in _entry_alarms(spec)}
     if body.alarm not in allowed:
         raise HTTPException(400, f"{body.alarm} is not an entry alarm")
+    clock = parse_alarm_clock(body.alarm_time)
     try:
         with _conn() as conn:
-            return create_incident(conn, body.run_id, body.alarm, body.title)
+            if body.run_id:
+                runs = {row["id"] for row in list_runs(conn)}
+                if body.run_id not in runs:
+                    raise ValueError(f"unknown run {body.run_id} — connect Telemetry on Trust first")
+                preview = bind_preview(body.alarm)
+                label = (preview or {}).get("label") or body.run_id
+                notes = f"bound from demo-local · run {body.run_id} · {label} · alarm @ {clock}"
+                run_id = body.run_id
+            else:
+                run_id, notes = bind_run_for_alarm(conn, body.alarm, clock)
+            return create_incident(conn, run_id, body.alarm, body.title, notes=notes)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 
+
+@app.get("/sources")
+def sources() -> dict[str, Any]:
+    """Demo-local connectors that keep telemetry and library warm."""
+    with _conn() as conn:
+        ensure_demo_incident(conn)
+        connectors = list_connectors(conn)
+    return {
+        "adapters": "demo-local",
+        "note": "Auto-sync keeps the store warm. Cases still open from an operator alarm; ORBIT does not detect or command.",
+        "connectors": connectors,
+        "activity": list_activity(),
+    }
+
+
+@app.get("/sources/activity")
+def sources_activity(limit: int = Query(default=20, ge=1, le=50)) -> list[dict[str, Any]]:
+    return list_activity(limit)
+
+
+@app.post("/sources/{connector_id}/sync")
+def sources_sync(connector_id: str) -> dict[str, Any]:
+    try:
+        with _conn() as conn:
+            ensure_demo_incident(conn)
+            connector = sync_connector(conn, connector_id)
+    except ValueError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    return {
+        "connector": connector,
+        "activity": list_activity(),
+    }
 
 @app.get("/incidents/{incident_id}")
 def incident(incident_id: str) -> dict[str, Any]:

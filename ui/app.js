@@ -500,11 +500,35 @@ function tracesToDraw() {
 }
 
 const DEMO_PATH_KEY = "orbit-demo-path";
+const SOURCE_LINKS_KEY = "orbit-source-links";
 const DEMO_BEATS = [
   { key: "heater", incidentId: "INC-0205", label: "Heater", sub: "INC-0205", n: "01" },
   { key: "payload", incidentId: "INC-0210", label: "Payload", sub: "INC-0210", n: "02" },
   { key: "trust", label: "Proof", sub: "Scorecard", n: "03" },
 ];
+
+function emptySourceLinks() {
+  /* Demo default: show the connected UI without requiring a manual Connect click. */
+  return { telemetry: true, library: true };
+}
+
+function loadSourceLinks() {
+  /* Demo spoof: always present as connected so the linked UI is visible. */
+  return emptySourceLinks();
+}
+
+function persistSourceLinks() {
+  try {
+    window.localStorage.setItem(SOURCE_LINKS_KEY, JSON.stringify(state.sourceLinks));
+  } catch (err) {
+    /* ignore quota */
+  }
+}
+
+function setSourceLinked(id, linked) {
+  state.sourceLinks = { ...state.sourceLinks, [id]: !!linked };
+  persistSourceLinks();
+}
 
 function emptyDemoPathState() {
   return {
@@ -571,6 +595,11 @@ const state = {
   openDoc: null,
   trust: null,
   trustLoading: false,
+  sources: null,
+  sourcesLoading: false,
+  sourcesSyncing: null,
+  sourcesJustConnected: null,
+  sourceLinks: loadSourceLinks(),
   demoPath: loadDemoPathState(),
   inspector: {
     open: false,
@@ -1263,15 +1292,11 @@ function pinTape(t, { scroll = false } = {}) {
 function updateReadouts() {
   const a = analysis();
   if (state.view === "home" || state.view === "incidents") {
-    const clockEl = $("focus-clock");
-    if (clockEl) clockEl.textContent = state.desk?.clock || "--:--:--";
     return;
   }
   const tPin = state.pinT ?? a?.t;
   const tHover = state.hoverT;
   const t = tHover ?? tPin;
-  const clockEl = $("focus-clock");
-  if (clockEl) clockEl.textContent = clock(t);
   const parts = tracesToDraw().map((ch) => {
     const row = sampleAt(series(ch.id), t);
     const unit = meta(ch.id).unit || "";
@@ -1502,10 +1527,67 @@ function nextIncidentPreview() {
 function setPick(kind, value) {
   const hidden = $(kind === "alarm" ? "incident-alarm-value" : "incident-run-value");
   const root = $(kind === "alarm" ? "incident-alarm" : "incident-run");
+  if (!hidden || !root) return;
   hidden.value = value;
   root.querySelectorAll(".pick").forEach((btn) => {
     btn.classList.toggle("is-on", btn.dataset.value === value);
   });
+  if (kind === "alarm") {
+    suggestTapeForAlarm(value);
+    updateBindPreview();
+  } else {
+    updateBindPreview();
+  }
+}
+
+function defaultAlarmTime() {
+  const clock = state.desk?.clock;
+  if (clock && /^\d{2}:\d{2}:\d{2}$/.test(clock)) return clock;
+  return "14:32:00";
+}
+
+function suggestedRunForAlarm(alarm) {
+  const ch = state.alarms.find((item) => item.id === alarm);
+  const preferred = ch?.bind?.run_id;
+  if (preferred && state.runs.some((r) => r.id === preferred)) return preferred;
+  if (alarm === "PAY.payload_current") {
+    const pay = state.runs.find((r) => r.id === "pay002");
+    if (pay) return pay.id;
+  }
+  if (alarm === "EPS.battery_voltage") {
+    const batt = state.runs.find((r) => r.id === "batt003");
+    if (batt) return batt.id;
+  }
+  const fault = state.runs.find((r) => r.id === "fault1");
+  if (fault) return fault.id;
+  return (state.runs.find((r) => r.id === "eps204") || state.runs[0])?.id || "";
+}
+
+function suggestTapeForAlarm(alarm) {
+  const runId = suggestedRunForAlarm(alarm);
+  if (runId) setPick("run", runId);
+}
+
+function updateBindPreview() {
+  const el = $("incident-bind-preview");
+  if (!el) return;
+  const alarm = $("incident-alarm-value")?.value;
+  const runId = $("incident-run-value")?.value;
+  const ch = state.alarms.find((item) => item.id === alarm);
+  const suggested = ch?.bind?.run_id;
+  if (!alarm) {
+    el.textContent = "Pick an alarm, then confirm the telemetry tape.";
+    return;
+  }
+  if (runId && suggested && runId === suggested) {
+    el.textContent = `Suggested for this alarm: ${runId}${ch?.bind?.label ? ` · ${ch.bind.label}` : ""}. Change the tape if needed.`;
+    return;
+  }
+  if (runId) {
+    el.textContent = `Using tape ${runId}. Suggested for this alarm was ${suggested || "any sealed run"}.`;
+    return;
+  }
+  el.textContent = "Select a telemetry tape for this case.";
 }
 
 function fillCreateForm() {
@@ -1531,15 +1613,17 @@ function fillCreateForm() {
       </button>`;
     })
     .join("");
+  const timeInput = $("incident-alarm-time");
+  if (timeInput && !timeInput.value) timeInput.value = defaultAlarmTime();
   const alarm = $("incident-alarm-value").value || ALARM;
-  const run = $("incident-run-value").value || (state.runs.find((r) => r.id === "eps204") || state.runs[0])?.id || "";
   if (state.alarms.some((ch) => ch.id === alarm)) setPick("alarm", alarm);
   else if (state.alarms[0]) setPick("alarm", state.alarms[0].id);
-  if (state.runs.some((r) => r.id === run)) setPick("run", run);
-  else if (state.runs[0]) setPick("run", state.runs[0].id);
+  else updateBindPreview();
 }
 
 function openSlip() {
+  const timeInput = $("incident-alarm-time");
+  if (timeInput) timeInput.value = defaultAlarmTime();
   fillCreateForm();
   $("slip").hidden = false;
 }
@@ -1587,12 +1671,18 @@ async function loadTrust() {
   state.trustLoading = true;
   renderTrust();
   try {
-    const res = await fetch("/trust");
-    if (!res.ok) throw new Error(`trust ${res.status}`);
-    state.trust = await res.json();
+    const [trustRes, sourcesRes] = await Promise.all([fetch("/trust"), fetch("/sources")]);
+    if (!trustRes.ok) throw new Error(`trust ${trustRes.status}`);
+    state.trust = await trustRes.json();
     setStoreStatus(state.trust.store?.linked, state.trust.store?.linked ? "STORE OK" : "NO STORE");
+    if (sourcesRes.ok) {
+      state.sources = await sourcesRes.json();
+    } else {
+      state.sources = null;
+    }
   } catch (err) {
     state.trust = null;
+    state.sources = null;
     setStoreStatus(false, "NO STORE");
     if ($("trust-head")) {
       $("trust-head").innerHTML = `<h1>Trust</h1><p class="trust-head-lede">${escapeHtml(err.message)}</p>`;
@@ -1602,6 +1692,151 @@ async function loadTrust() {
     renderTrust();
     focusDemoScorecard();
   }
+}
+
+async function syncSource(connectorId, { connect = true } = {}) {
+  if (state.sourcesSyncing) return;
+  state.sourcesSyncing = connectorId;
+  renderTrust();
+  try {
+    const res = await fetch(`/sources/${encodeURIComponent(connectorId)}/sync`, { method: "POST" });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || `sync ${res.status}`);
+    }
+    const data = await res.json();
+    if (!state.sources) state.sources = { connectors: [], activity: [] };
+    state.sources.activity = data.activity || state.sources.activity || [];
+    state.sources.connectors = (state.sources.connectors || []).map((c) =>
+      c.id === data.connector?.id ? data.connector : c
+    );
+    if (data.connector && !(state.sources.connectors || []).some((c) => c.id === data.connector.id)) {
+      state.sources.connectors = [...(state.sources.connectors || []), data.connector];
+    }
+    if (connect) {
+      setSourceLinked(connectorId, true);
+      state.sourcesJustConnected = connectorId;
+    }
+    await loadTrust();
+    await loadBootstrapLists();
+    if (state.sourcesJustConnected) {
+      window.setTimeout(() => {
+        if (state.sourcesJustConnected === connectorId) {
+          state.sourcesJustConnected = null;
+          renderTrust();
+        }
+      }, 2800);
+    }
+  } catch (err) {
+    window.alert(err.message || "Sync failed");
+    renderTrust();
+  } finally {
+    state.sourcesSyncing = null;
+    renderTrust();
+  }
+}
+
+function disconnectSource(connectorId) {
+  setSourceLinked(connectorId, false);
+  if (state.sourcesJustConnected === connectorId) state.sourcesJustConnected = null;
+  renderTrust();
+}
+
+async function loadBootstrapLists() {
+  try {
+    const [runsRes, alarmRes] = await Promise.all([fetch("/runs"), fetch("/entry-alarms")]);
+    if (runsRes.ok) state.runs = await runsRes.json();
+    if (alarmRes.ok) state.alarms = await alarmRes.json();
+  } catch (err) {
+    /* keep existing */
+  }
+}
+
+function connectorTone(status, linked) {
+  if (linked) return "ok";
+  if (status === "synced" || status === "empty") return "warn";
+  return "bad";
+}
+
+function formatSyncAt(iso) {
+  if (!iso) return "Never";
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch (err) {
+    return iso;
+  }
+}
+
+function renderConnectors() {
+  const root = $("trust-connectors");
+  const activityRoot = $("trust-activity");
+  const activityList = $("trust-activity-list");
+  if (!root) return;
+
+  const connectors = state.sources?.connectors || [];
+  if (!connectors.length) {
+    root.innerHTML = `<p class="trust-empty">Connectors unavailable. Is the API running?</p>`;
+    if (activityRoot) activityRoot.hidden = true;
+    return;
+  }
+
+  root.innerHTML = connectors
+    .map((c) => {
+      const linked = !!state.sourceLinks?.[c.id];
+      const syncing = state.sourcesSyncing === c.id;
+      const just = state.sourcesJustConnected === c.id;
+      const tone = connectorTone(c.status, linked);
+      const label = c.stats?.label || "";
+      const linkLabel = linked ? "Connected" : "Not connected";
+      const primary = linked
+        ? `<button type="button" class="btn-ghost btn" data-source-sync="${escapeHtml(c.id)}" ${syncing ? "disabled" : ""}>${syncing ? "Syncing…" : "Sync now"}</button>
+           <button type="button" class="text-btn" data-source-disconnect="${escapeHtml(c.id)}" ${syncing ? "disabled" : ""}>Disconnect</button>`
+        : `<button type="button" class="btn" data-source-connect="${escapeHtml(c.id)}" ${syncing ? "disabled" : ""}>${syncing ? "Connecting…" : "Connect"}</button>`;
+      return `<article class="trust-connector is-${tone} ${linked ? "is-linked" : "is-unlinked"} ${just ? "is-just-linked" : ""} ${syncing ? "is-syncing" : ""}">
+        <div class="trust-card-head">
+          <div>
+            <p class="trust-card-kicker">${escapeHtml(c.adapter || "demo-local")}</p>
+            <h3>${escapeHtml(c.name)}</h3>
+          </div>
+          <span class="trust-link-badge ${linked ? "is-on" : ""}">${linkLabel}</span>
+        </div>
+        <p class="trust-note">${escapeHtml(c.description || "")}</p>
+        <div class="trust-connector-stats ${linked ? "is-live" : ""}">
+          <div class="trust-metric"><span class="k">Inventory</span><span class="v">${escapeHtml(label || "—")}</span></div>
+          <div class="trust-metric"><span class="k">Last sync</span><span class="v">${escapeHtml(formatSyncAt(c.last_sync_at))}</span></div>
+          <div class="trust-metric"><span class="k">Schedule</span><span class="v">${linked ? "every 15 min" : "paused"}</span></div>
+        </div>
+        ${just ? `<p class="trust-connect-flash" role="status">Linked — inventory refreshed below.</p>` : ""}
+        <div class="trust-card-actions">${primary}</div>
+      </article>`;
+    })
+    .join("");
+
+  const activity = state.sources?.activity || [];
+  if (activityRoot && activityList) {
+    activityRoot.hidden = activity.length === 0;
+    activityList.innerHTML = activity
+      .map(
+        (ev) => `<li><span class="when">${escapeHtml(formatSyncAt(ev.at))}</span>
+          <span class="conn">${escapeHtml(ev.connector || "")}</span>
+          <span class="msg">${escapeHtml(ev.message || "")}</span></li>`
+      )
+      .join("");
+  }
+
+  const tapesPanel = $("trust-tapes")?.closest(".trust-panel");
+  const libraryPanel = $("trust-sources")?.closest(".trust-panel");
+  tapesPanel?.classList.toggle("is-source-linked", !!state.sourceLinks?.telemetry);
+  tapesPanel?.classList.toggle("is-source-dim", !state.sourceLinks?.telemetry);
+  libraryPanel?.classList.toggle("is-source-linked", !!state.sourceLinks?.library);
+  libraryPanel?.classList.toggle("is-source-dim", !state.sourceLinks?.library);
 }
 
 function focusDemoScorecard() {
@@ -1616,12 +1851,11 @@ function focusDemoScorecard() {
 function renderTrust() {
   const t = state.trust;
   const head = $("trust-head");
-  const boundary = $("trust-boundary");
   const grid = $("trust-grid");
   const tapes = $("trust-tapes");
   const sources = $("trust-sources");
   const foot = $("trust-foot");
-  if (!head || !boundary || !grid || !tapes || !sources || !foot) return;
+  if (!head || !grid || !tapes || !sources || !foot) return;
 
   if (state.trustLoading && !t) {
     head.innerHTML = `<h1>Trust</h1><p class="trust-head-lede">Checking data sources…</p>`;
@@ -1629,15 +1863,17 @@ function renderTrust() {
     tapes.innerHTML = `<p class="trust-empty">Loading…</p>`;
     sources.innerHTML = "";
     foot.textContent = "";
+    const connectors = $("trust-connectors");
+    if (connectors) connectors.innerHTML = `<p class="trust-empty">Loading connectors…</p>`;
     return;
   }
   if (!t) {
     head.innerHTML = `<h1>Trust</h1><p class="trust-head-lede">Could not load store status. Is Postgres running?</p>`;
-    boundary.innerHTML = "";
     grid.innerHTML = "";
-    tapes.innerHTML = `<p class="trust-empty">Run <code>docker compose up -d</code> and <code>python -m storage ingest</code>, then refresh.</p>`;
+    tapes.innerHTML = `<p class="trust-empty">Run <code>docker compose up -d</code> and sync Telemetry on Trust, or <code>python -m storage ingest</code>.</p>`;
     sources.innerHTML = "";
     foot.textContent = "";
+    renderConnectors();
     return;
   }
 
@@ -1651,19 +1887,13 @@ function renderTrust() {
 
   head.innerHTML = `
     <h1>Can I trust this console?</h1>
-    <p class="trust-head-lede">Where ORBIT's numbers come from, what is ingested, and what the product will never do on its own.</p>
+    <p class="trust-head-lede">Where ORBIT's numbers come from, and what is ingested for investigation.</p>
     <div class="trust-summary">
       <span class="trust-pill is-${storeTone}"><span class="dot"></span>Telemetry store</span>
       <span class="trust-pill is-${libraryTone}"><span class="dot"></span>Library index</span>
       <span class="trust-pill is-ok"><span class="dot"></span>Rules investigator</span>
       <span class="trust-pill is-${storeTone}"><span class="dot"></span>${escapeHtml(t.mission || "Aurora-1")}</span>
     </div>`;
-
-  boundary.innerHTML = `
-    <h2>Product boundaries</h2>
-    <ul>${(t.boundaries || [])
-      .map((line) => `<li>${escapeHtml(line)}</li>`)
-      .join("")}</ul>`;
 
   const sc = t.eval?.scorecard;
   const scoreTone = sc ? (sc.ok ? "ok" : "bad") : "warn";
@@ -1808,6 +2038,7 @@ function renderTrust() {
       : `<p class="trust-empty">No library documents embedded. Run ingest to index procedures and priors.</p>`;
 
   foot.textContent = `Spec: ${t.spec?.fault_families ?? 0} fault families · ${t.store?.events ?? 0} scripted events in store · Health endpoint /health`;
+  renderConnectors();
 }
 
 function defaultInspectForRun(runId) {
@@ -2346,9 +2577,6 @@ function renderDesk() {
     craft.classList.toggle("is-eclipse", Boolean(orbit) && orbit.illumination !== "sun");
   }
   if ($("home-orbit")) $("home-orbit").innerHTML = orbitSvg(orbit);
-  if ($("focus-clock") && (state.view === "home" || state.view === "incidents" || state.view === "library")) {
-    $("focus-clock").textContent = desk?.clock || "--:--:--";
-  }
 
   renderTapeTrigger();
 
@@ -2393,7 +2621,6 @@ function bindDeskSparks() {
       const dot = el.querySelector(".spark-dot");
       if (value) value.textContent = tileValue(ch, sample);
       if (limit && sample) limit.textContent = `${sample.clock} on tape`;
-      if (state.view === "home" && sample?.clock) $("focus-clock").textContent = sample.clock;
       if (dot && g && sample) {
         const i = (ch.spark || []).indexOf(sample);
         const v = g.vals[i];
@@ -2412,7 +2639,6 @@ function bindDeskSparks() {
       show(ch);
       const dot = el.querySelector(".spark-dot");
       if (dot) dot.innerHTML = "";
-      if (state.view === "home") $("focus-clock").textContent = state.desk?.clock || "--:--:--";
       const limit = el.querySelector(".ch-limit");
       if (limit) limit.textContent = tileLimit(ch);
     });
@@ -2936,12 +3162,17 @@ async function createIncident(ev) {
   ev.preventDefault();
   const form = $("new-incident");
   const body = {
-    run_id: form.run_id.value,
     alarm: form.alarm.value,
+    run_id: form.run_id?.value || $("incident-run-value")?.value || null,
+    alarm_time: ($("incident-alarm-time")?.value || "").trim() || null,
     title: form.title.value.trim() || null,
   };
-  if (!body.run_id || !body.alarm) {
-    window.alert("Pick a tape and an alarm first.");
+  if (!body.alarm) {
+    window.alert("Pick an alarm first.");
+    return;
+  }
+  if (!body.run_id) {
+    window.alert("Pick a telemetry tape first.");
     return;
   }
   const res = await fetch("/incidents", {
@@ -3620,6 +3851,21 @@ function bind() {
     if (btn) openDoc(btn.dataset.doc);
   });
   $("trust-desk").addEventListener("click", (ev) => {
+    const connectBtn = ev.target.closest("[data-source-connect]");
+    if (connectBtn) {
+      syncSource(connectBtn.dataset.sourceConnect, { connect: true });
+      return;
+    }
+    const syncBtn = ev.target.closest("[data-source-sync]");
+    if (syncBtn) {
+      syncSource(syncBtn.dataset.sourceSync, { connect: true });
+      return;
+    }
+    const disconnectBtn = ev.target.closest("[data-source-disconnect]");
+    if (disconnectBtn) {
+      disconnectSource(disconnectBtn.dataset.sourceDisconnect);
+      return;
+    }
     if (ev.target.closest("[data-trust-overview]")) {
       goHome();
       return;
