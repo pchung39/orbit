@@ -499,6 +499,44 @@ function tracesToDraw() {
   return TRACE_CATALOG.map((ch) => ({ ...ch, primary: ch.id === alarm }));
 }
 
+const DEMO_PATH_KEY = "orbit-demo-path";
+const DEMO_BEATS = [
+  { key: "heater", incidentId: "INC-0205", label: "Heater", sub: "INC-0205", n: "01" },
+  { key: "payload", incidentId: "INC-0210", label: "Payload", sub: "INC-0210", n: "02" },
+  { key: "trust", label: "Proof", sub: "Scorecard", n: "03" },
+];
+
+function emptyDemoPathState() {
+  return {
+    dismissed: false,
+    collapsed: false,
+    visitedHeater: false,
+    visitedPayload: false,
+    visitedTrust: false,
+  };
+}
+
+function loadDemoPathState() {
+  try {
+    const raw = window.localStorage.getItem(DEMO_PATH_KEY);
+    if (!raw) return emptyDemoPathState();
+    const parsed = JSON.parse(raw);
+    /* Old keys (visited204 / visited212) reset so stale progress cannot strand the new path. */
+    if ("visited204" in parsed || "visited212" in parsed) {
+      return emptyDemoPathState();
+    }
+    return {
+      dismissed: !!parsed.dismissed,
+      collapsed: !!parsed.collapsed,
+      visitedHeater: !!parsed.visitedHeater,
+      visitedPayload: !!parsed.visitedPayload,
+      visitedTrust: !!parsed.visitedTrust,
+    };
+  } catch (err) {
+    return emptyDemoPathState();
+  }
+}
+
 const state = {
   view: "home",
   runs: [],
@@ -509,7 +547,7 @@ const state = {
   runId: null,
   workspace: null,
   desk: null,
-  deskRunId: "eps204",
+  deskRunId: "fault1",
   tapePaletteOpen: false,
   tapePaletteQuery: "",
   incidentFilter: "all",
@@ -533,6 +571,7 @@ const state = {
   openDoc: null,
   trust: null,
   trustLoading: false,
+  demoPath: loadDemoPathState(),
   inspector: {
     open: false,
     runId: null,
@@ -544,6 +583,191 @@ const state = {
     data: null,
   },
 };
+
+function persistDemoPath() {
+  try {
+    window.localStorage.setItem(
+      DEMO_PATH_KEY,
+      JSON.stringify({
+        dismissed: state.demoPath.dismissed,
+        collapsed: state.demoPath.collapsed,
+        visitedHeater: state.demoPath.visitedHeater,
+        visitedPayload: state.demoPath.visitedPayload,
+        visitedTrust: state.demoPath.visitedTrust,
+      })
+    );
+  } catch (err) {
+    /* ignore quota / private mode */
+  }
+}
+
+function demoPathPhase() {
+  const d = state.demoPath;
+  if (d.dismissed) return "dismissed";
+  if (!d.visitedHeater) return "heater";
+  if (!d.visitedPayload) return "payload";
+  if (!d.visitedTrust) return "trust";
+  return "done";
+}
+
+function demoPathTargetId() {
+  const phase = demoPathPhase();
+  if (phase === "heater") return "INC-0205";
+  if (phase === "payload") return "INC-0210";
+  return null;
+}
+
+function dismissDemoPath() {
+  state.demoPath.dismissed = true;
+  state.demoPath.collapsed = false;
+  persistDemoPath();
+  renderDemoPath();
+  if (state.view === "incidents") renderIncidents();
+}
+
+function restartDemoPath() {
+  state.demoPath = emptyDemoPathState();
+  persistDemoPath();
+  renderDemoPath();
+  if (state.view === "incidents") renderIncidents();
+  if (state.view === "home") renderDesk();
+}
+
+function setDemoPathCollapsed(collapsed) {
+  if (state.demoPath.dismissed) return;
+  state.demoPath.collapsed = !!collapsed;
+  persistDemoPath();
+  renderDemoPath();
+}
+
+function noteDemoIncident(incidentId) {
+  if (state.demoPath.dismissed) return;
+  let changed = false;
+  if (incidentId === "INC-0205" && !state.demoPath.visitedHeater) {
+    state.demoPath.visitedHeater = true;
+    changed = true;
+  }
+  if (incidentId === "INC-0210" && !state.demoPath.visitedPayload) {
+    state.demoPath.visitedPayload = true;
+    changed = true;
+  }
+  if (changed) {
+    persistDemoPath();
+    renderDemoPath();
+  }
+}
+
+function noteDemoTrust() {
+  if (state.demoPath.dismissed) return;
+  if (!state.demoPath.visitedHeater || !state.demoPath.visitedPayload) {
+    renderDemoPath();
+    return;
+  }
+  if (!state.demoPath.visitedTrust) {
+    state.demoPath.visitedTrust = true;
+    persistDemoPath();
+  }
+  renderDemoPath();
+}
+
+function renderDemoPath() {
+  const root = $("demo-path");
+  if (!root) return;
+  const phase = demoPathPhase();
+
+  if (phase === "dismissed") {
+    root.hidden = false;
+    root.dataset.phase = "dismissed";
+    root.classList.remove("is-collapsed");
+    root.innerHTML = `
+      <div class="demo-path-inner is-slim">
+        <p class="demo-kicker">Demo path dismissed</p>
+        <p class="demo-copy">Restart anytime — INC-0205 → INC-0210 → Trust.</p>
+        <div class="demo-actions">
+          <button type="button" class="btn-bar demo-cta" data-demo-restart>Restart demo</button>
+        </div>
+      </div>`;
+    document.documentElement.style.setProperty("--demo-path", `${root.offsetHeight}px`);
+    return;
+  }
+
+  root.hidden = false;
+  root.dataset.phase = phase;
+
+  const stepIndex = phase === "done" ? 3 : phase === "heater" ? 1 : phase === "payload" ? 2 : 3;
+  const stepLabel =
+    phase === "heater" ? "Heater" : phase === "payload" ? "Payload" : phase === "trust" ? "Proof" : "Done";
+
+  if (state.demoPath.collapsed) {
+    root.classList.add("is-collapsed");
+    root.innerHTML = `
+      <div class="demo-path-inner is-slim is-collapsed">
+        <button type="button" class="demo-collapse-hit" data-demo-expand aria-expanded="false" aria-label="Expand demo path">
+          <span class="demo-brand-mark" aria-hidden="true"></span>
+          <span class="demo-kicker">Demo path · ${stepIndex}/3</span>
+          <span class="demo-collapse-step">${escapeHtml(stepLabel)}</span>
+        </button>
+        <div class="demo-actions">
+          <button type="button" class="text-btn" data-demo-expand>Expand</button>
+        </div>
+      </div>`;
+    document.documentElement.style.setProperty("--demo-path", `${root.offsetHeight}px`);
+    return;
+  }
+
+  root.classList.remove("is-collapsed");
+  const beatHtml = DEMO_BEATS.map((b, i) => {
+    const n = i + 1;
+    const done = n < stepIndex || phase === "done";
+    const on = phase === b.key;
+    return `<div class="demo-beat${done ? " is-done" : ""}${on ? " is-on" : ""}">
+      <span class="demo-beat-node" aria-hidden="true">${done && !on ? "✓" : b.n}</span>
+      <span class="demo-beat-label">${escapeHtml(b.label)}</span>
+      <span class="demo-beat-sub">${escapeHtml(b.sub)}</span>
+    </div>`;
+  }).join('<span class="demo-beat-rail" aria-hidden="true"></span>');
+
+  let thesis = "";
+  let detail = "";
+  let cta = "";
+  let trailing = `<button type="button" class="text-btn demo-skip" data-demo-collapse>Collapse</button>
+    <button type="button" class="text-btn demo-skip" data-demo-skip>Skip</button>`;
+
+  if (phase === "heater") {
+    thesis = "Recommend when earned";
+    detail = "Heater-only bus sag — payload stayed STANDBY; inhibit Heater B.";
+    cta = `<button type="button" class="btn-bar demo-cta" data-demo-cta="heater">Walk INC-0205</button>`;
+  } else if (phase === "payload") {
+    thesis = "Different culprit";
+    detail = "Payload spike on SCIENCE_MODE — do not inhibit the heater.";
+    cta = `<button type="button" class="btn-bar demo-cta" data-demo-cta="payload">Walk INC-0210</button>`;
+  } else if (phase === "trust") {
+    thesis = "Prove it with rates";
+    detail = "Scorecard: diagnosis, false-inhibit, provenance — not a prose claim.";
+    cta = `<button type="button" class="btn-bar demo-cta" data-demo-cta="trust">Open scorecard</button>`;
+  } else {
+    thesis = "Two earned closes · measured judgment";
+    detail = "That’s the product. The rest is evidence assembly.";
+    cta = `<button type="button" class="text-btn demo-skip" data-demo-restart>Restart</button>`;
+    trailing = `<button type="button" class="text-btn demo-skip" data-demo-collapse>Collapse</button>
+      <button type="button" class="btn-bar demo-cta" data-demo-dismiss>Dismiss</button>`;
+  }
+
+  root.innerHTML = `
+    <div class="demo-path-inner">
+      <div class="demo-brand">
+        <span class="demo-brand-mark" aria-hidden="true"></span>
+        <div>
+          <p class="demo-kicker">Demo path${phase === "done" ? "" : ` · ${stepIndex}/3`}</p>
+          <p class="demo-thesis">${escapeHtml(thesis)}</p>
+        </div>
+      </div>
+      <div class="demo-spine" role="list">${beatHtml}</div>
+      <p class="demo-copy">${escapeHtml(detail)}</p>
+      <div class="demo-actions">${cta}${trailing}</div>
+    </div>`;
+  document.documentElement.style.setProperty("--demo-path", `${root.offsetHeight}px`);
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -1254,7 +1478,8 @@ function incRow(item, all) {
   const copy = tapeCopy({ id: item.run_id });
   const cta = rowCta(item);
   const on = state.view === "case" && item.id === state.incidentId ? "is-on" : "";
-  return `<div class="inc-row tone-${incidentTone(item)} ${on} ${st === "recommended" ? "is-ready" : ""}" data-open-case="${item.id}" data-jump="${cta.jump}" role="button" tabindex="0">
+  const demoTarget = item.id === demoPathTargetId() ? "is-demo-target" : "";
+  return `<div class="inc-row tone-${incidentTone(item)} ${on} ${demoTarget} ${st === "recommended" ? "is-ready" : ""}" data-open-case="${item.id}" data-jump="${cta.jump}" role="button" tabindex="0">
     <span class="id">${item.id}</span>
     <span class="inc-alarm">
       <strong>${escapeHtml(alarmTitle(item.alarm))}</strong>
@@ -1375,7 +1600,17 @@ async function loadTrust() {
   } finally {
     state.trustLoading = false;
     renderTrust();
+    focusDemoScorecard();
   }
+}
+
+function focusDemoScorecard() {
+  const phase = demoPathPhase();
+  if (phase !== "done" && phase !== "trust") return;
+  if (state.view !== "trust") return;
+  requestAnimationFrame(() => {
+    $("trust-scorecard")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
 }
 
 function renderTrust() {
@@ -1435,6 +1670,9 @@ function renderTrust() {
   const scoreStatus = sc
     ? `${sc.cases_ok}/${sc.cases_total} cases`
     : `${t.eval?.cases ?? 5} cases`;
+  const demoPhase = demoPathPhase();
+  const demoScoreFocus =
+    !state.demoPath.dismissed && (demoPhase === "trust" || demoPhase === "done");
   const scoreRates = sc
     ? [sc.diagnosis, sc.withhold, sc.false_inhibit, sc.provenance].filter(Boolean)
     : [];
@@ -1520,7 +1758,7 @@ function renderTrust() {
         <button type="button" class="btn-ghost btn" data-trust-incidents>Open incidents</button>
       </div>
     </article>
-    <article class="trust-card is-${scoreTone}">
+    <article class="trust-card is-${scoreTone}${demoScoreFocus ? " is-demo-focus" : ""}" id="trust-scorecard">
       <div class="trust-card-head">
         <div>
           <p class="trust-card-kicker">Validation</p>
@@ -1807,6 +2045,7 @@ function enterLibrary() {
 
 function enterTrust() {
   setView("trust");
+  noteDemoTrust();
   loadTrust();
   $("stage").scrollTop = 0;
 }
@@ -2011,14 +2250,19 @@ function sitrep() {
   const illum = orbit?.illumination === "sun" ? "Sunlit" : orbit ? "Eclipse" : "Tape";
   const worst = crits[0] || warns[0];
   const level = crits.length ? "crit" : warns.length ? "warn" : "ok";
-  const label = crits.length ? "Critical" : warns.length ? "Warn" : "Nominal";
+  const onTape = state.incidents.filter((item) => item.run_id === state.deskRunId);
+  const label = crits.length
+    ? "Tape · past crit"
+    : warns.length
+      ? "Tape · past warn"
+      : "Tape · inside limits";
   const headline = worst
     ? `${worst.title} ${tileValue(worst)} ${worst.unit || ""}`.replace(/\s+/g, " ").trim()
-    : "All channels inside limits";
+    : "Last sample inside limits";
   const others = warns.length - 1;
   const title = worst
-    ? `${worst.title} ${worst.state === "critical" ? "critical" : "at warn"}${others > 0 ? ` · ${others} more outside limits` : ""}`
-    : "All channels inside limits";
+    ? `${worst.title} ${worst.state === "critical" ? "past crit" : "past warn"}${others > 0 ? ` · ${others} more outside limits` : ""}`
+    : "Last sample inside limits";
   const lines = [];
   for (const ch of warns) {
     const at = ch.crossed?.clock ? ` at ${ch.crossed.clock}` : "";
@@ -2028,18 +2272,78 @@ function sitrep() {
   if (!warns.length) {
     lines.push("Last sample on this tape is inside limits. Open a case only if you already have an alarm.");
   }
-  return { level, label, headline, title, lede: lines.join(" "), illum, warn: warns.length > 0 };
+  if (onTape.length) {
+    lines.push(`${onTape.length} case${onTape.length === 1 ? "" : "s"} on this tape.`);
+  }
+  return {
+    level,
+    label,
+    headline,
+    title,
+    lede: lines.join(" "),
+    illum,
+    warn: warns.length > 0,
+    caseCount: onTape.length,
+  };
+}
+
+function renderHomeHandoff() {
+  const root = $("home-handoff");
+  if (!root) return;
+  const sit = sitrep();
+  const rows = state.incidents.filter((item) => item.run_id === state.deskRunId);
+  const primary = rows[0];
+  const more = rows.length - 1;
+
+  let action = "";
+  if (primary) {
+    const act = caseAction(primary) || rowCta(primary).label;
+    action = `<button type="button" class="btn home-handoff-cta" data-open-case="${escapeHtml(primary.id)}" data-jump="walk">
+      Walk ${escapeHtml(primary.id)}
+    </button>
+    <p class="home-handoff-act">${escapeHtml(act)}${more > 0 ? ` · +${more} more on tape` : ""}</p>`;
+  } else {
+    action = `<button type="button" class="btn-ghost btn home-handoff-cta" data-go-incidents>Open incidents</button>
+      <p class="home-handoff-act">No case on this tape yet</p>`;
+  }
+
+  root.innerHTML = `
+    <div class="home-handoff-status is-${sit.level}">
+      <span class="dot" aria-hidden="true"></span>
+      <div>
+        <p class="home-handoff-k">${escapeHtml(sit.label)}</p>
+        <p class="home-handoff-v">${escapeHtml(sit.headline)}</p>
+      </div>
+    </div>
+    <div class="home-handoff-go">
+      ${action}
+    </div>`;
+}
+
+function renderHomeOps() {
+  const root = $("home-ops");
+  if (!root) return;
+  const all = state.incidents;
+  const openN = all.filter((item) => item.status === "open").length;
+  const readyN = all.filter((item) => item.status === "recommended").length;
+  const filedN = all.filter((item) => item.status === "filed").length;
+  root.innerHTML = `<button type="button" class="text-btn" data-go-incidents>${openN} open · ${readyN} ready · ${filedN} filed — all incidents</button>`;
 }
 
 function renderDesk() {
   const desk = state.desk;
   const orbit = desk?.orbit;
-  if ($("home-clock")) $("home-clock").textContent = desk?.clock || "--:--:--";
   if ($("home-illum")) {
-    $("home-illum").textContent = orbit?.illumination === "sun" ? "Sunlit" : orbit ? "Eclipse" : "";
+    const illum = orbit?.illumination === "sun" ? "Sunlit" : orbit ? "Eclipse" : "";
+    $("home-illum").textContent = illum || "—";
   }
   if ($("home-orbit-meta")) {
-    $("home-orbit-meta").textContent = orbit ? `${orbit.period_min} min orbit` : "";
+    $("home-orbit-meta").textContent = orbit ? `${orbit.period_min} min orbit` : "—";
+  }
+  const craft = $("home-craft");
+  if (craft) {
+    craft.classList.toggle("is-sun", orbit?.illumination === "sun");
+    craft.classList.toggle("is-eclipse", Boolean(orbit) && orbit.illumination !== "sun");
   }
   if ($("home-orbit")) $("home-orbit").innerHTML = orbitSvg(orbit);
   if ($("focus-clock") && (state.view === "home" || state.view === "incidents" || state.view === "library")) {
@@ -2070,14 +2374,8 @@ function renderDesk() {
     bindDeskSparks();
   }
 
-  const sit = sitrep();
-  const posture = $("home-posture");
-  if (posture) {
-    posture.className = `posture is-${sit.level}`;
-    posture.innerHTML = `<span class="dot"></span>
-      <span class="k">${escapeHtml(sit.label)}</span>
-      <span class="v">${escapeHtml(sit.headline)}</span>`;
-  }
+  renderHomeHandoff();
+  renderHomeOps();
 }
 
 function bindDeskSparks() {
@@ -2122,7 +2420,7 @@ function bindDeskSparks() {
 }
 
 async function loadDesk(runId) {
-  const wanted = runId || state.deskRunId || "eps204";
+  const wanted = runId || state.deskRunId || "fault1";
   const res = await fetch(`/desk?run_id=${encodeURIComponent(wanted)}`);
   if (!res.ok) throw new Error(`desk ${res.status}`);
   state.desk = await res.json();
@@ -2544,22 +2842,11 @@ function renderFindings() {
       .join("");
     return;
   }
-  const a = analysis();
-  if (!a) {
+  if (!analysis()) {
     body.innerHTML = `<p class="empty">Select a case to begin.</p>`;
     return;
   }
-    body.innerHTML = `<div class="report-cta">
-      <p class="report-cta-kicker">Not stamped</p>
-      <p>Assemble the tagged report when you want this evidence on the record. Every claim gets its provenance:</p>
-      <p class="report-legend">
-        <span class="tag tag-observed">OBSERVED</span>
-        <span class="tag tag-derived">DERIVED</span>
-        <span class="tag tag-documented">DOCUMENTED</span>
-        <span class="tag tag-hypothesis">HYPOTHESIS</span>
-      </p>
-      <p class="hint">Rules only — no paid model.</p>
-    </div>`;
+  body.innerHTML = `<p class="empty">Assemble the report to stamp this case. Rules only — no paid model.</p>`;
 }
 
 function renderCase() {
@@ -2575,11 +2862,20 @@ function renderCase() {
 }
 
 async function openIncident(incidentId, jump) {
-  await loadIncident(incidentId);
-  if (jump === "closeout") {
-    openDoc(incidentId);
-  } else if (jump === "findings") {
-    $("findings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  try {
+    await loadIncident(incidentId);
+    noteDemoIncident(incidentId);
+    if (jump === "closeout") {
+      openDoc(incidentId);
+    } else if (jump === "findings") {
+      $("findings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  } catch (err) {
+    const lede = $("alarm-lede");
+    if (lede) {
+      lede.hidden = false;
+      lede.textContent = `Could not open ${incidentId}: ${err.message}`;
+    }
   }
 }
 
@@ -3171,6 +3467,30 @@ async function refreshDocs() {
 }
 
 function bind() {
+  $("demo-path")?.addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-demo-restart]")) {
+      restartDemoPath();
+      return;
+    }
+    if (ev.target.closest("[data-demo-collapse]")) {
+      setDemoPathCollapsed(true);
+      return;
+    }
+    if (ev.target.closest("[data-demo-expand]")) {
+      setDemoPathCollapsed(false);
+      return;
+    }
+    if (ev.target.closest("[data-demo-skip]") || ev.target.closest("[data-demo-dismiss]")) {
+      dismissDemoPath();
+      return;
+    }
+    const cta = ev.target.closest("[data-demo-cta]");
+    if (!cta) return;
+    const action = cta.dataset.demoCta;
+    if (action === "heater") openIncident("INC-0205", "walk");
+    else if (action === "payload") openIncident("INC-0210", "walk");
+    else if (action === "trust") goTrust();
+  });
   $("tab-home").addEventListener("click", () => goHome());
   $("tab-incidents").addEventListener("click", () => goIncidents());
   $("tab-library").addEventListener("click", () => goLibrary());
@@ -3514,6 +3834,7 @@ function initTheme() {
 async function boot() {
   initTheme();
   bind();
+  renderDemoPath();
   const [runsRes, incidentRes, alarmRes, docsRes] = await Promise.all([
     fetch("/runs"),
     fetch("/incidents"),
@@ -3528,11 +3849,13 @@ async function boot() {
   fillCreateForm();
   renderIncidents();
   renderLibrary();
+  renderDemoPath();
   const tape =
-    state.incidents.find((item) => item.id === "INC-0204")?.run_id ||
+    state.incidents.find((item) => item.id === "INC-0205")?.run_id ||
+    state.runs.find((run) => run.id === "fault1")?.id ||
     state.runs.find((run) => run.id === "eps204")?.id ||
     state.runs[0]?.id ||
-    "eps204";
+    "fault1";
   enterHome();
   await loadDesk(tape);
 }

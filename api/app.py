@@ -345,9 +345,9 @@ def incident_workspace(incident_id: str) -> dict[str, Any]:
             for channel in needed
         }
         documents = [dict(item) for item in list_documents(conn)]
+        fb = get_hypothesis_feedback(conn, incident_id)
     data = workspace_payload(spec, run_id, events, telemetry, documents, extra_channels=[row["alarm"]])
     data["incident"] = dict(row)
-    fb = get_hypothesis_feedback(conn, incident_id)
     if fb:
         data["incident"]["feedback"] = dict(fb)
     data["alarm"] = row["alarm"]

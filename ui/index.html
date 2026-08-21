@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=case5" />
+    <link rel="stylesheet" href="/static/styles.css?v=report2" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -49,51 +49,68 @@
       </div>
     </header>
 
+    <aside id="demo-path" class="demo-path" hidden aria-label="Demo path"></aside>
+
     <div class="app">
       <main class="stage" id="stage">
         <section class="home" id="home">
-          <header class="home-hero" id="home-hero">
-            <div class="home-hero-top">
-              <div class="home-hero-copy">
-                <div class="craft">
-                  <svg class="logo-aurora" viewBox="0 0 48 48" aria-hidden="true">
-                    <circle cx="24" cy="24" r="22.5" fill="#0c1922" />
-                    <circle cx="24" cy="24" r="20" fill="#f4f6f7" />
-                    <path d="M8 31c7-12 12-19 16-19s9 7 16 19" fill="none" stroke="#1f8a7a" stroke-width="2.4" stroke-linecap="round" />
-                    <path d="M10 33c6.5-10 11-16 14-16s7.5 6 14 16" fill="none" stroke="#3d4a52" stroke-width="2" stroke-linecap="round" />
-                    <path d="M12 35c5.5-8 9-12 12-12s6.5 4 12 12" fill="none" stroke="#1d4e89" stroke-width="1.8" stroke-linecap="round" />
-                    <path d="M24 11l3.4 8H20.6L24 11z" fill="#0c1922" />
-                    <rect x="22.6" y="18.6" width="2.8" height="5.2" rx="0.5" fill="#0c1922" />
-                    <circle cx="24" cy="26.4" r="1.2" fill="#c45c12" />
-                  </svg>
-                  <div>
-                    <p class="craft-kicker">Spacecraft</p>
-                    <p class="craft-name">Aurora-1</p>
-                  </div>
-                </div>
-                <p class="home-lede" id="home-lede">Pick any ingested tape. Last sample on the recording — ORBIT does not downlink, detect, or command.</p>
-                <div class="posture" id="home-posture"></div>
-                <div class="home-hero-meta">
-                  <p class="home-clock" id="home-clock">--:--:--</p>
-                  <p class="tag" id="home-illum"></p>
-                  <p class="quiet" id="home-orbit-meta"></p>
+          <header class="home-craft" id="home-craft">
+            <div class="home-craft-copy">
+              <div class="home-bar-id">
+                <svg class="logo-aurora home-bar-logo" viewBox="0 0 48 48" aria-hidden="true">
+                  <circle cx="24" cy="24" r="22.5" fill="#0c1922" />
+                  <circle cx="24" cy="24" r="20" fill="#f4f6f7" />
+                  <path d="M8 31c7-12 12-19 16-19s9 7 16 19" fill="none" stroke="#1f8a7a" stroke-width="2.4" stroke-linecap="round" />
+                  <path d="M10 33c6.5-10 11-16 14-16s7.5 6 14 16" fill="none" stroke="#3d4a52" stroke-width="2" stroke-linecap="round" />
+                  <path d="M12 35c5.5-8 9-12 12-12s6.5 4 12 12" fill="none" stroke="#1d4e89" stroke-width="1.8" stroke-linecap="round" />
+                  <path d="M24 11l3.4 8H20.6L24 11z" fill="#0c1922" />
+                  <rect x="22.6" y="18.6" width="2.8" height="5.2" rx="0.5" fill="#0c1922" />
+                  <circle cx="24" cy="26.4" r="1.2" fill="#c45c12" />
+                </svg>
+                <div>
+                  <p class="home-bar-kicker">Spacecraft</p>
+                  <p class="home-bar-name">Aurora-1</p>
                 </div>
               </div>
-              <div class="orbit-wrap" id="home-orbit"></div>
+              <div class="home-craft-readouts">
+                <div class="home-craft-read">
+                  <p class="home-craft-read-k">Illumination</p>
+                  <p class="home-bar-tag" id="home-illum">—</p>
+                </div>
+                <div class="home-craft-read">
+                  <p class="home-craft-read-k">Period</p>
+                  <p class="home-bar-quiet" id="home-orbit-meta">—</p>
+                </div>
+              </div>
             </div>
-            <div class="home-tapes-shelf">
-              <p class="home-tapes-label">Select tape</p>
-              <button type="button" class="tape-trigger" id="tape-trigger" aria-haspopup="dialog" aria-expanded="false">
-                <span class="tape-trigger-kind" id="tape-trigger-kind">Demo</span>
-                <span class="tape-trigger-title" id="tape-trigger-title">Heater + confounder</span>
-                <span class="tape-trigger-count" id="tape-trigger-count"></span>
-                <svg class="tape-trigger-caret" viewBox="0 0 10 6" aria-hidden="true">
-                  <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-                </svg>
-              </button>
-            </div>
+            <div class="orbit-wrap home-craft-orbit" id="home-orbit" aria-hidden="true"></div>
           </header>
-          <section class="home-channels" id="home-channels" aria-label="Last samples on this tape"></section>
+
+          <section class="home-handoff" id="home-handoff" aria-label="Tape handoff"></section>
+
+          <div class="home-board">
+            <div class="home-board-head">
+              <div>
+                <p class="home-board-kicker">Last samples</p>
+                <h2 class="home-board-title">On this tape</h2>
+                <p class="home-board-lede" id="home-lede">Recording only — ORBIT does not downlink, detect, or command.</p>
+              </div>
+              <div class="home-board-tape">
+                <p class="home-tapes-label">Tape</p>
+                <button type="button" class="tape-trigger" id="tape-trigger" aria-haspopup="dialog" aria-expanded="false">
+                  <span class="tape-trigger-kind" id="tape-trigger-kind">Control</span>
+                  <span class="tape-trigger-title" id="tape-trigger-title">Heater only</span>
+                  <span class="tape-trigger-count" id="tape-trigger-count"></span>
+                  <svg class="tape-trigger-caret" viewBox="0 0 10 6" aria-hidden="true">
+                    <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <section class="home-channels" id="home-channels" aria-label="Last samples on this tape"></section>
+          </div>
+
+          <p class="home-foot" id="home-ops"></p>
         </section>
 
         <section class="incidents-desk" id="incidents-desk">
@@ -231,15 +248,15 @@
             <div class="case-panels">
               <section class="panel panel-compare" id="compare">
                 <p class="panel-kicker">01 · Evidence</p>
-                <h2>Loads at the warn</h2>
-                <p class="hint">Currents at the first warn. The last command is not automatically the cause.</p>
+                <h2>Load currents at first warn</h2>
+                <p class="hint">Heater, payload, and bus at the moment the alarm channel crossed. Compare each to its healthy ON — the last command is a clue, not the cause.</p>
                 <div class="compare" id="compare-grid"></div>
               </section>
 
               <section class="panel panel-commands" id="commands">
                 <p class="panel-kicker">02 · Lead-up</p>
-                <h2>Before the warn</h2>
-                <p class="hint">Commands, mode changes, and the first crossing on one strip. Last command is a clue, not a verdict. Click a row to pin the tape.</p>
+                <h2>Commands to the crossing</h2>
+                <p class="hint">Enables, mode changes, and the first warn on one strip. Click a row to pin the tape.</p>
                 <ol class="timeline lead-timeline" id="timeline"></ol>
               </section>
 
@@ -296,13 +313,19 @@
                 <div class="report-head">
                   <div>
                     <p class="panel-kicker">05 · Report</p>
-                    <h2>Tagged investigation</h2>
-                    <p class="hint">Stamp claims OBSERVED, DERIVED, DOCUMENTED, or HYPOTHESIS. This is the record a human files against.</p>
+                    <h2>The investigation</h2>
+                    <p class="hint">ORBIT assembles this from the tape and the book. Every claim is stamped with how we know it — the record a human files against.</p>
+                    <ul class="prov-legend" aria-label="Provenance tags">
+                      <li><span class="tag tag-observed">OBSERVED</span><span class="prov-def">in telemetry or the command log</span></li>
+                      <li><span class="tag tag-derived">DERIVED</span><span class="prov-def">computed from telemetry</span></li>
+                      <li><span class="tag tag-documented">DOCUMENTED</span><span class="prov-def">procedure or prior close-out</span></li>
+                      <li><span class="tag tag-hypothesis">HYPOTHESIS</span><span class="prov-def">proposed cause, not yet proven</span></li>
+                    </ul>
                   </div>
                   <button type="button" class="btn btn-report" id="assemble">Assemble report</button>
                 </div>
                 <div class="findings" id="findings-body">
-                  <p class="empty">Assemble the tagged report to stamp this case. Rules only — no paid model.</p>
+                  <p class="empty">Assemble the report to stamp this case. Rules only — no paid model.</p>
                 </div>
               </section>
 
@@ -428,6 +451,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=case1" type="module"></script>
+    <script src="/static/app.js?v=report2" type="module"></script>
   </body>
 </html>

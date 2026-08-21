@@ -15,7 +15,7 @@ def wait_ready(page) -> None:
         "() => document.getElementById('home-clock')?.textContent !== '--:--:--'",
         timeout=15000,
     )
-    page.wait_for_timeout(400)
+    page.wait_for_timeout(500)
 
 
 def shot(page, name: str, *, full_page: bool = False) -> None:
@@ -31,6 +31,12 @@ def main() -> None:
         page = browser.new_page(viewport=VIEWPORT)
         page.goto(BASE, wait_until="networkidle")
         wait_ready(page)
+
+        # Ensure demo path is expanded if present.
+        expand = page.locator("[data-demo-expand]")
+        if expand.count() and expand.first.is_visible():
+            expand.first.click()
+            page.wait_for_timeout(300)
 
         shot(page, "overview-dark.png", full_page=True)
 
@@ -48,9 +54,32 @@ def main() -> None:
         page.wait_for_timeout(400)
         shot(page, "library-dark.png")
 
+        page.click("#tab-trust")
+        page.wait_for_timeout(800)
+        shot(page, "trust-dark.png", full_page=True)
+
+        # Case walkthrough — heater-only demo beat.
         page.click("#tab-home")
-        page.click("#theme-toggle")
         page.wait_for_timeout(400)
+        cta = page.locator('[data-demo-cta="heater"]')
+        if cta.count() and cta.first.is_visible():
+            cta.first.click()
+        else:
+            page.click("#tab-incidents")
+            page.wait_for_timeout(600)
+            page.locator('[data-open-listed="INC-0205"], [data-open-case="INC-0205"]').first.click()
+        page.wait_for_selector("#case-desk:not([hidden]), #alarm", timeout=15000)
+        page.wait_for_timeout(1000)
+        spine = page.locator('[data-target="findings"]')
+        if spine.count():
+            spine.first.click()
+            page.wait_for_timeout(500)
+        shot(page, "case-dark.png")
+
+        page.click("#tab-home")
+        page.wait_for_timeout(400)
+        page.click("#theme-toggle")
+        page.wait_for_timeout(500)
         shot(page, "overview-light.png", full_page=True)
 
         browser.close()
