@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 
 from agent.investigate import investigate
 from agent.tools import Tools
+from agent.tracing import flush_tracing, init_tracing
 from eval.cases import CASES, Case
 from eval.feedback import export_jsonl, load_feedback_rows, print_summary
 from eval.score import Check, Observed, score
@@ -131,37 +132,41 @@ def main() -> None:
         sys.exit(0 if data.get("ok") else 1)
 
     selected = [c for c in CASES if args.case is None or c.id == args.case]
-    results = [run_case(case, args.provider, args.model) for case in selected]
-    card = build_scorecard(results, args.provider)
+    init_tracing()
+    try:
+        results = [run_case(case, args.provider, args.model) for case in selected]
+        card = build_scorecard(results, args.provider)
 
-    if args.json:
-        print(
-            json.dumps(
-                {
-                    "scorecard": card.as_dict(),
-                    "results": [
-                        {
-                            **{k: v for k, v in asdict(r).items() if k != "checks"},
-                            "checks": [asdict(c) for c in r.checks],
-                        }
-                        for r in results
-                    ],
-                },
-                indent=2,
+        if args.json:
+            print(
+                json.dumps(
+                    {
+                        "scorecard": card.as_dict(),
+                        "results": [
+                            {
+                                **{k: v for k, v in asdict(r).items() if k != "checks"},
+                                "checks": [asdict(c) for c in r.checks],
+                            }
+                            for r in results
+                        ],
+                    },
+                    indent=2,
+                )
             )
-        )
-    else:
-        _print(results)
-        print()
-        print_scorecard(card)
+        else:
+            _print(results)
+            print()
+            print_scorecard(card)
 
-    # Full suite only — don't overwrite the Trust artifact with a single-case run.
-    if args.case is None:
-        path = write_scorecard(card)
-        if not args.json:
-            print(f"wrote {path}")
+        # Full suite only — don't overwrite the Trust artifact with a single-case run.
+        if args.case is None:
+            path = write_scorecard(card)
+            if not args.json:
+                print(f"wrote {path}")
 
-    sys.exit(0 if all(r.ok for r in results) else 1)
+        sys.exit(0 if all(r.ok for r in results) else 1)
+    finally:
+        flush_tracing()
 
 
 if __name__ == "__main__":

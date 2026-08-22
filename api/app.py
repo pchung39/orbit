@@ -18,6 +18,7 @@ from agent.closeout import build_closeout
 from agent.hypothesis import hypothesis_for
 from agent.investigate import investigate_rules
 from agent.tools import Tools
+from agent.tracing import flush_tracing, init_tracing, log_to_span, span
 from simulator.scenarios import clock_to_s, format_clock
 from simulator.simulate import load_and_validate
 from storage.sources import (
@@ -114,6 +115,13 @@ app = FastAPI(
     title="ORBIT",
     description="Assemble telemetry, commands, procedures, and incidents. Does not command the spacecraft.",
 )
+
+init_tracing()
+
+
+@app.on_event("shutdown")
+def _flush_braintrust() -> None:
+    flush_tracing()
 
 
 def _conn():
@@ -435,15 +443,23 @@ def investigate_incident(incident_id: str) -> dict[str, Any]:
             raise HTTPException(404, f"unknown incident {incident_id}")
         mark_incident_recommended(conn, incident_id)
         row = get_incident(conn, incident_id) or row
-    report = investigate_rules(row["run_id"], alarm_channel=row["alarm"])
-    return {
-        "incident_id": incident_id,
-        "run_id": row["run_id"],
-        "provider": "rules",
-        "alarm": row["alarm"],
-        "status": row["status"],
-        "report": report,
-    }
+    with span(
+        "api.investigate_incident",
+        span_type="task",
+        input={"incident_id": incident_id, "run_id": row["run_id"], "alarm": row["alarm"]},
+        metadata={"provider": "rules", "source": "console"},
+    ) as sp:
+        report = investigate_rules(row["run_id"], alarm_channel=row["alarm"])
+        out = {
+            "incident_id": incident_id,
+            "run_id": row["run_id"],
+            "provider": "rules",
+            "alarm": row["alarm"],
+            "status": row["status"],
+            "report": report,
+        }
+        log_to_span(sp, output={"incident_id": incident_id, "run_id": row["run_id"], "chars": len(report)})
+        return out
 
 
 class FileIn(BaseModel):
@@ -690,8 +706,15 @@ def search(
 @app.post("/investigate/{run_id}")
 def investigate(run_id: str, alarm: str = Query(default="EPS.bus_voltage")) -> dict[str, str]:
     """Rules-based investigation only. Paid LLM stays on the CLI, on request."""
-    report = investigate_rules(run_id, alarm_channel=alarm)
-    return {"run_id": run_id, "provider": "rules", "alarm": alarm, "report": report}
+    with span(
+        "api.investigate_run",
+        span_type="task",
+        input={"run_id": run_id, "alarm": alarm},
+        metadata={"provider": "rules", "source": "api"},
+    ) as sp:
+        report = investigate_rules(run_id, alarm_channel=alarm)
+        log_to_span(sp, output={"run_id": run_id, "chars": len(report)})
+        return {"run_id": run_id, "provider": "rules", "alarm": alarm, "report": report}
 
 
 @app.get("/")

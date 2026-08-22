@@ -197,6 +197,16 @@ Default is `--provider rules` (no paid LLM). Green on this harness is the bar: *
 
 **Current rules scorecard:** 4/4 named closes · 1/1 withheld · 3/3 no false Heater B inhibit · 5/5 fact vs inference clean.
 
+### Braintrust (optional)
+
+If `BRAINTRUST_API_KEY` is set (via `.env.braintrust` from the Braintrust wizard, or env), ORBIT sends investigation traces to project **ORBIT**:
+
+- Console / API **Assemble report** (rules + tool spans)
+- `python -m agent investigate … --provider rules` (and LLM CLI when wrapped)
+- `python -m eval` case runs
+
+No key → tracing is a no-op. Do not commit `.env.braintrust` or `.braintrust.json`.
+
 ### Operator hypothesis feedback
 
 On **Case**, confirm or reject ORBIT’s working hypothesis when one was asserted. Withheld cases have nothing to confirm. Feedback is stored until file, appended to the close-out, and never changes uplink behavior.

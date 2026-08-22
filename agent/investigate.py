@@ -12,6 +12,7 @@ from pathlib import Path
 
 from agent.llm import investigate_llm, resolve_provider
 from agent.tools import Tools, _fmt
+from agent.tracing import flush_tracing, init_tracing, log_to_span, span
 from simulator.scenarios import format_clock
 from simulator.simulate import load_and_validate
 from storage.store import connect, init_schema
@@ -50,6 +51,18 @@ def _similar_incident(tools: Tools, query: str, prefer_id: str | None) -> tuple[
 
 
 def investigate_rules(run_id: str, alarm_channel: str = "EPS.bus_voltage") -> str:
+    with span(
+        "investigate_rules",
+        span_type="task",
+        input={"run_id": run_id, "alarm": alarm_channel},
+        metadata={"provider": "rules"},
+    ) as sp:
+        report = _investigate_rules_body(run_id, alarm_channel)
+        log_to_span(sp, output=report, metadata={"provider": "rules", "run_id": run_id})
+        return report
+
+
+def _investigate_rules_body(run_id: str, alarm_channel: str = "EPS.bus_voltage") -> str:
     spec = load_and_validate()
     conn = connect()
     init_schema(conn)
@@ -398,11 +411,23 @@ def investigate_rules(run_id: str, alarm_channel: str = "EPS.bus_voltage") -> st
 def investigate(run_id: str, alarm_channel: str, provider: str, model: str | None) -> str:
     if provider == "rules":
         return investigate_rules(run_id, alarm_channel)
-    spec = load_and_validate()
-    conn = connect()
-    init_schema(conn)
-    tools = Tools(conn, spec)
-    return investigate_llm(tools, run_id, alarm_channel, provider, model=model)
+    with span(
+        "investigate_llm",
+        span_type="task",
+        input={"run_id": run_id, "alarm": alarm_channel},
+        metadata={"provider": provider, "model": model},
+    ) as sp:
+        spec = load_and_validate()
+        conn = connect()
+        init_schema(conn)
+        tools = Tools(conn, spec)
+        report = investigate_llm(tools, run_id, alarm_channel, provider, model=model)
+        log_to_span(
+            sp,
+            output=report,
+            metadata={"provider": provider, "model": model, "tool_log": tools.log},
+        )
+        return report
 
 
 def main() -> None:
@@ -421,16 +446,20 @@ def main() -> None:
     inv.add_argument("--out", type=Path, default=None)
     args = parser.parse_args()
 
-    if args.provider == "rules":
-        provider = "rules"
-    else:
-        provider = resolve_provider(args.provider)
-    report = investigate(args.run_id, args.alarm, provider, args.model)
-    out = args.out or ROOT / "investigations" / f"{args.run_id}.md"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(report)
-    print(report)
-    print(f"wrote {out}")
+    init_tracing()
+    try:
+        if args.provider == "rules":
+            provider = "rules"
+        else:
+            provider = resolve_provider(args.provider)
+        report = investigate(args.run_id, args.alarm, provider, args.model)
+        out = args.out or ROOT / "investigations" / f"{args.run_id}.md"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(report)
+        print(report)
+        print(f"wrote {out}")
+    finally:
+        flush_tracing()
 
 
 if __name__ == "__main__":

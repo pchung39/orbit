@@ -117,15 +117,9 @@ TOOL_PARAMS = [
 
 
 def load_dotenv() -> None:
-    path = ROOT / ".env"
-    if not path.exists():
-        return
-    for line in path.read_text().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip().strip("'").strip('"'))
+    from agent.tracing import load_env_files
+
+    load_env_files()
 
 
 def resolve_provider(requested: str) -> str:
@@ -193,7 +187,10 @@ def investigate_llm(
     provider: str,
     model: str | None = None,
 ) -> str:
+    from agent.tracing import init_tracing
+
     load_dotenv()
+    init_tracing()
     model = model or os.environ.get("ORBIT_MODEL") or DEFAULT_MODELS[provider]
     user = (
         f"Investigate run `{run_id}`. Entry: `{alarm_channel}` warn. "
@@ -220,7 +217,12 @@ def investigate_llm(
 def _openai_loop(tools: Tools, user: str, model: str) -> str:
     from openai import OpenAI
 
-    client = OpenAI()
+    try:
+        from braintrust import wrap_openai
+
+        client = wrap_openai(OpenAI())
+    except Exception:
+        client = OpenAI()
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM},
         {"role": "user", "content": user},
@@ -252,7 +254,12 @@ def _openai_loop(tools: Tools, user: str, model: str) -> str:
 def _anthropic_loop(tools: Tools, user: str, model: str) -> str:
     import anthropic
 
-    client = anthropic.Anthropic()
+    try:
+        from braintrust import wrap_anthropic
+
+        client = wrap_anthropic(anthropic.Anthropic())
+    except Exception:
+        client = anthropic.Anthropic()
     messages: list[dict[str, Any]] = [{"role": "user", "content": user}]
     for _ in range(MAX_TURNS):
         resp = client.messages.create(

@@ -12,3 +12,6 @@ orbit.db
 .env
 
 
+# Added by Braintrust Wizard
+.env.braintrust
+.braintrust.json
