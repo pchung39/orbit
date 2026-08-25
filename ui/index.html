@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=seal2" />
+    <link rel="stylesheet" href="/static/styles.css?v=know1" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -26,7 +26,6 @@
       <nav class="app-nav" aria-label="Sections">
         <button type="button" class="app-tab is-on" id="tab-home">Overview</button>
         <button type="button" class="app-tab" id="tab-incidents">Incidents<span class="n" id="tab-incidents-n"></span></button>
-        <button type="button" class="app-tab" id="tab-library">Library</button>
         <button type="button" class="app-tab" id="tab-trust">Trust</button>
       </nav>
       <div class="appbar-actions">
@@ -132,51 +131,6 @@
           </div>
         </section>
 
-        <section class="library-desk" id="library-desk">
-          <header class="lib-hero">
-            <div class="lib-hero-copy">
-              <p class="craft-kicker" id="library-kicker">Aurora-1 · book</p>
-              <h1>Library</h1>
-              <p class="inc-lede">Procedures, similar cases, and filed close-outs. Search ranks by meaning. ORBIT does not uplink from here.</p>
-            </div>
-            <form class="lib-search" id="library-form">
-              <label class="sr-only" for="library-q">Search the library</label>
-              <svg class="lib-ico" viewBox="0 0 16 16" aria-hidden="true">
-                <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.5" />
-                <path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-              </svg>
-              <input id="library-q" name="q" type="search" placeholder="Search procedures, cases, close-outs…" autocomplete="off" />
-              <span class="kbd" id="library-kbd">/</span>
-              <button type="button" class="lib-clear" id="library-clear" aria-label="Clear search" hidden>×</button>
-            </form>
-            <div class="lib-suggest" id="library-suggest"></div>
-            <div class="lib-toolbar">
-              <div class="lib-kinds" id="library-kinds" role="group" aria-label="Filter by kind"></div>
-              <div class="lib-families" id="library-families" role="group" aria-label="Filter by signature"></div>
-            </div>
-          </header>
-          <div class="lib-work">
-            <aside class="lib-index" aria-label="Documents">
-              <p class="lib-status" id="library-status"></p>
-              <p class="lib-count" id="library-count" hidden></p>
-              <div class="lib-scroll" id="library-body"></div>
-            </aside>
-            <article class="lib-page" id="library-reader" aria-label="Reader">
-              <div class="lib-shelf" id="library-shelf"></div>
-              <div class="lib-article" id="library-article" hidden>
-                <button type="button" class="text-btn lib-back" id="reader-close">Close</button>
-                <header class="lib-page-head">
-                  <p class="eyebrow" id="reader-kind"></p>
-                  <h2 id="reader-title"></h2>
-                  <p class="lib-reader-why" id="reader-why"></p>
-                  <div class="lib-page-actions" id="reader-actions"></div>
-                </header>
-                <div class="reader-body md" id="reader-body"></div>
-              </div>
-            </article>
-          </div>
-        </section>
-
         <section class="trust-desk" id="trust-desk" aria-label="Trust and data sources">
           <header class="trust-head" id="trust-head"></header>
           <section class="trust-panel trust-sources-panel" aria-labelledby="trust-connectors-title">
@@ -223,22 +177,16 @@
           </p>
 
           <header class="case-head" id="alarm">
-            <div class="case-head-main">
-              <div class="case-head-copy">
-                <div class="kicker-row">
-                  <p class="eyebrow" id="alarm-kicker">Case</p>
-                  <span class="chip" id="status-chip" hidden></span>
-                </div>
-                <h1 id="alarm-title">Select a case</h1>
-                <p class="case-ribbon" id="case-ribbon" hidden></p>
-                <p class="lede" id="alarm-lede"></p>
+            <div class="case-head-top">
+              <div class="kicker-row">
+                <p class="eyebrow" id="alarm-kicker">Case</p>
+                <span class="chip" id="status-chip" hidden></span>
               </div>
-              <aside class="hero-readout" id="hero-readout" aria-label="Alarm reading">
-                <p class="hero-ch" id="alarm-ch"></p>
-                <p class="hero-value"><span id="alarm-value">—</span><span class="unit" id="alarm-unit"></span></p>
-                <p class="hero-meter" id="alarm-meter" hidden><span class="track"><i></i></span><span class="pct"></span></p>
-                <div class="hero-limit" id="alarm-limit"></div>
-              </aside>
+              <div class="case-head-title-row">
+                <h1 id="alarm-title">Select a case</h1>
+                <button type="button" class="btn btn-report case-head-cta" id="case-head-cta" hidden>Run investigation</button>
+              </div>
+              <p class="lede" id="alarm-lede"></p>
             </div>
             <dl class="case-facts" id="case-meta"></dl>
             <p class="case-filed" id="case-filed" hidden>
@@ -249,33 +197,167 @@
 
           <div class="case-grid">
             <nav class="spine" id="case-spine" aria-label="Case walkthrough">
-              <button type="button" class="spine-step is-on" data-target="compare"><span class="n">01</span><span>Evidence</span></button>
-              <button type="button" class="spine-step" data-target="commands"><span class="n">02</span><span>Lead-up</span></button>
-              <button type="button" class="spine-step" data-target="traces"><span class="n">03</span><span>Tape</span></button>
-              <button type="button" class="spine-step" data-target="procedure"><span class="n">04</span><span>Procedure</span></button>
-              <button type="button" class="spine-step" data-target="findings"><span class="n">05</span><span>Report</span></button>
-              <button type="button" class="spine-step" data-target="action"><span class="n">06</span><span>Decision</span></button>
+              <button type="button" class="spine-step is-on" data-target="investigation"><span class="n">01</span><span>Investigation</span></button>
+              <button type="button" class="spine-step" data-target="knowledge"><span class="n">02</span><span>Knowledge</span></button>
+              <button type="button" class="spine-step" data-target="procedure"><span class="n">03</span><span>Procedure</span></button>
+              <button type="button" class="spine-step" data-target="evidence"><span class="n">04</span><span>Evidence</span></button>
+              <button type="button" class="spine-step" data-target="action"><span class="n">05</span><span>Decision</span></button>
             </nav>
 
             <div class="case-panels">
-              <section class="panel panel-compare" id="compare">
-                <p class="panel-kicker">01 · Evidence</p>
+              <section class="panel panel-findings investigation-hero" id="investigation">
+                <div class="report-head">
+                  <div>
+                    <p class="panel-kicker">Investigation</p>
+                    <h2>The investigation</h2>
+                    <p class="hint">ORBIT assembles this from the tape and the book. Every claim is stamped with how we know it.</p>
+                    <p class="investigation-teaser" id="investigation-teaser" hidden></p>
+                    <details class="prov-ref" id="prov-ref">
+                      <summary class="prov-ref-summary">
+                        <span class="prov-ref-tags" aria-hidden="true">
+                          <span class="tag tag-observed">OBSERVED</span>
+                          <span class="tag tag-derived">DERIVED</span>
+                          <span class="tag tag-documented">DOCUMENTED</span>
+                          <span class="tag tag-hypothesis">HYPOTHESIS</span>
+                        </span>
+                        <span class="prov-ref-label">Provenance key</span>
+                      </summary>
+                      <ul class="prov-ref-defs" aria-label="Provenance tag definitions">
+                        <li><span class="tag tag-observed">OBSERVED</span><span>in telemetry or the command log</span></li>
+                        <li><span class="tag tag-derived">DERIVED</span><span>computed from telemetry</span></li>
+                        <li><span class="tag tag-documented">DOCUMENTED</span><span>procedure or prior close-out</span></li>
+                        <li><span class="tag tag-hypothesis">HYPOTHESIS</span><span>proposed cause, not yet proven</span></li>
+                      </ul>
+                    </details>
+                  </div>
+                  <div class="investigation-actions">
+                    <button type="button" class="btn btn-report" id="assemble">Run investigation</button>
+                    <button type="button" class="btn btn-ghost" id="rerun-investigation" hidden>Re-run investigation</button>
+                  </div>
+                </div>
+                <div class="findings" id="findings-body">
+                  <div class="investigation-empty">
+                    <p>Run investigation to stamp this case with a provenance-tagged report.</p>
+                    <button type="button" class="btn btn-report investigation-empty-cta">Run investigation</button>
+                  </div>
+                </div>
+              </section>
+
+
+              <section class="panel evidence-bundle knowledge-bundle" id="knowledge">
+                <button type="button" class="evidence-toggle" id="knowledge-toggle" aria-expanded="true" aria-controls="knowledge-panels">
+                  <span class="evidence-toggle-main">
+                    <span class="panel-kicker">Knowledge</span>
+                    <span class="evidence-toggle-title" id="knowledge-toggle-title">Procedure · priors · related</span>
+                  </span>
+                  <span class="evidence-toggle-meta">
+                    <span class="evidence-toggle-state" id="knowledge-toggle-state">Hide</span>
+                    <span class="evidence-chevron" aria-hidden="true"></span>
+                  </span>
+                </button>
+                <div class="evidence-panels" id="knowledge-panels">
+                  <section class="panel evidence-panel knowledge-panel">
+                    <p class="hint">Documents this case is built on — chosen by the same analysis as the report — plus neighbors ranked by meaning. Search to look past this case.</p>
+                    <form class="knowledge-search" id="knowledge-form">
+                      <label class="sr-only" for="knowledge-q">Search procedures and priors</label>
+                      <svg class="lib-ico" viewBox="0 0 16 16" aria-hidden="true">
+                        <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.5" />
+                        <path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                      </svg>
+                      <input id="knowledge-q" name="q" type="search" placeholder="Search procedures, priors, close-outs…" autocomplete="off" />
+                      <span class="kbd" id="knowledge-kbd">/</span>
+                      <button type="button" class="lib-clear" id="knowledge-clear" aria-label="Clear search" hidden>×</button>
+                    </form>
+                    <p class="knowledge-status" id="knowledge-status"></p>
+                    <div class="knowledge-list" id="knowledge-list"></div>
+                    <article class="knowledge-reader" id="knowledge-reader" hidden>
+                      <button type="button" class="text-btn" id="knowledge-reader-close">Close document</button>
+                      <header class="knowledge-reader-head">
+                        <p class="eyebrow" id="reader-kind"></p>
+                        <h2 id="reader-title"></h2>
+                        <p class="knowledge-reader-why" id="reader-why"></p>
+                        <div class="knowledge-reader-actions" id="reader-actions"></div>
+                      </header>
+                      <div class="reader-body md" id="reader-body"></div>
+                    </article>
+                  </section>
+                </div>
+              </section>
+
+              <section class="panel evidence-bundle" id="procedure">
+                <button type="button" class="evidence-toggle" id="procedure-toggle" aria-expanded="true" aria-controls="procedure-panels">
+                  <span class="evidence-toggle-main">
+                    <span class="panel-kicker">Procedure</span>
+                    <span class="evidence-toggle-title" id="procedure-toggle-title">EPS-17 · book</span>
+                  </span>
+                  <span class="evidence-toggle-meta">
+                    <span class="evidence-toggle-state" id="procedure-toggle-state">Hide</span>
+                    <span class="evidence-chevron" aria-hidden="true"></span>
+                  </span>
+                </button>
+                <div class="evidence-panels" id="procedure-panels">
+                  <section class="panel panel-proc evidence-panel" id="procedure-body">
+                    <article class="procedure">
+                      <p class="eyebrow">Book</p>
+                      <header class="proc-head">
+                        <p class="proc-id" id="proc-id">EPS-17</p>
+                        <div>
+                          <h2 id="proc-title">EPS low-voltage response</h2>
+                          <p class="proc-aka" id="proc-aka">Check recently activated nonessential loads</p>
+                        </div>
+                      </header>
+                      <dl class="proc-meta">
+                        <div>
+                          <dt>Applies to</dt>
+                          <dd id="proc-applies">Aurora-1 Electrical Power System</dd>
+                        </div>
+                        <div>
+                          <dt>Entry</dt>
+                          <dd id="proc-entry"><code>EPS.bus_voltage</code> at or below warn (26.5 V)</dd>
+                        </div>
+                        <div>
+                          <dt>Goal</dt>
+                          <dd id="proc-goal">Find the load that just came on. Do not guess the payload first.</dd>
+                        </div>
+                      </dl>
+                      <p class="hint">Green on a step means this case already has the evidence. It is not a sign-off. The last step is still a human command — ORBIT does not send it.</p>
+                      <ol class="proc" id="proc"></ol>
+                      <button type="button" class="text-btn" id="open-proc">Read full procedure in Knowledge</button>
+                    </article>
+                  </section>
+                </div>
+              </section>
+
+              <section class="panel evidence-bundle" id="evidence">
+                <button type="button" class="evidence-toggle" id="evidence-toggle" aria-expanded="true" aria-controls="evidence-panels">
+                  <span class="evidence-toggle-main">
+                    <span class="panel-kicker">Evidence</span>
+                    <span class="evidence-toggle-title">Compare · lead-up · tape</span>
+                  </span>
+                  <span class="evidence-toggle-meta">
+                    <span class="evidence-toggle-state" id="evidence-toggle-state">Hide</span>
+                    <span class="evidence-chevron" aria-hidden="true"></span>
+                  </span>
+                </button>
+                <div class="evidence-panels" id="evidence-panels">
+              <section class="panel panel-compare evidence-panel" id="compare">
+                <p class="panel-kicker">Compare</p>
                 <h2>Load currents at first warn</h2>
                 <p class="hint">Heater, payload, and bus at the moment the alarm channel crossed. Compare each to its healthy ON — the last command is a clue, not the cause.</p>
                 <div class="compare" id="compare-grid"></div>
               </section>
 
-              <section class="panel panel-commands" id="commands">
-                <p class="panel-kicker">02 · Lead-up</p>
+              <section class="panel panel-commands evidence-panel" id="commands">
+                <p class="panel-kicker">Lead-up</p>
                 <h2>Commands to the crossing</h2>
                 <p class="hint">Enables, mode changes, and the first warn on one strip. Click a row to pin the tape.</p>
                 <ol class="timeline lead-timeline" id="timeline"></ol>
               </section>
 
-              <section class="panel panel-traces" id="traces">
+              <section class="panel panel-traces evidence-panel" id="traces">
                 <div class="row">
                   <div>
-                    <p class="panel-kicker">03 · Tape</p>
+                    <p class="panel-kicker">Tape</p>
                     <h2>Telemetry</h2>
                     <p class="hint" id="trace-caption">Same window. Dashed lines are the lead-up and the first warn.</p>
                   </div>
@@ -289,61 +371,12 @@
                 <div class="traces" id="trace-stack"></div>
                 <p class="hover-read" id="hover-read"></p>
               </section>
-
-              <section class="panel panel-proc" id="procedure">
-                <article class="procedure">
-                  <p class="panel-kicker">04 · Procedure</p>
-                  <p class="eyebrow">Book</p>
-                  <header class="proc-head">
-                    <p class="proc-id" id="proc-id">EPS-17</p>
-                    <div>
-                      <h2 id="proc-title">EPS low-voltage response</h2>
-                      <p class="proc-aka" id="proc-aka">Check recently activated nonessential loads</p>
-                    </div>
-                  </header>
-                  <dl class="proc-meta">
-                    <div>
-                      <dt>Applies to</dt>
-                      <dd id="proc-applies">Aurora-1 Electrical Power System</dd>
-                    </div>
-                    <div>
-                      <dt>Entry</dt>
-                      <dd id="proc-entry"><code>EPS.bus_voltage</code> at or below warn (26.5 V)</dd>
-                    </div>
-                    <div>
-                      <dt>Goal</dt>
-                      <dd id="proc-goal">Find the load that just came on. Do not guess the payload first.</dd>
-                    </div>
-                  </dl>
-                  <p class="hint">Green on a step means this case already has the evidence. It is not a sign-off. The last step is still a human command — ORBIT does not send it.</p>
-                  <ol class="proc" id="proc"></ol>
-                  <button type="button" class="text-btn" id="open-proc">Open full procedure</button>
-                </article>
-              </section>
-
-              <section class="panel panel-findings" id="findings">
-                <div class="report-head">
-                  <div>
-                    <p class="panel-kicker">05 · Report</p>
-                    <h2>The investigation</h2>
-                    <p class="hint">ORBIT assembles this from the tape and the book. Every claim is stamped with how we know it — the record a human files against.</p>
-                    <ul class="prov-legend" aria-label="Provenance tags">
-                      <li><span class="tag tag-observed">OBSERVED</span><span class="prov-def">in telemetry or the command log</span></li>
-                      <li><span class="tag tag-derived">DERIVED</span><span class="prov-def">computed from telemetry</span></li>
-                      <li><span class="tag tag-documented">DOCUMENTED</span><span class="prov-def">procedure or prior close-out</span></li>
-                      <li><span class="tag tag-hypothesis">HYPOTHESIS</span><span class="prov-def">proposed cause, not yet proven</span></li>
-                    </ul>
-                  </div>
-                  <button type="button" class="btn btn-report" id="assemble">Assemble report</button>
-                </div>
-                <div class="findings" id="findings-body">
-                  <p class="empty">Assemble the report to stamp this case. Rules only — no paid model.</p>
                 </div>
               </section>
 
               <section class="panel panel-decide" id="action">
                 <div id="decide-open">
-                  <p class="panel-kicker">06 · Decision</p>
+                  <p class="panel-kicker">Decision</p>
                   <p class="eyebrow">Suggested action</p>
                   <h2 id="decide-title">None yet</h2>
                   <p class="lede" id="decide-sub">Select a case to see a next step.</p>
@@ -355,7 +388,7 @@
                   </div>
                 </div>
                 <div id="decide-filed" hidden>
-                  <p class="panel-kicker">06 · Filed</p>
+                  <p class="panel-kicker">Filed</p>
                   <p class="stamp">Filed · not sent</p>
                   <h2 id="filed-action-title">Inhibit Heater B</h2>
                   <p class="lede" id="filed-action-sub">Recorded in the library. ORBIT did not uplink.</p>
@@ -467,6 +500,18 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=seal2" type="module"></script>
+    <script src="/static/app.js?v=know1" type="module"></script>
+
+    <div class="slip-wrap" id="doc-slip" hidden>
+      <div class="slip doc-slip" role="dialog" aria-modal="true" aria-labelledby="doc-slip-title">
+        <div class="doc-slip-body">
+          <button type="button" class="text-btn" id="doc-slip-close">Close</button>
+          <p class="eyebrow" id="doc-slip-kind"></p>
+          <h2 id="doc-slip-title"></h2>
+          <p class="knowledge-reader-why" id="doc-slip-why"></p>
+          <div class="reader-body md" id="doc-slip-body"></div>
+        </div>
+      </div>
+    </div>
   </body>
 </html>

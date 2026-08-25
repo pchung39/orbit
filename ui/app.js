@@ -134,7 +134,7 @@ function familyLine(item, all) {
 
 function rowCta(item) {
   if (item.status === "filed") return { jump: "closeout", label: "Read close-out" };
-  if (item.status === "recommended") return { jump: "walk", label: "File · not sent" };
+  if (item.status === "recommended") return { jump: "action", label: "File · not sent" };
   return { jump: "walk", label: "Walk" };
 }
 
@@ -191,29 +191,48 @@ function activeFeedbackVerdict() {
   return state.feedback?.verdict || "";
 }
 
-function feedbackFormHtml({ editable, compact, noteId = "feedback-note" }) {
+function isHoldFeedback(a, fb) {
+  return Boolean(a?.withheld || fb?.hypothesis_key === "WITHHELD");
+}
+
+function feedbackVerdictLabel(verdict, isHold) {
+  if (isHold) {
+    return verdict === "confirmed" ? "Hold confirmed" : "Hold rejected";
+  }
+  return verdict === "confirmed" ? "Hypothesis confirmed" : "Hypothesis rejected";
+}
+
+function feedbackFormHtml({ editable, compact, noteId = "feedback-note", mode = "hypothesis" }) {
   const fb = state.feedback;
   const verdict = activeFeedbackVerdict();
   const note = fb?.note || "";
+  const isHold = mode === "hold";
+  const kicker = isHold ? "Decision review" : "Hypothesis review";
+  const aria = isHold ? "Confirm or reject hold decision" : "Confirm or reject hypothesis";
+  const hint = isHold
+    ? "ORBIT did not assert a root cause. Confirm or reject whether hold was correct. Saved for eval. Does not change uplink."
+    : "Saved locally for future eval runs. Does not change the recommended action or uplink anything.";
   if (!editable) {
     if (!fb) return "";
-    const label = verdict === "confirmed" ? "Hypothesis confirmed" : "Hypothesis rejected";
+    const hold = isHoldFeedback(analysis(), fb);
+    const label = feedbackVerdictLabel(verdict, hold);
+    const key = hold ? "Hold · do not command" : fb.hypothesis_key || "";
     return `<div class="guess-feedback is-readonly">
       <p class="guess-kicker">${escapeHtml(label)}</p>
-      <p class="guess-fb-key">${escapeHtml(fb.hypothesis_key || "")}</p>
+      <p class="guess-fb-key">${escapeHtml(key)}</p>
       ${note ? `<p class="guess-fb-note">${escapeHtml(note)}</p>` : ""}
     </div>`;
   }
   return `<div class="guess-feedback ${compact ? "is-compact" : ""}">
-    <p class="guess-kicker">Hypothesis review</p>
-    <div class="fb-toggle" role="group" aria-label="Confirm or reject hypothesis">
+    <p class="guess-kicker">${escapeHtml(kicker)}</p>
+    <div class="fb-toggle" role="group" aria-label="${escapeHtml(aria)}">
       <button type="button" class="fb-opt ${verdict === "confirmed" ? "is-on" : ""}" data-fb-verdict="confirmed">Confirmed</button>
       <button type="button" class="fb-opt ${verdict === "rejected" ? "is-on" : ""}" data-fb-verdict="rejected">Rejected</button>
     </div>
     <label class="fb-note-label">Note <span class="opt">optional</span>
-      <textarea class="feedback-note" id="${noteId}" rows="2" placeholder="Why you agree or disagree…">${escapeHtml(note)}</textarea>
+      <textarea class="feedback-note" id="${noteId}" rows="2" placeholder="${isHold ? "Why hold was or was not the right call…" : "Why you agree or disagree…"}">${escapeHtml(note)}</textarea>
     </label>
-    ${compact ? "" : '<p class="hint fb-hint">Saved locally for future eval runs. Does not change the recommended action or uplink anything.</p>'}
+    ${compact ? "" : `<p class="hint fb-hint">${escapeHtml(hint)}</p>`}
     <button type="button" class="btn btn-ghost btn-sm" data-save-feedback ${state.feedbackSaving ? "disabled" : ""}>${state.feedbackSaving ? "Saving…" : fb ? "Update feedback" : "Save feedback"}</button>
   </div>`;
 }
@@ -223,26 +242,23 @@ function renderFileSlipFeedback() {
   if (!root) return;
   const filed = state.incident?.status === "filed";
   const a = analysis();
+  const mode = a?.withheld ? "hold" : "hypothesis";
   if (filed) {
-    root.innerHTML = feedbackFormHtml({ editable: false, compact: true });
-    return;
-  }
-  if (a?.withheld) {
-    root.innerHTML = `<div class="file-fb-summary">
-      <p class="pick-label">Hold</p>
-      <p class="guess-fb-key">No root-cause hypothesis — threshold not met</p>
-    </div>`;
+    root.innerHTML = feedbackFormHtml({ editable: false, compact: true, mode });
     return;
   }
   if (state.feedback) {
+    const hold = isHoldFeedback(a, state.feedback);
+    const label = hold ? "Decision review" : "Hypothesis review";
+    const key = hold ? "Hold · do not command" : state.feedback.hypothesis_key;
     root.innerHTML = `<div class="file-fb-summary">
-      <p class="pick-label">Hypothesis review</p>
-      <p class="guess-fb-key">${escapeHtml(state.feedback.hypothesis_key)} · ${escapeHtml(state.feedback.verdict)}</p>
+      <p class="pick-label">${escapeHtml(label)}</p>
+      <p class="guess-fb-key">${escapeHtml(key)} · ${escapeHtml(state.feedback.verdict)}</p>
       ${state.feedback.note ? `<p class="guess-fb-note">${escapeHtml(state.feedback.note)}</p>` : ""}
     </div>`;
     return;
   }
-  root.innerHTML = feedbackFormHtml({ editable: true, compact: true, noteId: "file-feedback-note" });
+  root.innerHTML = feedbackFormHtml({ editable: true, compact: true, noteId: "file-feedback-note", mode });
 }
 
 async function saveFeedback(scopeEl) {
@@ -307,7 +323,7 @@ function renderDecisionContext(a) {
   if (hypRoot) {
     if (showHyp) {
       hypRoot.hidden = false;
-      const kicker = g.withheld ? "No root cause asserted" : "Working hypothesis";
+      const kicker = g.withheld ? "Recommended hold" : "Working hypothesis";
       hypRoot.innerHTML = `<p class="decide-section-kicker">${kicker}</p>${hypothesisContextHtml(a, g)}`;
     } else {
       hypRoot.hidden = true;
@@ -317,18 +333,17 @@ function renderDecisionContext(a) {
 
   if (fbRoot) {
     const showFb = inc && !filed && (inc.status === "recommended" || state.report);
-    if (showFb && g?.withheld) {
+    const mode = g?.withheld ? "hold" : "hypothesis";
+    if (showFb) {
       fbRoot.hidden = false;
-      fbRoot.innerHTML = `<div class="guess-feedback is-withheld">
-        <p class="guess-kicker">Hypothesis review</p>
-        <p class="hint">ORBIT did not assert a root cause — nothing to confirm or reject. File records the hold.</p>
-      </div>`;
-    } else if (showFb) {
-      fbRoot.hidden = false;
-      fbRoot.innerHTML = feedbackFormHtml({ editable: true, compact: false, noteId: "decide-feedback-note" });
+      fbRoot.innerHTML = feedbackFormHtml({ editable: true, compact: false, noteId: "decide-feedback-note", mode });
     } else if (filed && (state.feedback || inc?.feedback)) {
       fbRoot.hidden = false;
-      fbRoot.innerHTML = feedbackFormHtml({ editable: false, compact: false });
+      fbRoot.innerHTML = feedbackFormHtml({
+        editable: false,
+        compact: false,
+        mode: isHoldFeedback(a, state.feedback || inc?.feedback) ? "hold" : "hypothesis",
+      });
     } else {
       fbRoot.hidden = true;
       fbRoot.innerHTML = "";
@@ -336,28 +351,11 @@ function renderDecisionContext(a) {
   }
 }
 
-function renderCaseRibbon(inc) {
-  const ribbon = $("case-ribbon");
-  if (!ribbon) return;
-  if (!inc) {
-    ribbon.hidden = true;
-    ribbon.innerHTML = "";
-    return;
-  }
-  const st = inc.status || "open";
-  if (st === "recommended") {
-    ribbon.hidden = false;
-    ribbon.innerHTML = `<span class="case-ribbon-text">Report stamped — review and file in step 06.</span>
-      <button type="button" class="text-btn" data-case-jump="action">Go to decision</button>`;
-    return;
-  }
-  if (st === "open") {
-    ribbon.hidden = false;
-    ribbon.innerHTML = `<span class="case-ribbon-text">Walk evidence, then assemble the report before filing.</span>`;
-    return;
-  }
-  ribbon.hidden = true;
-  ribbon.innerHTML = "";
+function caseFactHtml(k, v, tone, sub) {
+  return `<div class="fact ${tone ? `is-${tone}` : ""}">
+    <dt>${escapeHtml(k)}</dt>
+    <dd>${escapeHtml(v)}${sub ? `<span class="sub">${escapeHtml(sub)}</span>` : ""}</dd>
+  </div>`;
 }
 
 function tapeCopy(run) {
@@ -588,6 +586,9 @@ const state = {
   hoverT: null,
   report: null,
   investigating: false,
+  evidenceOpen: true,
+  procedureOpen: true,
+  knowledgeOpen: true,
   filing: false,
   feedback: null,
   feedbackSaving: false,
@@ -1979,7 +1980,7 @@ function renderTrust() {
       </div>
       <p class="trust-note">Semantic search during investigation uses local embeddings — not a paid API. Rebuild with <code>python -m storage ingest</code>.</p>
       <div class="trust-card-actions">
-        <button type="button" class="btn-ghost btn" data-trust-library>Open library</button>
+        <button type="button" class="btn-ghost btn" data-trust-library>Browse index docs</button>
       </div>
     </article>
     <article class="trust-card is-${investigatorTone}">
@@ -2234,11 +2235,9 @@ function setView(view) {
   document.body.classList.toggle("view-home", view === "home");
   document.body.classList.toggle("view-incidents", view === "incidents");
   document.body.classList.toggle("view-case", view === "case");
-  document.body.classList.toggle("view-library", view === "library");
   document.body.classList.toggle("view-trust", view === "trust");
   $("tab-home")?.classList.toggle("is-on", view === "home");
   $("tab-incidents")?.classList.toggle("is-on", view === "incidents");
-  $("tab-library")?.classList.toggle("is-on", view === "library");
   $("tab-trust")?.classList.toggle("is-on", view === "trust");
   const skip = $("skip");
   if (skip) {
@@ -2247,21 +2246,17 @@ function setView(view) {
         ? "#incidents-desk"
         : view === "case"
           ? "#stage"
-          : view === "library"
-            ? "#library-desk"
-            : view === "trust"
-              ? "#trust-desk"
-              : "#home";
+          : view === "trust"
+            ? "#trust-desk"
+            : "#home";
     skip.textContent =
       view === "incidents"
         ? "Skip to incidents"
         : view === "case"
           ? "Skip to case"
-          : view === "library"
-            ? "Skip to library"
-            : view === "trust"
-              ? "Skip to trust"
-              : "Skip to overview";
+          : view === "trust"
+            ? "Skip to trust"
+            : "Skip to overview";
   }
 }
 
@@ -2282,13 +2277,7 @@ function enterIncidents() {
 function enterCase() {
   setView("case");
   renderIncidents();
-  setSpine("compare");
-}
-
-function enterLibrary() {
-  setView("library");
-  renderLibrary();
-  $("stage").scrollTop = 0;
+  setSpine("investigation");
 }
 
 function enterTrust() {
@@ -2302,9 +2291,79 @@ async function goTrust() {
   enterTrust();
 }
 
-/* Case spine: the six steps of the walk, kept in sync with the scroll position. */
-const SPINE_IDS = ["compare", "commands", "traces", "procedure", "findings", "action"];
+/* Case spine: investigation → procedure → evidence → decision. */
+const SPINE_IDS = ["investigation", "knowledge", "procedure", "evidence", "action"];
 const spineVisible = new Map();
+
+function syncFold(id, open, toggleId, stateLabelId) {
+  const bundle = $(id);
+  const toggle = $(toggleId);
+  const stateLabel = $(stateLabelId);
+  if (!bundle) return;
+  bundle.classList.toggle("is-collapsed", !open);
+  if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
+  if (stateLabel) stateLabel.textContent = open ? "Hide" : "Show";
+}
+
+function syncEvidenceBundle() {
+  syncFold("evidence", state.evidenceOpen, "evidence-toggle", "evidence-toggle-state");
+}
+
+function syncProcedureBundle() {
+  syncFold("procedure", state.procedureOpen, "procedure-toggle", "procedure-toggle-state");
+}
+
+function syncKnowledgeBundle() {
+  syncFold("knowledge", state.knowledgeOpen, "knowledge-toggle", "knowledge-toggle-state");
+}
+
+function syncCaseFolds() {
+  syncEvidenceBundle();
+  syncProcedureBundle();
+  syncKnowledgeBundle();
+}
+
+function updateInvestigationChrome() {
+  const hasReport = Boolean(state.report);
+  const filed = state.incident?.status === "filed";
+  document.body.classList.toggle("has-investigation", hasReport);
+  const hero = $("investigation");
+  if (hero) hero.classList.toggle("has-report", hasReport);
+  const headCta = $("case-head-cta");
+  if (headCta) {
+    headCta.hidden = filed || hasReport || !state.incidentId;
+    headCta.disabled = state.investigating || !state.incidentId;
+    headCta.textContent = state.investigating ? "Investigating…" : "Run investigation";
+  }
+  const rerun = $("rerun-investigation");
+  if (rerun) {
+    rerun.hidden = filed || !hasReport;
+    rerun.disabled = state.investigating;
+  }
+  const assemble = $("assemble");
+  if (assemble) {
+    assemble.hidden = filed || hasReport;
+    assemble.disabled = state.investigating || !state.incidentId;
+    assemble.textContent = state.investigating ? "Investigating…" : "Run investigation";
+  }
+  document.querySelectorAll(".investigation-empty-cta").forEach((btn) => {
+    btn.hidden = filed || hasReport;
+    btn.disabled = state.investigating || !state.incidentId;
+    btn.textContent = state.investigating ? "Investigating…" : "Run investigation";
+  });
+  const teaser = $("investigation-teaser");
+  if (teaser) {
+    const guess = workingGuess(analysis());
+    if (!hasReport && guess && !filed) {
+      teaser.hidden = false;
+      teaser.textContent = `Working guess: ${guess.suspect}${guess.decoy ? " · payload confounder present" : ""}`;
+    } else {
+      teaser.hidden = true;
+      teaser.textContent = "";
+    }
+  }
+  syncCaseFolds();
+}
 
 function setSpine(id) {
   document.querySelectorAll(".spine-step").forEach((btn) => {
@@ -2318,14 +2377,33 @@ function initSpine() {
   if (!root || !spine) return;
   spine.addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-target]");
-    if (btn) $(btn.dataset.target)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (!btn) return;
+    if (btn.dataset.target === "evidence" && !state.evidenceOpen) {
+      state.evidenceOpen = true;
+      syncEvidenceBundle();
+    }
+    if (btn.dataset.target === "procedure" && !state.procedureOpen) {
+      state.procedureOpen = true;
+      syncProcedureBundle();
+    }
+    if (btn.dataset.target === "knowledge" && !state.knowledgeOpen) {
+      state.knowledgeOpen = true;
+      syncKnowledgeBundle();
+    }
+    $(btn.dataset.target)?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   if (typeof IntersectionObserver !== "function") return;
   const observer = new IntersectionObserver(
     (entries) => {
       for (const entry of entries) spineVisible.set(entry.target.id, entry.isIntersecting);
       if (state.view !== "case") return;
-      const first = SPINE_IDS.find((id) => spineVisible.get(id));
+      const visible = SPINE_IDS.filter((id) => {
+        if (id === "evidence" && !state.evidenceOpen) return false;
+        if (id === "procedure" && !state.procedureOpen) return false;
+        if (id === "knowledge" && !state.knowledgeOpen) return false;
+        return spineVisible.get(id);
+      });
+      const first = visible[0] || SPINE_IDS.find((id) => spineVisible.get(id));
       if (first) setSpine(first);
     },
     { root, rootMargin: "-10% 0px -68% 0px", threshold: 0 }
@@ -2680,10 +2758,6 @@ async function goIncidents() {
   enterIncidents();
 }
 
-function goLibrary() {
-  enterLibrary();
-}
-
 function renderAlarm(a) {
   const hero = $("alarm");
   const inc = state.incident;
@@ -2706,28 +2780,21 @@ function renderAlarm(a) {
   const filedLine = $("case-filed");
   if (filedLine) filedLine.hidden = st !== "filed";
   $("alarm-title").textContent = inc ? alarmTitle(inc.alarm) : "Select a case";
-  renderCaseRibbon(inc);
   const when = a?.warn ? clock(a.warn.time_s) : openedClock(inc?.opened_at);
-  const facts = [];
-  if (inc) {
-    if (a?.warn) facts.push({ k: "First warn", v: when, tone: "warn" });
-    else if (when) facts.push({ k: "Opened", v: when });
-    facts.push({ k: "Entry", v: alarm });
-    if (inc.run_id) facts.push({ k: "Tape", v: tapeCopy({ id: inc.run_id }).title, sub: inc.run_id });
-  }
-  $("case-meta").innerHTML = facts
-    .map(
-      (f) => `<div class="fact ${f.tone ? `is-${f.tone}` : ""}">
-        <dt>${escapeHtml(f.k)}</dt>
-        <dd>${escapeHtml(f.v)}${f.sub ? `<span class="sub">${escapeHtml(f.sub)}</span>` : ""}</dd>
-      </div>`
-    )
-    .join("");
+  const parts = [];
   if (!a) {
     $("alarm-lede").textContent = "Open a case from an alarm you already have. ORBIT does not detect anomalies.";
     $("alarm-lede").hidden = false;
-    $("hero-readout").hidden = true;
     hero.classList.remove("is-warn", "is-ok");
+    if (inc) {
+      if (when) parts.push(caseFactHtml("Opened", when));
+      parts.push(caseFactHtml("Entry", alarm));
+      if (inc.run_id) {
+        const copy = tapeCopy({ id: inc.run_id });
+        parts.push(caseFactHtml("Tape", copy.title, null, inc.run_id));
+      }
+    }
+    $("case-meta").innerHTML = parts.join("");
     return;
   }
   const v = a.warn?.value_num ?? sampleAt(series(alarm), a.t)?.value_num;
@@ -2736,10 +2803,24 @@ function renderAlarm(a) {
   const unit = ch.unit || "";
   $("alarm-lede").hidden = true;
   $("alarm-lede").textContent = "";
-  $("hero-readout").hidden = false;
-  $("alarm-ch").textContent = alarm;
-  $("alarm-value").textContent = fmt(v, 2);
-  $("alarm-unit").textContent = unit;
+  parts.push(`<div class="fact fact-readout ${crossed ? "is-warn" : "is-ok"}" id="hero-readout" aria-label="Alarm reading">
+    <dt id="alarm-ch">${escapeHtml(alarm)}</dt>
+    <dd>
+      <p class="readout-value"><span id="alarm-value">${fmt(v, 2)}</span><span class="unit" id="alarm-unit">${escapeHtml(unit)}</span></p>
+      <p class="hero-meter" id="alarm-meter" hidden><span class="track"><i></i></span><span class="pct"></span></p>
+      <div class="hero-limit" id="alarm-limit"></div>
+    </dd>
+  </div>`);
+  if (inc) {
+    if (a.warn) parts.push(caseFactHtml("First warn", when, "warn"));
+    else if (when) parts.push(caseFactHtml("Opened", when));
+    parts.push(caseFactHtml("Entry", alarm));
+    if (inc.run_id) {
+      const copy = tapeCopy({ id: inc.run_id });
+      parts.push(caseFactHtml("Tape", copy.title, null, inc.run_id));
+    }
+  }
+  $("case-meta").innerHTML = parts.join("");
   renderAlarmMargin(v, ch);
   $("alarm-limit").innerHTML = `${
     crossed ? `<span class="flag">Warn ${escapeHtml(clock(a.warn.time_s))}</span>` : ""
@@ -2938,6 +3019,8 @@ function renderProc(a) {
   $("proc-applies").textContent = book.applies;
   $("proc-entry").innerHTML = book.entry;
   $("proc-goal").textContent = book.goal;
+  const title = $("procedure-toggle-title");
+  if (title) title.textContent = `${id} · book`;
   const named = Boolean(a?.suspect || a?.payloadSuspect || a?.batterySuspect);
   const status = {
     confirm: a?.warn ? "Satisfied" : "",
@@ -2985,10 +3068,10 @@ function renderDecision(a) {
     if (badge) {
       if (fb?.verdict) {
         badge.hidden = false;
-        badge.textContent =
-          fb.verdict === "confirmed"
-            ? `Hypothesis confirmed · ${fb.hypothesis_key}`
-            : `Hypothesis rejected · ${fb.hypothesis_key}`;
+        const hold = isHoldFeedback(a, fb);
+        badge.textContent = hold
+          ? `${feedbackVerdictLabel(fb.verdict, true)} · hold`
+          : `${feedbackVerdictLabel(fb.verdict, false)} · ${fb.hypothesis_key}`;
       } else {
         badge.hidden = true;
         badge.textContent = "";
@@ -3065,9 +3148,7 @@ function renderDecision(a) {
 
 function renderFindings() {
   const body = $("findings-body");
-  const btn = $("assemble");
-  btn.disabled = state.investigating || !state.incidentId;
-  btn.textContent = state.investigating ? "Assembling…" : "Assemble report";
+  updateInvestigationChrome();
   if (state.report) {
     const sections = state.report.split(/\n(?=## )/);
     body.innerHTML = sections
@@ -3086,10 +3167,13 @@ function renderFindings() {
     return;
   }
   if (!analysis()) {
-    body.innerHTML = `<p class="empty">Select a case to begin.</p>`;
+    body.innerHTML = `<div class="investigation-empty"><p>Select a case to begin.</p></div>`;
     return;
   }
-  body.innerHTML = `<p class="empty">Assemble the report to stamp this case. Rules only — no paid model.</p>`;
+  body.innerHTML = `<div class="investigation-empty">
+    <p>Run investigation to stamp this case with a provenance-tagged report.</p>
+    <button type="button" class="btn btn-report investigation-empty-cta">Run investigation</button>
+  </div>`;
 }
 
 function renderCase() {
@@ -3102,6 +3186,7 @@ function renderCase() {
   renderProc(a);
   renderDecision(a);
   renderFindings();
+  renderKnowledge();
 }
 
 async function openIncident(incidentId, jump) {
@@ -3110,8 +3195,22 @@ async function openIncident(incidentId, jump) {
     noteDemoIncident(incidentId);
     if (jump === "closeout") {
       openDoc(incidentId);
-    } else if (jump === "findings") {
-      $("findings")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (jump === "findings" || jump === "investigation") {
+      $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (jump === "action") {
+      $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (jump === "evidence") {
+      state.evidenceOpen = true;
+      syncEvidenceBundle();
+      $("evidence")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (jump === "procedure") {
+      state.procedureOpen = true;
+      syncProcedureBundle();
+      $("procedure")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (jump === "knowledge") {
+      state.knowledgeOpen = true;
+      syncKnowledgeBundle();
+      $("knowledge")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   } catch (err) {
     const lede = $("alarm-lede");
@@ -3139,12 +3238,22 @@ async function loadIncident(incidentId) {
   if (state.workspace.incident) {
     state.incident = state.workspace.incident;
     state.feedback = state.incident.feedback || state.feedback;
+    const inc = state.incident;
+    if (inc.status === "filed" && inc.closeout) {
+      state.report = inc.closeout;
+    } else if (inc.investigation_report) {
+      state.report = inc.investigation_report;
+    }
   }
+  state.evidenceOpen = !state.report;
+  state.procedureOpen = !state.report;
+  state.knowledgeOpen = true;
   state.runId = state.workspace.run_id;
   const a = analysis();
   state.pinT = a?.warn?.time_s ?? a?.heaterCmd?.time_s ?? null;
   renderCase();
-  const input = $("library-q");
+  syncCaseFolds();
+  const input = $("knowledge-q");
   if (input) input.value = "";
   await searchLibrary(likeThisQuery(), { grounded: true });
 }
@@ -3163,15 +3272,19 @@ async function assemble() {
     if (data.status && state.incident) state.incident.status = data.status;
     const listed = state.incidents.find((item) => item.id === state.incidentId);
     if (listed && data.status) listed.status = data.status;
+    state.evidenceOpen = false;
+    state.procedureOpen = false;
+    state.knowledgeOpen = true;
     renderIncidents();
     renderAlarm(analysis());
     renderDecision(analysis());
   } catch (err) {
-    state.report = `# Could not assemble\n\n${err.message}`;
+    state.report = `# Could not investigate\n\n${err.message}`;
   } finally {
     state.investigating = false;
     renderFindings();
-    $("findings").scrollIntoView({ behavior: "smooth", block: "start" });
+    syncCaseFolds();
+    $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 }
 
@@ -3237,7 +3350,7 @@ async function fileIncident(ev) {
     renderAlarm(analysis());
     renderDecision(analysis());
     await refreshDocs();
-    const input = $("library-q");
+    const input = $("knowledge-q");
     if (input) input.value = "";
     await searchLibrary(likeThisQuery(), { grounded: true });
     $("alarm").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -3249,37 +3362,77 @@ async function fileIncident(ev) {
   }
 }
 
-async function openDoc(id) {
+function fillDocReader(doc, why) {
+  const kind = libraryKind(doc);
+  const close = libraryClose(doc);
+  const whyText = why || (close ? `${libraryUse(doc)} · ${close}` : libraryUse(doc));
+  return { kind, whyText };
+}
+
+async function openDoc(id, opts = {}) {
   const res = await fetch(`/documents/${encodeURIComponent(id)}`);
   if (!res.ok) return;
   const doc = await res.json();
   state.openDocId = doc.id;
   state.openDoc = doc;
-  const kind = libraryKind(doc);
-  const close = libraryClose(doc);
-  $("reader-kind").textContent = libraryKindLabel(doc);
-  $("reader-title").textContent = doc.title;
-  $("reader-why").textContent = close ? `${libraryUse(doc)} · ${close}` : libraryUse(doc);
-  $("reader-body").innerHTML = renderMd(doc.body, { skipTitle: true });
-  const actions = $("reader-actions");
-  const listed = state.incidents.find((item) => item.id === doc.id);
-  if (actions) {
-    actions.innerHTML = listed
-      ? `<button type="button" class="btn-bar" data-open-listed="${escapeHtml(doc.id)}">Open case</button>`
-      : "";
+  const grounded = groundedDocs().find((g) => g.doc.id === doc.id);
+  const { whyText } = fillDocReader(doc, opts.why || grounded?.why);
+
+  const onCase = state.view === "case" && state.incidentId;
+  if (onCase || opts.forceCase) {
+    if (state.view !== "case" && state.incidentId) enterCase();
+    state.knowledgeOpen = true;
+    syncKnowledgeBundle();
+    $("reader-kind").textContent = libraryKindLabel(doc);
+    $("reader-title").textContent = doc.title;
+    $("reader-why").textContent = whyText;
+    $("reader-body").innerHTML = renderMd(doc.body, { skipTitle: true });
+    const actions = $("reader-actions");
+    if (actions) {
+      const listed = state.incidents.find((item) => item.id === doc.id);
+      actions.innerHTML = listed && listed.id !== state.incidentId
+        ? `<button type="button" class="btn-bar" data-open-listed="${escapeHtml(doc.id)}">Open case ${escapeHtml(doc.id)}</button>`
+        : "";
+    }
+    const reader = $("knowledge-reader");
+    if (reader) {
+      reader.hidden = false;
+      reader.className = `knowledge-reader kind-${libraryKind(doc)}`;
+    }
+    renderKnowledge();
+    $("knowledge")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    reader?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    return;
   }
-  const reader = $("library-reader");
-  if (reader) reader.className = `lib-page kind-${kind}`;
-  enterLibrary();
-  reader?.scrollTo?.(0, 0);
+
+  openDocSlip(doc, whyText);
+}
+
+function openDocSlip(doc, whyText) {
+  const slip = $("doc-slip");
+  if (!slip) return;
+  $("doc-slip-kind").textContent = libraryKindLabel(doc);
+  $("doc-slip-title").textContent = doc.title;
+  $("doc-slip-why").textContent = whyText || libraryUse(doc);
+  $("doc-slip-body").innerHTML = renderMd(doc.body, { skipTitle: true });
+  slip.hidden = false;
+}
+
+function closeDocSlip() {
+  const slip = $("doc-slip");
+  if (slip) slip.hidden = true;
 }
 
 function closeReader() {
   state.openDocId = null;
   state.openDoc = null;
-  const reader = $("library-reader");
-  if (reader) reader.className = "lib-page";
-  renderLibrary();
+  const reader = $("knowledge-reader");
+  if (reader) {
+    reader.hidden = true;
+    reader.className = "knowledge-reader";
+  }
+  closeDocSlip();
+  renderKnowledge();
 }
 
 function tidySnippet(s) {
@@ -3436,282 +3589,170 @@ function libGroup(title, html, extra = "") {
   </section>`;
 }
 
-function renderLibrary() {
-  const kicker = $("library-kicker");
-  if (kicker) kicker.textContent = state.openDocId ? `${state.openDocId} · book` : "Aurora-1 · book";
-  const kindsRoot = $("library-kinds");
-  const famRoot = $("library-families");
-  const status = $("library-status");
-  const root = $("library-body");
-  const count = $("library-count");
-  const clear = $("library-clear");
-  const suggest = $("library-suggest");
-  if (clear) clear.hidden = !state.libraryQuery;
-  if (count) count.textContent = `${state.docs.length} docs`;
-
-  const query = state.libraryQuery;
-  const kind = state.libraryKind || "all";
-  const family = state.libraryFamily || "all";
-  const inKind = (doc) => kind === "all" || libraryKind(doc) === kind;
-  const inFam = (doc) => family === "all" || libraryFamily(doc) === family;
-  const visible = (doc) => inKind(doc) && inFam(doc);
-
-  const base = query && state.libraryHits ? state.libraryHits : state.docs;
-  const kindCounts = { all: 0, procedure: 0, history: 0, filed: 0 };
-  const famCounts = { all: 0, heater: 0, payload: 0, battery: 0 };
-  for (const doc of base) {
-    if (!inFam(doc)) continue;
-    kindCounts.all += 1;
-    kindCounts[libraryKind(doc)] = (kindCounts[libraryKind(doc)] || 0) + 1;
-  }
-  for (const doc of base) {
-    if (!inKind(doc)) continue;
-    famCounts.all += 1;
-    const fam = libraryFamily(doc);
-    if (famCounts[fam] != null) famCounts[fam] += 1;
-  }
-  if (kindsRoot) {
-    kindsRoot.innerHTML = LIB_KINDS.map(
-      (k) =>
-        `<button type="button" class="lib-kind kind-${k.id} ${k.id === kind ? "is-on" : ""}" data-kind="${k.id}">${k.label}<span class="n">${kindCounts[k.id] || 0}</span></button>`
-    ).join("");
-  }
-  if (famRoot) {
-    famRoot.innerHTML = LIB_FAMILIES.map(
-      (f) =>
-        `<button type="button" class="lib-fam fam-${f.id} ${f.id === family ? "is-on" : ""}" data-family="${f.id}">${f.label}<span class="n">${famCounts[f.id] || 0}</span></button>`
-    ).join("");
-  }
-  if (suggest) {
-    const chips = LIB_SUGGEST.map(
-      (s) =>
-        `<button type="button" class="lib-chip ${query === s.q ? "is-on" : ""}" data-suggest="${escapeHtml(s.q)}">${escapeHtml(s.label)}</button>`
-    );
-    if (state.incidentId) {
-      chips.unshift(
-        `<button type="button" class="lib-chip ${!query ? "is-on" : ""}" data-for-case="1">For ${escapeHtml(state.incidentId)}</button>`
-      );
-    }
-    suggest.innerHTML = chips.join("");
-  }
-
-  const shelf = $("library-shelf");
-  const article = $("library-article");
-  const reader = $("library-reader");
-  const reading = Boolean(state.openDocId && state.openDoc);
-  if (shelf) shelf.hidden = reading;
-  if (article) article.hidden = !reading;
-  if (reader && !reading) reader.className = "lib-page";
-  $("library-desk")?.classList.toggle("is-reading", reading);
-  if (suggest) suggest.hidden = reading;
-
-  if (!root) return;
-  state.libraryVisibleIds = [];
-
-  const remember = (docs) => {
-    for (const doc of docs) {
-      if (!state.libraryVisibleIds.includes(doc.id)) state.libraryVisibleIds.push(doc.id);
-    }
-  };
-
-  if (state.librarySearching) {
-    if (status) status.textContent = "Searching";
-    root.innerHTML = `<p class="lib-hint">Searching the library…</p>`;
-    if (shelf && !reading) shelf.innerHTML = `<p class="lib-hint">Searching the library…</p>`;
-    return;
-  }
-
-  if (query) {
-    const hits = (state.libraryHits || []).filter(visible);
-    remember(hits);
-    if (status) status.textContent = `${hits.length} result${hits.length === 1 ? "" : "s"} · “${query}”`;
-    if (!hits.length) {
-      root.innerHTML = `<p class="lib-hint">Nothing matched “${escapeHtml(query)}”. Try a shorter search, or clear a filter.</p>`;
-      if (shelf && !reading) {
-        shelf.innerHTML = `<p class="eyebrow">Search</p><h2>Nothing matched</h2><p class="lib-shelf-lede">“${escapeHtml(query)}” is not in this filter. Try a shorter phrase, or clear kind / signature.</p>`;
-      }
-      return;
-    }
-    const scale = matchScaler(hits);
-    root.innerHTML = hits.map((hit) => libItem(hit, { query, match: scale(hit) })).join("");
-    if (shelf && !reading) renderLibraryShelf(hits, { query, scale, searching: true });
-    root.querySelector(".lib-item.is-on")?.scrollIntoView({ block: "nearest" });
-    return;
-  }
-
-  const ground = groundedDocs().filter((g) => visible(g.doc));
-  const groundIds = new Set(ground.map((g) => g.doc.id));
-  const related = (state.libraryHits || []).filter((doc) => visible(doc) && !groundIds.has(doc.id));
-  const relatedIds = new Set(related.map((doc) => doc.id));
-  const rest = state.docs
-    .filter((doc) => visible(doc) && !groundIds.has(doc.id) && !relatedIds.has(doc.id))
-    .sort(
-      (a, b) =>
-        (KIND_RANK[libraryKind(a)] ?? 9) - (KIND_RANK[libraryKind(b)] ?? 9) || String(a.id).localeCompare(String(b.id))
-    );
-    remember(ground.map((g) => g.doc));
-    remember(related);
-    remember(rest);
-
-    const shown = ground.length + related.length + rest.length;
-  if (status) {
-    status.textContent = state.incidentId
-      ? `${shown} document${shown === 1 ? "" : "s"} · ranked for ${state.incidentId}`
-      : `${shown} document${shown === 1 ? "" : "s"}`;
-  }
-  if (!shown) {
-    root.innerHTML = `<p class="lib-hint">Nothing in this filter.</p>`;
-    if (shelf && !reading) shelf.innerHTML = `<p class="lib-hint">Nothing in this filter.</p>`;
-    return;
-  }
-  const scale = related.length ? matchScaler(related) : null;
-  root.innerHTML =
-    libGroup("For this case", ground.map((g) => libItem(g.doc, { why: g.why })).join(""), "is-ground") +
-    libGroup(
-      "Related by search",
-      related.map((doc) => libItem(doc, { match: scale ? scale(doc) : null })).join("")
-    ) +
-    libGroup(state.incidentId ? "Everything else" : "All documents", rest.map((doc) => libItem(doc)).join(""));
-  if (shelf && !reading) {
-    renderLibraryShelf(
-      [...ground.map((g) => g.doc), ...related, ...rest],
-      { grounded: ground }
-    );
-  }
-  root.querySelector(".lib-item.is-on")?.scrollIntoView({ block: "nearest" });
-}
-
-function libCard(doc, opts = {}) {
+function knowledgeCard(doc, opts = {}) {
   const kind = libraryKind(doc);
+  const on = doc.id === state.openDocId ? "is-on" : "";
   const close = libraryClose(doc);
-  return `<button type="button" class="lib-card kind-${kind}" data-doc="${escapeHtml(doc.id)}">
-    <span class="kind-chip kind-${kind}">${escapeHtml(libraryKindLabel(doc))}</span>
-    <span class="id">${escapeHtml(doc.id)}</span>
-    <span class="use">${escapeHtml(libraryUse(doc))}</span>
-    ${close ? `<span class="close-line">${escapeHtml(close)}</span>` : ""}
-    ${opts.why ? `<span class="lib-why">${escapeHtml(opts.why)}</span>` : ""}
+  const score = doc.score != null
+    ? `<span class="knowledge-score">${Number(doc.score).toFixed(2)}</span>`
+    : "";
+  return `<button type="button" class="knowledge-card kind-${kind} ${on} ${opts.grounded ? "is-grounded" : ""}" data-doc="${escapeHtml(doc.id)}">
+    <span class="knowledge-card-top">
+      <span class="kind-chip kind-${kind}">${escapeHtml(libraryKindLabel(doc))}</span>
+      <strong>${escapeHtml(doc.id)}</strong>
+      ${score}
+    </span>
+    <span class="knowledge-card-title">${escapeHtml(doc.title)}</span>
+    <span class="knowledge-card-use">${escapeHtml(opts.why || libraryUse(doc))}</span>
+    ${close ? `<span class="knowledge-card-close">${escapeHtml(close)}</span>` : ""}
   </button>`;
 }
 
-function renderLibraryShelf(docs, opts = {}) {
-  const shelf = $("library-shelf");
-  if (!shelf) return;
-  if (opts.searching) {
-    shelf.innerHTML = `<p class="eyebrow">Search</p>
-      <h2>${docs.length} match${docs.length === 1 ? "" : "es"}</h2>
-      <p class="lib-shelf-lede">Pick a document in the index — procedures, similar cases, and filed close-outs stay on the same page.</p>
-      <div class="lib-shelf-grid">${docs.map((doc) => libCard(doc)).join("")}</div>`;
+function knowledgeToggleSummary(ground, related) {
+  const bits = [];
+  if (ground.length) bits.push(...ground.map((g) => g.doc.id));
+  else bits.push("No grounded docs");
+  if (related.length) bits.push(`${related.length} related`);
+  return bits.slice(0, 4).join(" · ");
+}
+
+function renderKnowledge() {
+  const root = $("knowledge-list");
+  const status = $("knowledge-status");
+  const clear = $("knowledge-clear");
+  const title = $("knowledge-toggle-title");
+  const reader = $("knowledge-reader");
+  if (clear) clear.hidden = !state.libraryQuery;
+  if (!root) return;
+
+  const reading = Boolean(state.openDocId && state.openDoc && reader && !reader.hidden);
+  if (reader && !state.openDocId) reader.hidden = true;
+
+  if (state.librarySearching) {
+    if (status) status.textContent = "Searching the index…";
+    root.innerHTML = `<p class="knowledge-hint">Searching…</p>`;
     return;
   }
-  const byKind = { procedure: [], history: [], filed: [] };
-  const whyFor = new Map((opts.grounded || []).map((g) => [g.doc.id, g.why]));
-  for (const doc of docs) byKind[libraryKind(doc)]?.push(doc);
-  const groups = [
-    { id: "procedure", title: "Procedures", lede: "The book. What to check before you guess." },
-    { id: "history", title: "Similar cases", lede: "Prior signatures on this craft. Same fault family, already closed." },
-    { id: "filed", title: "Filed close-outs", lede: "Decisions recorded here. The command was not sent." },
-  ];
-  const head = state.incidentId
-    ? `<p class="eyebrow">Ranked for ${escapeHtml(state.incidentId)}</p>
-       <h2>What this case is built on</h2>
-       <p class="lib-shelf-lede">Procedure, same signature, and the filed record if it exists. Search above to look past this case.</p>`
-    : `<p class="eyebrow">Aurora-1</p>
-       <h2>The book</h2>
-       <p class="lib-shelf-lede">Read a procedure the way it was written. Compare it to a prior close. Filing still does not uplink.</p>`;
-  shelf.innerHTML =
-    head +
-    groups
-      .map((g) => {
-        const items = byKind[g.id];
-        if (!items.length) return "";
-        return `<section class="lib-shelf-group">
-          <p class="family-head">${escapeHtml(g.title)}</p>
-          <p class="hint">${escapeHtml(g.lede)}</p>
-          <div class="lib-shelf-grid">${items.map((doc) => libCard(doc, { why: whyFor.get(doc.id) })).join("")}</div>
-        </section>`;
-      })
-      .join("");
+
+  const ground = groundedDocs();
+  const groundIds = new Set(ground.map((g) => g.doc.id));
+  const query = state.libraryQuery;
+
+  if (query) {
+    const hits = state.libraryHits || [];
+    if (status) {
+      status.textContent = hits.length
+        ? `${hits.length} result${hits.length === 1 ? "" : "s"} for “${query}”`
+        : `Nothing matched “${query}”`;
+    }
+    if (title) title.textContent = hits.length ? `Search · ${hits.length} hits` : "Search · no hits";
+    if (!hits.length) {
+      root.innerHTML = `<p class="knowledge-hint">No documents matched. Try a shorter phrase, or clear search to return to this case.</p>`;
+      return;
+    }
+    root.innerHTML = `<div class="knowledge-group">
+      <p class="knowledge-group-kicker">Search results</p>
+      <div class="knowledge-grid">${hits.map((doc) => knowledgeCard(doc)).join("")}</div>
+    </div>`;
+    return;
+  }
+
+  const related = (state.libraryHits || []).filter((doc) => !groundIds.has(doc.id)).slice(0, 6);
+  if (title) title.textContent = knowledgeToggleSummary(ground, related);
+  if (status) {
+    status.textContent = state.incidentId
+      ? `${ground.length} grounded · ${related.length} related by meaning`
+      : "Open a case to ground the book";
+  }
+
+  let html = "";
+  if (ground.length) {
+    html += `<div class="knowledge-group is-ground">
+      <p class="knowledge-group-kicker">Built for this case</p>
+      <p class="knowledge-group-note">Chosen by the same analysis as the investigation — not by search rank.</p>
+      <div class="knowledge-grid">${ground.map((g) => knowledgeCard(g.doc, { why: g.why, grounded: true })).join("")}</div>
+    </div>`;
+  } else {
+    html += `<p class="knowledge-hint">Run investigation or open a case with a matching procedure to ground the book.</p>`;
+  }
+  if (related.length) {
+    html += `<div class="knowledge-group">
+      <p class="knowledge-group-kicker">Related by meaning</p>
+      <p class="knowledge-group-note">Semantic neighbors from the local index. Useful when the grounded set is thin or you want a second opinion.</p>
+      <div class="knowledge-grid">${related.map((doc) => knowledgeCard(doc)).join("")}</div>
+    </div>`;
+  }
+  root.innerHTML = html;
 }
 
 async function searchLibrary(query, opts = {}) {
   const q = (query || "").trim();
-  /* A grounded fetch ranks the shelf for the open case; it is not a user query. */
   state.libraryQuery = opts.grounded ? "" : q;
   if (!q) {
     state.libraryHits = null;
-    renderLibrary();
+    renderKnowledge();
     return;
   }
   state.librarySearching = true;
-  renderLibrary();
+  renderKnowledge();
   try {
     const res = await fetch(`/search?q=${encodeURIComponent(q)}&limit=20`);
     if (!res.ok) throw new Error(`search ${res.status}`);
     state.libraryHits = await res.json();
-  } catch (err) {
+  } catch {
     state.libraryHits = [];
   } finally {
     state.librarySearching = false;
-    renderLibrary();
+    renderKnowledge();
   }
 }
 
-function followThisCase() {
-  const input = $("library-q");
+function resetKnowledgeToCase() {
+  const input = $("knowledge-q");
   if (input) input.value = "";
   state.libraryQuery = "";
   if (!state.incidentId) {
-    browseLibrary();
+    state.libraryHits = null;
+    renderKnowledge();
     return;
   }
   searchLibrary(likeThisQuery(), { grounded: true });
 }
 
-function browseLibrary() {
-  state.libraryQuery = "";
-  state.libraryHits = null;
-  const input = $("library-q");
-  if (input) input.value = "";
-  renderLibrary();
-}
-
-function focusLibrarySearch() {
-  enterLibrary();
-  const input = $("library-q");
+function focusKnowledgeSearch() {
+  if (!state.incidentId) {
+    enterIncidents();
+    return;
+  }
+  if (state.view !== "case") enterCase();
+  state.knowledgeOpen = true;
+  syncKnowledgeBundle();
+  $("knowledge")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const input = $("knowledge-q");
   if (input) {
     input.focus();
     input.select();
   }
 }
 
-function moveLibrarySelection(delta) {
-  const ids = state.libraryVisibleIds || [];
-  if (!ids.length) return;
-  const cur = ids.indexOf(state.openDocId);
-  const idx =
-    cur < 0 ? (delta > 0 ? 0 : ids.length - 1) : Math.max(0, Math.min(ids.length - 1, cur + delta));
-  const next = ids[idx];
-  if (next && next !== state.openDocId) openDoc(next);
-}
-
-let libraryTimer = 0;
-function onLibraryTyped() {
-  window.clearTimeout(libraryTimer);
-  libraryTimer = window.setTimeout(() => {
-    const q = ($("library-q")?.value || "").trim();
-    if (!q) {
-      followThisCase();
-      return;
-    }
-    searchLibrary(q);
-  }, 200);
-}
-
 async function refreshDocs() {
   const res = await fetch("/documents");
   if (!res.ok) return;
   state.docs = await res.json();
-  renderLibrary();
+  renderKnowledge();
+}
+
+let knowledgeTimer = 0;
+function onKnowledgeTyped() {
+  window.clearTimeout(knowledgeTimer);
+  knowledgeTimer = window.setTimeout(() => {
+    const q = ($("knowledge-q")?.value || "").trim();
+    if (!q) {
+      resetKnowledgeToCase();
+      return;
+    }
+    searchLibrary(q);
+  }, 220);
 }
 
 function bind() {
@@ -3741,7 +3782,6 @@ function bind() {
   });
   $("tab-home").addEventListener("click", () => goHome());
   $("tab-incidents").addEventListener("click", () => goIncidents());
-  $("tab-library").addEventListener("click", () => goLibrary());
   $("tab-trust").addEventListener("click", () => goTrust());
   $("store-status").addEventListener("click", () => goTrust());
   $("back-incidents").addEventListener("click", () => goIncidents());
@@ -3798,21 +3838,43 @@ function bind() {
     openIncident(row.dataset.openCase, row.dataset.jump);
   });
   initSpine();
-  $("library-form").addEventListener("submit", (ev) => {
+  $("knowledge-form")?.addEventListener("submit", (ev) => {
     ev.preventDefault();
-    window.clearTimeout(libraryTimer);
-    const q = $("library-q").value.trim();
+    window.clearTimeout(knowledgeTimer);
+    const q = ($("knowledge-q")?.value || "").trim();
     if (!q) {
-      followThisCase();
+      resetKnowledgeToCase();
       return;
     }
     searchLibrary(q);
   });
-  $("library-q").addEventListener("input", onLibraryTyped);
-  $("library-clear").addEventListener("click", () => {
-    window.clearTimeout(libraryTimer);
-    followThisCase();
-    $("library-q").focus();
+  $("knowledge-q")?.addEventListener("input", onKnowledgeTyped);
+  $("knowledge-clear")?.addEventListener("click", () => {
+    window.clearTimeout(knowledgeTimer);
+    resetKnowledgeToCase();
+    $("knowledge-q")?.focus();
+  });
+  $("knowledge-list")?.addEventListener("click", (ev) => {
+    const listed = ev.target.closest("[data-open-listed]");
+    if (listed) {
+      openIncident(listed.dataset.openListed);
+      return;
+    }
+    const btn = ev.target.closest("[data-doc]");
+    if (btn) openDoc(btn.dataset.doc);
+  });
+  $("knowledge-reader")?.addEventListener("click", (ev) => {
+    const listed = ev.target.closest("[data-open-listed]");
+    if (listed) openIncident(listed.dataset.openListed);
+  });
+  $("knowledge-reader-close")?.addEventListener("click", closeReader);
+  $("knowledge-toggle")?.addEventListener("click", () => {
+    state.knowledgeOpen = !state.knowledgeOpen;
+    syncKnowledgeBundle();
+  });
+  $("doc-slip-close")?.addEventListener("click", closeDocSlip);
+  $("doc-slip")?.addEventListener("click", (ev) => {
+    if (ev.target.id === "doc-slip") closeDocSlip();
   });
   $("inc-search-form")?.addEventListener("submit", (ev) => ev.preventDefault());
   $("inc-q")?.addEventListener("input", () => {
@@ -3831,41 +3893,6 @@ function bind() {
     const clear = $("inc-clear");
     if (clear) clear.hidden = true;
     renderIncidents();
-  });
-  $("library-kinds").addEventListener("click", (ev) => {
-    const btn = ev.target.closest("[data-kind]");
-    if (!btn) return;
-    state.libraryKind = btn.dataset.kind;
-    renderLibrary();
-  });
-  $("library-families").addEventListener("click", (ev) => {
-    const btn = ev.target.closest("[data-family]");
-    if (!btn) return;
-    state.libraryFamily = btn.dataset.family;
-    renderLibrary();
-  });
-  $("library-suggest").addEventListener("click", (ev) => {
-    if (ev.target.closest("[data-for-case]")) {
-      window.clearTimeout(libraryTimer);
-      followThisCase();
-      return;
-    }
-    const chip = ev.target.closest("[data-suggest]");
-    if (!chip) return;
-    window.clearTimeout(libraryTimer);
-    const q = chip.dataset.suggest;
-    const input = $("library-q");
-    if (input) input.value = q;
-    searchLibrary(q);
-  });
-  $("library-desk").addEventListener("click", (ev) => {
-    const listed = ev.target.closest("[data-open-listed]");
-    if (listed) {
-      openIncident(listed.dataset.openListed);
-      return;
-    }
-    const btn = ev.target.closest("[data-doc]");
-    if (btn) openDoc(btn.dataset.doc);
   });
   $("trust-desk").addEventListener("click", (ev) => {
     const connectBtn = ev.target.closest("[data-source-connect]");
@@ -3888,7 +3915,8 @@ function bind() {
       return;
     }
     if (ev.target.closest("[data-trust-library]")) {
-      goLibrary();
+      const first = (state.docs || []).find((d) => libraryKind(d) === "procedure") || state.docs?.[0];
+      if (first) openDoc(first.id);
       return;
     }
     if (ev.target.closest("[data-trust-incidents]")) {
@@ -3909,10 +3937,7 @@ function bind() {
       return;
     }
     const doc = ev.target.closest("[data-trust-doc]");
-    if (doc) {
-      goLibrary();
-      openDoc(doc.dataset.trustDoc);
-    }
+    if (doc) openDoc(doc.dataset.trustDoc);
   });
   $("inspect-tape-btn")?.addEventListener("click", () => {
     if (!state.runId && !state.incident) return;
@@ -3990,9 +4015,36 @@ function bind() {
       $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    $("compare")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (where === "investigation" || where === "findings") {
+      $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (where === "evidence") {
+      state.evidenceOpen = true;
+      syncEvidenceBundle();
+      $("evidence")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (where === "procedure") {
+      state.procedureOpen = true;
+      syncProcedureBundle();
+      $("procedure")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (where === "knowledge") {
+      state.knowledgeOpen = true;
+      syncKnowledgeBundle();
+      $("knowledge")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   $("findings-body").addEventListener("click", (ev) => {
+    const runBtn = ev.target.closest(".investigation-empty-cta");
+    if (runBtn) {
+      assemble();
+      return;
+    }
     const btn = ev.target.closest("[data-t]");
     if (!btn) return;
     pinTape(btn.dataset.t, { scroll: true });
@@ -4005,6 +4057,16 @@ function bind() {
     renderCase();
   });
   $("assemble").addEventListener("click", assemble);
+  $("case-head-cta")?.addEventListener("click", assemble);
+  $("rerun-investigation")?.addEventListener("click", assemble);
+  $("evidence-toggle")?.addEventListener("click", () => {
+    state.evidenceOpen = !state.evidenceOpen;
+    syncEvidenceBundle();
+  });
+  $("procedure-toggle")?.addEventListener("click", () => {
+    state.procedureOpen = !state.procedureOpen;
+    syncProcedureBundle();
+  });
   $("file-incident").addEventListener("click", openFileSlip);
   $("file-form").addEventListener("submit", fileIncident);
   $("file-slip").addEventListener("click", (ev) => {
@@ -4029,28 +4091,26 @@ function bind() {
   };
   $("open-closeout").addEventListener("click", openCloseout);
   $("open-closeout-case").addEventListener("click", openCloseout);
-  $("open-proc").addEventListener("click", () => openDoc(procedureId(analysis())));
-  $("reader-close").addEventListener("click", closeReader);
+  $("open-proc").addEventListener("click", () => openDoc(procedureId(analysis()), { forceCase: true }));
   document.addEventListener("keydown", (ev) => {
     const typing = /^(INPUT|TEXTAREA)$/.test(ev.target?.tagName || "");
     if ((ev.key === "k" || ev.key === "K") && (ev.metaKey || ev.ctrlKey)) {
       ev.preventDefault();
-      focusLibrarySearch();
+      focusKnowledgeSearch();
       return;
     }
     if (ev.key === "/" && !typing && !ev.metaKey && !ev.ctrlKey) {
       ev.preventDefault();
-      focusLibrarySearch();
-      return;
-    }
-    if ((ev.key === "ArrowDown" || ev.key === "ArrowUp") && state.view === "library" && (!typing || ev.target?.id === "library-q")) {
-      ev.preventDefault();
-      moveLibrarySelection(ev.key === "ArrowDown" ? 1 : -1);
+      focusKnowledgeSearch();
       return;
     }
     if (ev.key !== "Escape") return;
     if (state.tapePaletteOpen) {
       closeTapePalette();
+      return;
+    }
+    if ($("doc-slip") && !$("doc-slip").hidden) {
+      closeDocSlip();
       return;
     }
     if (!$("slip").hidden) {
@@ -4066,8 +4126,8 @@ function bind() {
       return;
     }
     if (state.libraryQuery) {
-      window.clearTimeout(libraryTimer);
-      followThisCase();
+      window.clearTimeout(knowledgeTimer);
+      resetKnowledgeToCase();
     }
   });
 }
@@ -4111,7 +4171,6 @@ async function boot() {
   setStoreStatus(state.runs.length > 0);
   fillCreateForm();
   renderIncidents();
-  renderLibrary();
   renderDemoPath();
   const tape =
     state.incidents.find((item) => item.id === "INC-0205")?.run_id ||

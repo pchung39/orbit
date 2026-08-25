@@ -36,7 +36,7 @@ HYPOTHESIS_BY_FAMILY: dict[str, tuple[str, str]] = {
     ),
     "withheld": (
         "WITHHELD",
-        "",
+        "Hold — do not command (EPS-17 step 4 threshold not met).",
     ),
     "open": (
         "OPEN",

@@ -247,7 +247,8 @@ def list_runs(conn: psycopg.Connection) -> list[dict[str, Any]]:
 
 
 _INCIDENT_COLS = (
-    "id, title, run_id, alarm, status, opened_at, notes, filed_at, closeout"
+    "id, title, run_id, alarm, status, opened_at, notes, filed_at, closeout, "
+    "investigation_report, investigated_at"
 )
 _INCIDENT_LIST_COLS = (
     "id, title, run_id, alarm, status, opened_at, notes, filed_at"
@@ -379,6 +380,28 @@ def mark_incident_recommended(conn: psycopg.Connection, incident_id: str) -> dic
         )
         conn.commit()
         row = get_incident(conn, incident_id)
+    return dict(row) if row else None
+
+
+def save_investigation(
+    conn: psycopg.Connection, incident_id: str, report: str
+) -> dict[str, Any] | None:
+    from datetime import datetime, timezone
+
+    row = get_incident(conn, incident_id)
+    if row is None:
+        return None
+    if row["status"] == "filed":
+        raise ValueError(f"{incident_id} is already filed")
+    investigated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    status = "recommended" if row["status"] in ("open", "recommended") else row["status"]
+    conn.execute(
+        "UPDATE incidents SET status = %s, investigation_report = %s, investigated_at = %s "
+        "WHERE id = %s",
+        (status, report, investigated_at, incident_id),
+    )
+    conn.commit()
+    row = get_incident(conn, incident_id)
     return dict(row) if row else None
 
 

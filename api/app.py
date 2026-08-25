@@ -42,7 +42,7 @@ from storage.store import (
     list_documents,
     list_incidents,
     list_runs,
-    mark_incident_recommended,
+    save_investigation,
     query_channel,
     query_events,
     search_documents,
@@ -441,8 +441,8 @@ def investigate_incident(incident_id: str) -> dict[str, Any]:
         row = get_incident(conn, incident_id)
         if row is None:
             raise HTTPException(404, f"unknown incident {incident_id}")
-        mark_incident_recommended(conn, incident_id)
-        row = get_incident(conn, incident_id) or row
+        if row["status"] == "filed":
+            raise HTTPException(409, f"{incident_id} is already filed")
     with span(
         "api.investigate_incident",
         span_type="task",
@@ -450,13 +450,21 @@ def investigate_incident(incident_id: str) -> dict[str, Any]:
         metadata={"provider": "rules", "source": "console"},
     ) as sp:
         report = investigate_rules(row["run_id"], alarm_channel=row["alarm"])
+        try:
+            with _conn() as conn:
+                saved = save_investigation(conn, incident_id, report)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        if saved is None:
+            raise HTTPException(404, f"unknown incident {incident_id}")
         out = {
             "incident_id": incident_id,
-            "run_id": row["run_id"],
+            "run_id": saved["run_id"],
             "provider": "rules",
-            "alarm": row["alarm"],
-            "status": row["status"],
+            "alarm": saved["alarm"],
+            "status": saved["status"],
             "report": report,
+            "investigated_at": saved.get("investigated_at"),
         }
         log_to_span(sp, output={"incident_id": incident_id, "run_id": row["run_id"], "chars": len(report)})
         return out
@@ -519,7 +527,9 @@ def file_open_incident(incident_id: str, body: FileIn | None = None) -> dict[str
             raise HTTPException(404, f"unknown incident {incident_id}")
         if row["status"] == "filed":
             raise HTTPException(409, f"{incident_id} is already filed")
-    report = investigate_rules(row["run_id"], alarm_channel=row["alarm"])
+        report = row.get("investigation_report")
+        if not report:
+            report = investigate_rules(row["run_id"], alarm_channel=row["alarm"])
     with _conn() as conn:
         feedback = get_hypothesis_feedback(conn, incident_id)
     closeout = build_closeout(dict(row), report, note, feedback=dict(feedback) if feedback else None)

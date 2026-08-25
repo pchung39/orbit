@@ -60,7 +60,7 @@ Encore if you have time:
 
 ## The investigation
 
-Step **05** is the product moment. ORBIT assembles a report from the tape and the book. Every claim is stamped:
+Step **01** is the product moment. Run investigation to stamp a report from the tape and the book. Every claim is tagged:
 
 | Tag | Meaning |
 |---|---|
@@ -75,10 +75,9 @@ A plausible story is not a cause until the procedure’s number is met. On **INC
 
 1. **Overview** — mission badge, tape handoff, last samples, orbit context, limit-margin meters
 2. **Incidents** — case queue, craft signatures, next-up ordering
-3. **Case** — six-step spine: evidence → lead-up → tape → procedure → **the investigation** → decision
-4. **Library** — semantic search over procedures and close-outs (`/` or ⌘K)
-5. **Trust** — **Sources** (telemetry archive + library index), store health, eval scorecard, tape inspect
-6. **Demo path** — collapsible guided tour that ends on proof, not prose
+3. **Case** — investigation-first walkthrough: **Run investigation** → **Knowledge** (grounded procedure + priors) → procedure → evidence → decision
+4. **Trust** — **Sources** (telemetry archive + library index), store health, eval scorecard, tape inspect
+5. **Demo path** — collapsible guided tour that ends on proof, not prose
 
 **Open case** asks for an alarm, time, and **archive tape**. ORBIT **seals a time window** (warn ± pad) into a new evidence package for that case — it does not keep a live downlink. Demo path incidents (`INC-0205`, `0210`, …) are pre-seeded and unchanged.
 
@@ -111,7 +110,7 @@ ORBIT is an investigation workbench, not the mission archive. Upstream (demo-loc
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/library-dark.png" alt="Library — search, filters, and EPS-17 in the reading column" width="920" />
+  <img src="docs/screenshots/library-dark.png" alt="Case knowledge — grounded procedure, priors, and in-case reader" width="920" />
 </p>
 
 <p align="center">
@@ -124,8 +123,7 @@ ORBIT is an investigation workbench, not the mission archive. Upstream (demo-loc
 |---|---|
 | **Overview** | Mission badge, Demo path, tape handoff, channel tiles + sparklines, orbit map |
 | **Incidents** | Filterable table, stats, **Next up**, **Signatures**; **Open case** = alarm + time + archive tape → sealed package |
-| **Case** | Sticky spine, load compare, command lead-up, shared-axis traces, procedure satisfaction, stamped investigation, file decision |
-| **Library** | Full-page book: `/` search, kind + signature filters, index + reader |
+| **Case** | Investigation hero, contextual knowledge (grounded procedure + priors + search), collapsible procedure & evidence, file decision |
 | **Trust** | **Sources** (Telemetry archive + Library index; on-demand sync), archive/sealed catalog, scorecard, Inspect |
 | **Theme** | Dark default, light optional |
 
@@ -201,7 +199,7 @@ Default is `--provider rules` (no paid LLM). Green on this harness is the bar: *
 
 If `BRAINTRUST_API_KEY` is set (via `.env.braintrust` from the Braintrust wizard, or env), ORBIT sends investigation traces to project **ORBIT**:
 
-- Console / API **Assemble report** (rules + tool spans)
+- Console / API **Run investigation** (rules + tool spans)
 - `python -m agent investigate … --provider rules` (and LLM CLI when wrapped)
 - `python -m eval` case runs
 
@@ -209,7 +207,7 @@ No key → tracing is a no-op. Do not commit `.env.braintrust` or `.braintrust.j
 
 ### Operator hypothesis feedback
 
-On **Case**, confirm or reject ORBIT’s working hypothesis when one was asserted. Withheld cases have nothing to confirm. Feedback is stored until file, appended to the close-out, and never changes uplink behavior.
+On **Case**, confirm or reject ORBIT’s recommendation — the working hypothesis when one was asserted, or the hold decision when threshold was not met. Feedback is stored until file, appended to the close-out, and never changes uplink behavior.
 
 ```bash
 python -m eval --feedback

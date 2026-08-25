@@ -44,21 +44,11 @@ def main() -> None:
         page.wait_for_timeout(800)
         shot(page, "incidents-dark.png")
 
-        page.click("#tab-library")
-        page.wait_for_timeout(600)
-        page.click('[data-doc="EPS-17"]')
-        page.wait_for_function(
-            "() => document.getElementById('reader-title')?.textContent",
-            timeout=10000,
-        )
-        page.wait_for_timeout(400)
-        shot(page, "library-dark.png")
-
         page.click("#tab-trust")
         page.wait_for_timeout(800)
         shot(page, "trust-dark.png", full_page=True)
 
-        # Case walkthrough — heater-only demo beat.
+        # Case walkthrough — heater-only demo beat + knowledge.
         page.click("#tab-home")
         page.wait_for_timeout(400)
         cta = page.locator('[data-demo-cta="heater"]')
@@ -70,10 +60,29 @@ def main() -> None:
             page.locator('[data-open-listed="INC-0205"], [data-open-case="INC-0205"]').first.click()
         page.wait_for_selector("#case-desk:not([hidden]), #alarm", timeout=15000)
         page.wait_for_timeout(1000)
-        spine = page.locator('[data-target="findings"]')
-        if spine.count():
-            spine.first.click()
+        run_btn = page.locator("#assemble, #case-head-cta, .investigation-empty-cta")
+        if run_btn.count():
+            run_btn.first.click()
+            page.wait_for_function(
+                "() => document.body.classList.contains('has-investigation')",
+                timeout=20000,
+            )
             page.wait_for_timeout(500)
+        # Contextual knowledge — open grounded procedure.
+        knowledge = page.locator("#knowledge-toggle")
+        if knowledge.count():
+            if page.locator("#knowledge.is-collapsed").count():
+                knowledge.first.click()
+                page.wait_for_timeout(300)
+        doc = page.locator('#knowledge-list [data-doc="EPS-17"]')
+        if doc.count():
+            doc.first.click()
+            page.wait_for_function(
+                "() => document.getElementById('reader-title')?.textContent",
+                timeout=10000,
+            )
+            page.wait_for_timeout(400)
+            shot(page, "library-dark.png")
         shot(page, "case-dark.png")
 
         page.click("#tab-home")

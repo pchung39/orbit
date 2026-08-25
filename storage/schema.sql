@@ -57,6 +57,8 @@ CREATE TABLE IF NOT EXISTS incidents (
 
 ALTER TABLE incidents ADD COLUMN IF NOT EXISTS filed_at TEXT;
 ALTER TABLE incidents ADD COLUMN IF NOT EXISTS closeout TEXT;
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS investigation_report TEXT;
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS investigated_at TEXT;
 
 CREATE TABLE IF NOT EXISTS hypothesis_feedback (
     incident_id TEXT PRIMARY KEY REFERENCES incidents(id),

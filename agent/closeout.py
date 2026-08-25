@@ -12,13 +12,27 @@ def _feedback_section(feedback: dict[str, Any]) -> list[str]:
     key = feedback.get("hypothesis_key") or "UNKNOWN"
     if key == "WITHHELD":
         note = (feedback.get("note") or "").strip()
-        line = (
-            "No root-cause hypothesis asserted — EPS-17 step 4 threshold not met. "
-            "**[DOCUMENTED]**"
-        )
+        verdict = feedback.get("verdict") or ""
+        if verdict == "confirmed":
+            line = (
+                "Hold — do not command — confirmed by operator. "
+                "EPS-17 step 4 threshold not met; no root-cause hypothesis asserted. "
+                "**[DOCUMENTED]**"
+            )
+        elif verdict == "rejected":
+            line = (
+                "Hold — do not command — rejected by operator; "
+                "operator disagrees with withholding. "
+                "**[OBSERVED — operator]**"
+            )
+        else:
+            line = (
+                "No root-cause hypothesis asserted — EPS-17 step 4 threshold not met. "
+                "**[DOCUMENTED]**"
+            )
         if note:
             line = f"{line} Operator note: {note} **[OBSERVED — operator]**"
-        return ["## Operator review", "", line, ""]
+        return ["## Operator decision review", "", line, ""]
     verdict = feedback.get("verdict") or ""
     note = (feedback.get("note") or "").strip()
     if verdict == "confirmed":
