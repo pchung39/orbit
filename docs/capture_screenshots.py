@@ -32,24 +32,16 @@ def main() -> None:
 
         shot(page, "overview-dark.png", full_page=True)
 
-        page.click("#tab-incidents")
+        page.goto(f"{BASE.rstrip('/')}/incidents", wait_until="networkidle")
         page.wait_for_timeout(800)
         shot(page, "incidents-dark.png")
 
-        page.click("#tab-trust")
+        page.goto(f"{BASE.rstrip('/')}/trust", wait_until="networkidle")
         page.wait_for_timeout(800)
         shot(page, "trust-dark.png", full_page=True)
 
         # Case walkthrough — heater-only demo beat + knowledge.
-        page.click("#tab-home")
-        page.wait_for_timeout(400)
-        cta = page.locator('[data-open-case="INC-0205"]')
-        if cta.count() and cta.first.is_visible():
-            cta.first.click()
-        else:
-            page.click("#tab-incidents")
-            page.wait_for_timeout(600)
-            page.locator('[data-open-listed="INC-0205"], [data-open-case="INC-0205"]').first.click()
+        page.goto(f"{BASE.rstrip('/')}/incidents/INC-0205", wait_until="networkidle")
         page.wait_for_selector("#case-desk:not([hidden]), #alarm", timeout=15000)
         page.wait_for_timeout(1000)
         run_btn = page.locator("#assemble")
@@ -77,7 +69,7 @@ def main() -> None:
             shot(page, "library-dark.png")
         shot(page, "case-dark.png")
 
-        page.click("#tab-home")
+        page.goto(BASE, wait_until="networkidle")
         page.wait_for_timeout(400)
         page.click("#theme-toggle")
         page.wait_for_timeout(500)

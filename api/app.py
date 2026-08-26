@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import APIRouter, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -116,6 +116,8 @@ app = FastAPI(
     title="ORBIT",
     description="Assemble telemetry, commands, procedures, and incidents. Does not command the spacecraft.",
 )
+
+api = APIRouter(prefix="/api")
 
 init_tracing()
 
@@ -236,12 +238,7 @@ def _channel_card(spec: dict[str, Any], name: str) -> dict[str, Any]:
     }
 
 
-@app.get("/health")
-def health() -> dict[str, bool]:
-    return {"ok": True}
-
-
-@app.get("/trust")
+@api.get("/trust")
 def trust() -> dict[str, Any]:
     """Data-plane health for the trust console. Read-only."""
     spec = load_and_validate()
@@ -258,7 +255,7 @@ def trust() -> dict[str, Any]:
     return snapshot
 
 
-@app.get("/desk")
+@api.get("/desk")
 def desk(run_id: str | None = Query(default=None)) -> dict[str, Any]:
     """Last samples on a tape. Not a live downlink. ORBIT does not detect."""
     spec = load_and_validate()
@@ -311,20 +308,20 @@ def desk(run_id: str | None = Query(default=None)) -> dict[str, Any]:
     }
 
 
-@app.get("/entry-alarms")
+@api.get("/entry-alarms")
 def entry_alarms() -> list[dict[str, Any]]:
     """Alarms an operator can open an incident from. ORBIT does not detect these."""
     return _entry_alarms(load_and_validate())
 
 
-@app.get("/incidents")
+@api.get("/incidents")
 def incidents() -> list[dict[str, Any]]:
     with _conn() as conn:
         ensure_demo_incident(conn)
         return [dict(row) for row in list_incidents(conn)]
 
 
-@app.post("/incidents")
+@api.post("/incidents")
 def open_incident(body: IncidentIn) -> dict[str, Any]:
     spec = load_and_validate()
     allowed = {item["id"] for item in _entry_alarms(spec)}
@@ -340,7 +337,7 @@ def open_incident(body: IncidentIn) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
-@app.get("/sources")
+@api.get("/sources")
 def sources() -> dict[str, Any]:
     """Upstream archive catalog + library index. Cases fetch-on-seal — not a live feed."""
     with _conn() as conn:
@@ -358,18 +355,18 @@ def sources() -> dict[str, Any]:
     }
 
 
-@app.get("/archive")
+@api.get("/archive")
 def archive_catalog() -> list[dict[str, Any]]:
     """Upstream archive tapes available to seal from (metadata + reachability)."""
     return list_archive_catalog()
 
 
-@app.get("/sources/activity")
+@api.get("/sources/activity")
 def sources_activity(limit: int = Query(default=20, ge=1, le=50)) -> list[dict[str, Any]]:
     return list_activity(limit)
 
 
-@app.post("/sources/{connector_id}/sync")
+@api.post("/sources/{connector_id}/sync")
 def sources_sync(connector_id: str) -> dict[str, Any]:
     try:
         with _conn() as conn:
@@ -382,7 +379,7 @@ def sources_sync(connector_id: str) -> dict[str, Any]:
         "activity": list_activity(),
     }
 
-@app.get("/incidents/{incident_id}")
+@api.get("/incidents/{incident_id}")
 def incident(incident_id: str) -> dict[str, Any]:
     with _conn() as conn:
         row = get_incident(conn, incident_id)
@@ -395,7 +392,7 @@ def incident(incident_id: str) -> dict[str, Any]:
         return out
 
 
-@app.get("/incidents/{incident_id}/workspace")
+@api.get("/incidents/{incident_id}/workspace")
 def incident_workspace(incident_id: str) -> dict[str, Any]:
     spec = load_and_validate()
     with _conn() as conn:
@@ -443,7 +440,7 @@ def workspace_payload(
     }
 
 
-@app.post("/incidents/{incident_id}/investigate")
+@api.post("/incidents/{incident_id}/investigate")
 def investigate_incident(incident_id: str) -> dict[str, Any]:
     with _conn() as conn:
         row = get_incident(conn, incident_id)
@@ -487,7 +484,7 @@ class FeedbackIn(BaseModel):
     note: str | None = Field(default=None)
 
 
-@app.get("/incidents/{incident_id}/feedback")
+@api.get("/incidents/{incident_id}/feedback")
 def incident_feedback(incident_id: str) -> dict[str, Any] | None:
     with _conn() as conn:
         row = get_incident(conn, incident_id)
@@ -497,7 +494,7 @@ def incident_feedback(incident_id: str) -> dict[str, Any] | None:
         return dict(fb) if fb else None
 
 
-@app.put("/incidents/{incident_id}/feedback")
+@api.put("/incidents/{incident_id}/feedback")
 def save_incident_feedback(incident_id: str, body: FeedbackIn) -> dict[str, Any]:
     with _conn() as conn:
         row = get_incident(conn, incident_id)
@@ -523,7 +520,7 @@ def save_incident_feedback(incident_id: str, body: FeedbackIn) -> dict[str, Any]
     return {"feedback": fb, "incident_id": incident_id, "status": row["status"]}
 
 
-@app.post("/incidents/{incident_id}/file")
+@api.post("/incidents/{incident_id}/file")
 def file_open_incident(incident_id: str, body: FileIn | None = None) -> dict[str, Any]:
     """Write a library close-out. Does not command the spacecraft."""
     note = (body.note if body else None) or None
@@ -553,13 +550,13 @@ def file_open_incident(incident_id: str, body: FileIn | None = None) -> dict[str
     }
 
 
-@app.get("/runs")
+@api.get("/runs")
 def runs() -> list[dict[str, Any]]:
     with _conn() as conn:
         return [_row(row) for row in list_runs(conn)]
 
 
-@app.get("/runs/{run_id}/events")
+@api.get("/runs/{run_id}/events")
 def events(run_id: str) -> list[dict[str, Any]]:
     with _conn() as conn:
         rows = query_events(conn, run_id)
@@ -568,7 +565,7 @@ def events(run_id: str) -> list[dict[str, Any]]:
         return [_row(row) for row in rows]
 
 
-@app.get("/runs/{run_id}/workspace")
+@api.get("/runs/{run_id}/workspace")
 def workspace(run_id: str) -> dict[str, Any]:
     """One payload for the console: events, traces, channel limits, documents."""
     spec = load_and_validate()
@@ -584,7 +581,7 @@ def workspace(run_id: str) -> dict[str, Any]:
     return workspace_payload(spec, run_id, events, telemetry, documents)
 
 
-@app.get("/runs/{run_id}/channels/{channel}")
+@api.get("/runs/{run_id}/channels/{channel}")
 def channel(
     run_id: str,
     channel: str,
@@ -600,7 +597,7 @@ def channel(
         return [_row(row) for row in rows]
 
 
-@app.get("/runs/{run_id}/inspect")
+@api.get("/runs/{run_id}/inspect")
 def inspect_tape(
     run_id: str,
     channel: str = Query(..., description="Telemetry channel to list sample-by-sample"),
@@ -690,13 +687,13 @@ def inspect_tape(
     }
 
 
-@app.get("/documents")
+@api.get("/documents")
 def documents() -> list[dict[str, Any]]:
     with _conn() as conn:
         return [dict(row) for row in list_documents(conn)]
 
 
-@app.get("/documents/{doc_id}")
+@api.get("/documents/{doc_id}")
 def document(doc_id: str) -> dict[str, Any]:
     with _conn() as conn:
         row = get_document(conn, doc_id)
@@ -711,7 +708,7 @@ def document(doc_id: str) -> dict[str, Any]:
         }
 
 
-@app.get("/search")
+@api.get("/search")
 def search(
     q: str = Query(..., min_length=1),
     limit: int = Query(default=20, ge=1, le=40),
@@ -721,7 +718,7 @@ def search(
         return [_row(row) for row in search_documents(conn, q, limit=limit)]
 
 
-@app.post("/investigate/{run_id}")
+@api.post("/investigate/{run_id}")
 def investigate(run_id: str, alarm: str = Query(default="EPS.bus_voltage")) -> dict[str, str]:
     """Rules-based investigation only. Paid LLM stays on the CLI, on request."""
     with span(
@@ -735,9 +732,54 @@ def investigate(run_id: str, alarm: str = Query(default="EPS.bus_voltage")) -> d
         return {"run_id": run_id, "provider": "rules", "alarm": alarm, "report": report}
 
 
-@app.get("/")
-def console() -> FileResponse:
+def health() -> dict[str, bool]:
+    return {"ok": True}
+
+
+@app.get("/health")
+def health_root() -> dict[str, bool]:
+    return health()
+
+
+@api.get("/health")
+def health_api() -> dict[str, bool]:
+    return health()
+
+
+def _spa_index() -> FileResponse:
     return FileResponse(UI_DIR / "index.html")
 
 
+app.include_router(api)
+# Mount before SPA catch-all so /static/* is not swallowed.
 app.mount("/static", StaticFiles(directory=UI_DIR), name="static")
+
+
+@app.get("/")
+def spa_home() -> FileResponse:
+    return _spa_index()
+
+
+@app.get("/incidents")
+def spa_incidents() -> FileResponse:
+    return _spa_index()
+
+
+@app.get("/trust")
+def spa_trust() -> FileResponse:
+    return _spa_index()
+
+
+@app.get("/incidents/{incident_id}")
+def spa_case(incident_id: str) -> FileResponse:
+    return _spa_index()
+
+
+@app.get("/{full_path:path}")
+def spa_fallback(full_path: str) -> FileResponse:
+    """SPA fallback for unknown non-API paths. Do not swallow /api or /static."""
+    if full_path == "api" or full_path.startswith("api/") or full_path.startswith("static/"):
+        raise HTTPException(404, "Not found")
+    if "." in full_path.rsplit("/", 1)[-1]:
+        raise HTTPException(404, "Not found")
+    return _spa_index()

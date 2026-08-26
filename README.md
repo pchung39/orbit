@@ -145,7 +145,7 @@ python -m storage ingest
 uvicorn api.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
+Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). Console routes: `/`, `/incidents`, `/trust`, `/incidents/INC-0205`. JSON APIs live under `/api` (e.g. `GET /api/incidents`). Load balancer probe: `GET /health` (also `/api/health`).
 
 **Start here:** Overview walkthrough → **INC-0205** → **INC-0210** (same alarm, different culprit) → **Trust** scorecard.
 
@@ -162,7 +162,7 @@ python -m storage channel eps204 THM.heater_b_current --from-clock 14:29:00 --to
 python -m storage events eps204
 ```
 
-HTTP: `GET /runs/{run_id}/inspect?channel=&alarm=&window=focus|full`
+HTTP: `GET /api/runs/{run_id}/inspect?channel=&alarm=&window=focus|full`
 
 ### Regenerate screenshots
 
@@ -223,8 +223,8 @@ The spec is canonical: [`spec/aurora1_mission_model.yaml`](spec/aurora1_mission_
 | Simulator | Nominal + EPS-204 + fault1 + INC-0187 + PAY-002 + INC-0191 + BATT-003 + INC-0162 + marg001 |
 | Store | Postgres / pgvector — runs, telemetry, events, procedures, incidents |
 | Agent | Tools over the store; `--provider rules` in the UI; Claude/OpenAI CLI-only |
-| Console | FastAPI + instrument UI at `/` |
-| Trust API | `GET /trust` — store, library, investigator health |
+| Console | FastAPI SPA at `/`, `/incidents`, `/trust`, `/incidents/{id}`; JSON under `/api` |
+| Trust API | `GET /api/trust` — store, library, investigator health |
 | Eval | Diagnosis / withhold / false-inhibit / source-tag scorecard |
 | Feedback | Operator confirm/reject on working hypothesis |
 

@@ -1,4 +1,11 @@
 const ALARM = "EPS.bus_voltage";
+const API = "/api";
+
+function apiUrl(path) {
+  if (!path.startsWith("/")) path = `/${path}`;
+  return `${API}${path}`;
+}
+
 const TRACE_CATALOG = [
   { id: "EPS.bus_voltage", title: "Bus voltage", color: "var(--ch-bus)" },
   { id: "EPS.battery_voltage", title: "Battery voltage", color: "var(--ch-batt)" },
@@ -273,7 +280,7 @@ async function saveFeedback(scopeEl) {
   renderDecision(analysis());
   renderFileSlipFeedback();
   try {
-    const res = await fetch(`/incidents/${encodeURIComponent(state.incidentId)}/feedback`, {
+    const res = await fetch(apiUrl(`/incidents/${encodeURIComponent(state.incidentId)}/feedback`), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ verdict: on.dataset.fbVerdict, note }),
@@ -1412,7 +1419,7 @@ async function loadTrust() {
   state.trustLoading = true;
   renderTrust();
   try {
-    const [trustRes, sourcesRes] = await Promise.all([fetch("/trust"), fetch("/sources")]);
+    const [trustRes, sourcesRes] = await Promise.all([fetch(apiUrl("/trust")), fetch(apiUrl("/sources"))]);
     if (!trustRes.ok) throw new Error(`trust ${trustRes.status}`);
     state.trust = await trustRes.json();
     setStoreStatus(state.trust.store?.linked, state.trust.store?.linked ? "STORE OK" : "NO STORE");
@@ -1441,7 +1448,7 @@ async function syncSource(connectorId) {
   state.sourcesSyncing = connectorId;
   renderTrust();
   try {
-    const res = await fetch(`/sources/${encodeURIComponent(connectorId)}/sync`, { method: "POST" });
+    const res = await fetch(apiUrl(`/sources/${encodeURIComponent(connectorId)}/sync`), { method: "POST" });
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
       throw new Error(err.detail || `sync ${res.status}`);
@@ -1469,7 +1476,7 @@ async function syncSource(connectorId) {
 
 async function loadArchiveCatalog() {
   try {
-    const res = await fetch("/archive");
+    const res = await fetch(apiUrl("/archive"));
     if (!res.ok) throw new Error(`archive ${res.status}`);
     state.archiveCatalog = await res.json();
   } catch (err) {
@@ -1479,7 +1486,7 @@ async function loadArchiveCatalog() {
 
 async function loadBootstrapLists() {
   try {
-    const [runsRes, alarmRes] = await Promise.all([fetch("/runs"), fetch("/entry-alarms")]);
+    const [runsRes, alarmRes] = await Promise.all([fetch(apiUrl("/runs")), fetch(apiUrl("/entry-alarms"))]);
     if (runsRes.ok) state.runs = await runsRes.json();
     if (alarmRes.ok) state.alarms = await alarmRes.json();
     await loadArchiveCatalog();
@@ -1768,7 +1775,7 @@ function renderTrust() {
       ? docRows.join("")
       : `<p class="trust-empty">No library documents embedded. Run ingest to index procedures and priors.</p>`;
 
-  foot.textContent = `Spec: ${t.spec?.fault_families ?? 0} fault families · ${t.store?.events ?? 0} scripted events in store · Health endpoint /health`;
+  foot.textContent = `Spec: ${t.spec?.fault_families ?? 0} fault families · ${t.store?.events ?? 0} scripted events in store · Health endpoint /health (also /api/health)`;
   renderConnectors();
 }
 
@@ -1833,7 +1840,7 @@ async function loadInspector() {
   if (ins.alarm) params.set("alarm", ins.alarm);
   if (ins.pinClock) params.set("pin_clock", ins.pinClock);
   try {
-    const res = await fetch(`/runs/${encodeURIComponent(ins.runId)}/inspect?${params}`);
+    const res = await fetch(apiUrl(`/runs/${encodeURIComponent(ins.runId)}/inspect?${params}`));
     if (!res.ok) throw new Error(`inspect ${res.status}`);
     ins.data = await res.json();
   } catch (err) {
@@ -1973,11 +1980,71 @@ function setView(view) {
   }
 }
 
+/** Avoid pushState while applying browser back/forward or boot pathname. */
+let syncingFromHistory = false;
+
+function pathForView(view, incidentId = state.incidentId) {
+  if (view === "incidents") return "/incidents";
+  if (view === "trust") return "/trust";
+  if (view === "case" && incidentId) return `/incidents/${encodeURIComponent(incidentId)}`;
+  return "/";
+}
+
+function syncUrl(view, { replace = false } = {}) {
+  if (syncingFromHistory) return;
+  const incidentId = view === "case" ? state.incidentId : null;
+  const path = pathForView(view, incidentId);
+  const same = location.pathname === path;
+  const method = replace || same ? "replaceState" : "pushState";
+  history[method]({ view, incidentId }, "", path);
+}
+
+function parsePath(pathname) {
+  const path = (pathname || "/").replace(/\/+$/, "") || "/";
+  const caseMatch = path.match(/^\/incidents\/([^/]+)$/);
+  if (caseMatch) {
+    return { view: "case", incidentId: decodeURIComponent(caseMatch[1]) };
+  }
+  if (path === "/incidents") return { view: "incidents", incidentId: null };
+  if (path === "/trust") return { view: "trust", incidentId: null };
+  return { view: "home", incidentId: null };
+}
+
+async function routeFromPath(pathname, { replace = false } = {}) {
+  const { view, incidentId } = parsePath(pathname);
+  syncingFromHistory = true;
+  try {
+    if (view === "case" && incidentId) {
+      if (state.incidentId !== incidentId || state.view !== "case" || !state.workspace) {
+        await openIncident(incidentId);
+      } else {
+        enterCase();
+      }
+    } else if (view === "incidents") {
+      enterIncidents();
+    } else if (view === "trust") {
+      enterTrust();
+    } else {
+      enterHome();
+    }
+    // Normalize address bar (e.g. trailing slash) without stacking history.
+    const path = pathForView(state.view, state.incidentId);
+    history.replaceState(
+      { view: state.view, incidentId: state.view === "case" ? state.incidentId : null },
+      "",
+      path
+    );
+  } finally {
+    syncingFromHistory = false;
+  }
+}
+
 function enterHome() {
   setView("home");
   renderHome();
   updateReadouts();
   $("stage").scrollTop = 0;
+  syncUrl("home");
 }
 
 function enterIncidents() {
@@ -1985,18 +2052,21 @@ function enterIncidents() {
   renderIncidents();
   updateReadouts();
   $("stage").scrollTop = 0;
+  syncUrl("incidents");
 }
 
 function enterCase() {
   setView("case");
   renderIncidents();
   setSpine("investigation");
+  syncUrl("case");
 }
 
 function enterTrust() {
   setView("trust");
   loadTrust();
   $("stage").scrollTop = 0;
+  syncUrl("trust");
 }
 
 async function goTrust() {
@@ -2311,7 +2381,7 @@ function renderHome() {
 
 async function loadDesk(runId) {
   const wanted = runId || state.deskRunId || "fault1";
-  const res = await fetch(`/desk?run_id=${encodeURIComponent(wanted)}`);
+  const res = await fetch(apiUrl(`/desk?run_id=${encodeURIComponent(wanted)}`));
   if (!res.ok) throw new Error(`desk ${res.status}`);
   state.desk = await res.json();
   state.deskRunId = state.desk.run_id || wanted;
@@ -2822,7 +2892,7 @@ async function loadIncident(incidentId) {
   enterCase();
   $("stage").scrollTop = 0;
   renderIncidents();
-  const res = await fetch(`/incidents/${encodeURIComponent(incidentId)}/workspace`);
+  const res = await fetch(apiUrl(`/incidents/${encodeURIComponent(incidentId)}/workspace`));
   if (!res.ok) throw new Error(`workspace ${res.status}`);
   state.workspace = await res.json();
   if (state.workspace.incident) {
@@ -2853,7 +2923,7 @@ async function assemble() {
   state.investigating = true;
   renderFindings();
   try {
-    const res = await fetch(`/incidents/${encodeURIComponent(state.incidentId)}/investigate`, {
+    const res = await fetch(apiUrl(`/incidents/${encodeURIComponent(state.incidentId)}/investigate`), {
       method: "POST",
     });
     if (!res.ok) throw new Error(`investigate ${res.status}`);
@@ -2895,7 +2965,7 @@ async function createIncident(ev) {
     window.alert("Pick an archive tape first.");
     return;
   }
-  const res = await fetch("/incidents", {
+  const res = await fetch(apiUrl("/incidents"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -2921,7 +2991,7 @@ async function fileIncident(ev) {
   confirmBtn.disabled = true;
   confirmBtn.textContent = "Filing…";
   try {
-    const res = await fetch(`/incidents/${encodeURIComponent(state.incidentId)}/file`, {
+    const res = await fetch(apiUrl(`/incidents/${encodeURIComponent(state.incidentId)}/file`), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ note: $("file-note").value.trim() || null }),
@@ -2960,7 +3030,7 @@ function fillDocReader(doc, why) {
 }
 
 async function openDoc(id, opts = {}) {
-  const res = await fetch(`/documents/${encodeURIComponent(id)}`);
+  const res = await fetch(apiUrl(`/documents/${encodeURIComponent(id)}`));
   if (!res.ok) return;
   const doc = await res.json();
   state.openDocId = doc.id;
@@ -3286,7 +3356,7 @@ async function searchLibrary(query, opts = {}) {
   state.librarySearching = true;
   renderKnowledge();
   try {
-    const res = await fetch(`/search?q=${encodeURIComponent(q)}&limit=20`);
+    const res = await fetch(apiUrl(`/search?q=${encodeURIComponent(q)}&limit=20`));
     if (!res.ok) throw new Error(`search ${res.status}`);
     state.libraryHits = await res.json();
   } catch {
@@ -3326,7 +3396,7 @@ function focusKnowledgeSearch() {
 }
 
 async function refreshDocs() {
-  const res = await fetch("/documents");
+  const res = await fetch(apiUrl("/documents"));
   if (!res.ok) return;
   state.docs = await res.json();
   renderKnowledge();
@@ -3346,6 +3416,11 @@ function onKnowledgeTyped() {
 }
 
 function bind() {
+  window.addEventListener("popstate", () => {
+    routeFromPath(location.pathname).catch((err) => {
+      console.warn("routeFromPath", err);
+    });
+  });
   $("tab-home").addEventListener("click", () => goHome());
   $("tab-incidents").addEventListener("click", () => goIncidents());
   $("tab-trust").addEventListener("click", () => goTrust());
@@ -3711,10 +3786,10 @@ async function boot() {
   initTheme();
   bind();
   const [runsRes, incidentRes, alarmRes, docsRes] = await Promise.all([
-    fetch("/runs"),
-    fetch("/incidents"),
-    fetch("/entry-alarms"),
-    fetch("/documents"),
+    fetch(apiUrl("/runs")),
+    fetch(apiUrl("/incidents")),
+    fetch(apiUrl("/entry-alarms")),
+    fetch(apiUrl("/documents")),
   ]);
   state.runs = await runsRes.json();
   state.incidents = await incidentRes.json();
@@ -3730,13 +3805,17 @@ async function boot() {
     state.runs.find((run) => run.id === "eps204")?.id ||
     state.runs[0]?.id ||
     "fault1";
-  enterHome();
-  try {
-    await loadDesk(state.deskRunId);
-  } catch (err) {
-    /* craft keeps static orbit */
+  await routeFromPath(location.pathname, { replace: true });
+  if (state.view === "home") {
+    try {
+      await loadDesk(state.deskRunId);
+    } catch (err) {
+      /* craft keeps static orbit */
+    }
   }
-  loadTrust().catch(() => {});
+  if (state.view !== "trust") {
+    loadTrust().catch(() => {});
+  }
 }
 
 boot().catch((err) => {
