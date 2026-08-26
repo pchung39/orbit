@@ -47,8 +47,6 @@
       </div>
     </header>
 
-    <aside id="demo-path" class="demo-path" hidden aria-label="Demo path"></aside>
-
     <div class="app">
       <main class="stage" id="stage">
         <section class="home" id="home">
@@ -84,13 +82,14 @@
             <div class="orbit-wrap home-craft-orbit" id="home-orbit" aria-hidden="true"></div>
           </header>
 
-          <section class="home-handoff" id="home-handoff" aria-label="Tape handoff"></section>
+          <section class="home-handoff" id="home-handoff" aria-label="90-second walkthrough"></section>
 
           <div class="home-board">
             <div class="home-board-head">
               <div>
                 <p class="home-board-kicker">Last samples</p>
                 <h2 class="home-board-title">On this tape</h2>
+                <div class="home-board-sitrep" id="home-sitrep"></div>
                 <p class="home-board-lede" id="home-lede">Recording only — ORBIT does not downlink, detect, or command.</p>
               </div>
               <div class="home-board-tape">
@@ -184,7 +183,6 @@
               </div>
               <div class="case-head-title-row">
                 <h1 id="alarm-title">Select a case</h1>
-                <button type="button" class="btn btn-report case-head-cta" id="case-head-cta" hidden>Run investigation</button>
               </div>
               <p class="lede" id="alarm-lede"></p>
             </div>
@@ -193,6 +191,7 @@
               <span id="case-filed-copy">In the library. Command not sent.</span>
               <button type="button" class="text-btn" id="open-closeout-case">Read close-out</button>
             </p>
+            <p class="case-next" id="case-next" hidden></p>
           </header>
 
           <div class="case-grid">
@@ -214,12 +213,6 @@
                     <p class="investigation-teaser" id="investigation-teaser" hidden></p>
                     <details class="prov-ref" id="prov-ref">
                       <summary class="prov-ref-summary">
-                        <span class="prov-ref-tags" aria-hidden="true">
-                          <span class="tag tag-observed">OBSERVED</span>
-                          <span class="tag tag-derived">DERIVED</span>
-                          <span class="tag tag-documented">DOCUMENTED</span>
-                          <span class="tag tag-hypothesis">HYPOTHESIS</span>
-                        </span>
                         <span class="prov-ref-label">Provenance key</span>
                       </summary>
                       <ul class="prov-ref-defs" aria-label="Provenance tag definitions">
@@ -238,20 +231,19 @@
                 <div class="findings" id="findings-body">
                   <div class="investigation-empty">
                     <p>Run investigation to stamp this case with a provenance-tagged report.</p>
-                    <button type="button" class="btn btn-report investigation-empty-cta">Run investigation</button>
                   </div>
                 </div>
               </section>
 
 
-              <section class="panel evidence-bundle knowledge-bundle" id="knowledge">
-                <button type="button" class="evidence-toggle" id="knowledge-toggle" aria-expanded="true" aria-controls="knowledge-panels">
+              <section class="panel evidence-bundle knowledge-bundle is-collapsed" id="knowledge">
+                <button type="button" class="evidence-toggle" id="knowledge-toggle" aria-expanded="false" aria-controls="knowledge-panels">
                   <span class="evidence-toggle-main">
                     <span class="panel-kicker">Knowledge</span>
                     <span class="evidence-toggle-title" id="knowledge-toggle-title">Procedure · priors · related</span>
                   </span>
                   <span class="evidence-toggle-meta">
-                    <span class="evidence-toggle-state" id="knowledge-toggle-state">Hide</span>
+                    <span class="evidence-toggle-state" id="knowledge-toggle-state">Show</span>
                     <span class="evidence-chevron" aria-hidden="true"></span>
                   </span>
                 </button>
@@ -284,14 +276,14 @@
                 </div>
               </section>
 
-              <section class="panel evidence-bundle" id="procedure">
-                <button type="button" class="evidence-toggle" id="procedure-toggle" aria-expanded="true" aria-controls="procedure-panels">
+              <section class="panel evidence-bundle is-collapsed" id="procedure">
+                <button type="button" class="evidence-toggle" id="procedure-toggle" aria-expanded="false" aria-controls="procedure-panels">
                   <span class="evidence-toggle-main">
                     <span class="panel-kicker">Procedure</span>
                     <span class="evidence-toggle-title" id="procedure-toggle-title">EPS-17 · book</span>
                   </span>
                   <span class="evidence-toggle-meta">
-                    <span class="evidence-toggle-state" id="procedure-toggle-state">Hide</span>
+                    <span class="evidence-toggle-state" id="procedure-toggle-state">Show</span>
                     <span class="evidence-chevron" aria-hidden="true"></span>
                   </span>
                 </button>
@@ -328,14 +320,14 @@
                 </div>
               </section>
 
-              <section class="panel evidence-bundle" id="evidence">
-                <button type="button" class="evidence-toggle" id="evidence-toggle" aria-expanded="true" aria-controls="evidence-panels">
+              <section class="panel evidence-bundle is-collapsed" id="evidence">
+                <button type="button" class="evidence-toggle" id="evidence-toggle" aria-expanded="false" aria-controls="evidence-panels">
                   <span class="evidence-toggle-main">
                     <span class="panel-kicker">Evidence</span>
                     <span class="evidence-toggle-title">Compare · lead-up · tape</span>
                   </span>
                   <span class="evidence-toggle-meta">
-                    <span class="evidence-toggle-state" id="evidence-toggle-state">Hide</span>
+                    <span class="evidence-toggle-state" id="evidence-toggle-state">Show</span>
                     <span class="evidence-chevron" aria-hidden="true"></span>
                   </span>
                 </button>

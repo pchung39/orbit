@@ -32,12 +32,6 @@ def main() -> None:
         page.goto(BASE, wait_until="networkidle")
         wait_ready(page)
 
-        # Ensure demo path is expanded if present.
-        expand = page.locator("[data-demo-expand]")
-        if expand.count() and expand.first.is_visible():
-            expand.first.click()
-            page.wait_for_timeout(300)
-
         shot(page, "overview-dark.png", full_page=True)
 
         page.click("#tab-incidents")
@@ -51,7 +45,7 @@ def main() -> None:
         # Case walkthrough — heater-only demo beat + knowledge.
         page.click("#tab-home")
         page.wait_for_timeout(400)
-        cta = page.locator('[data-demo-cta="heater"]')
+        cta = page.locator('[data-open-case="INC-0205"]')
         if cta.count() and cta.first.is_visible():
             cta.first.click()
         else:
@@ -60,7 +54,7 @@ def main() -> None:
             page.locator('[data-open-listed="INC-0205"], [data-open-case="INC-0205"]').first.click()
         page.wait_for_selector("#case-desk:not([hidden]), #alarm", timeout=15000)
         page.wait_for_timeout(1000)
-        run_btn = page.locator("#assemble, #case-head-cta, .investigation-empty-cta")
+        run_btn = page.locator("#assemble")
         if run_btn.count():
             run_btn.first.click()
             page.wait_for_function(

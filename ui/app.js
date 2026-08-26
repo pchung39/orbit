@@ -134,7 +134,7 @@ function familyLine(item, all) {
 
 function rowCta(item) {
   if (item.status === "filed") return { jump: "closeout", label: "Read close-out" };
-  if (item.status === "recommended") return { jump: "action", label: "File · not sent" };
+  if (item.status === "recommended") return { jump: "walk", label: "File decision" };
   return { jump: "walk", label: "Walk" };
 }
 
@@ -504,12 +504,28 @@ function tracesToDraw() {
   return TRACE_CATALOG.map((ch) => ({ ...ch, primary: ch.id === alarm }));
 }
 
-const DEMO_PATH_KEY = "orbit-demo-path";
 const SOURCE_LINKS_KEY = "orbit-source-links";
-const DEMO_BEATS = [
-  { key: "heater", incidentId: "INC-0205", label: "Heater", sub: "INC-0205", n: "01" },
-  { key: "payload", incidentId: "INC-0210", label: "Payload", sub: "INC-0210", n: "02" },
-  { key: "trust", label: "Proof", sub: "Scorecard", n: "03" },
+const DEMO_STORY = [
+  {
+    id: "INC-0205",
+    n: "01",
+    title: "Earn the close",
+    blurb: "Heater-only fault — inhibit when the load is guilty.",
+    primary: true,
+  },
+  {
+    id: "INC-0210",
+    n: "02",
+    title: "Same alarm, different culprit",
+    blurb: "Payload spike — do not inhibit Heater B.",
+  },
+  {
+    id: null,
+    n: "03",
+    title: "Prove it with rates",
+    blurb: "Eval scorecard — diagnosis and false-inhibit, not a prose claim.",
+    trust: true,
+  },
 ];
 
 function emptySourceLinks() {
@@ -535,37 +551,6 @@ function setSourceLinked(id, linked) {
   persistSourceLinks();
 }
 
-function emptyDemoPathState() {
-  return {
-    dismissed: false,
-    collapsed: false,
-    visitedHeater: false,
-    visitedPayload: false,
-    visitedTrust: false,
-  };
-}
-
-function loadDemoPathState() {
-  try {
-    const raw = window.localStorage.getItem(DEMO_PATH_KEY);
-    if (!raw) return emptyDemoPathState();
-    const parsed = JSON.parse(raw);
-    /* Old keys (visited204 / visited212) reset so stale progress cannot strand the new path. */
-    if ("visited204" in parsed || "visited212" in parsed) {
-      return emptyDemoPathState();
-    }
-    return {
-      dismissed: !!parsed.dismissed,
-      collapsed: !!parsed.collapsed,
-      visitedHeater: !!parsed.visitedHeater,
-      visitedPayload: !!parsed.visitedPayload,
-      visitedTrust: !!parsed.visitedTrust,
-    };
-  } catch (err) {
-    return emptyDemoPathState();
-  }
-}
-
 const state = {
   view: "home",
   runs: [],
@@ -586,9 +571,9 @@ const state = {
   hoverT: null,
   report: null,
   investigating: false,
-  evidenceOpen: true,
-  procedureOpen: true,
-  knowledgeOpen: true,
+  evidenceOpen: false,
+  procedureOpen: false,
+  knowledgeOpen: false,
   filing: false,
   feedback: null,
   feedbackSaving: false,
@@ -608,7 +593,6 @@ const state = {
   sourcesSyncing: null,
   sourcesJustConnected: null,
   sourceLinks: loadSourceLinks(),
-  demoPath: loadDemoPathState(),
   inspector: {
     open: false,
     runId: null,
@@ -620,191 +604,6 @@ const state = {
     data: null,
   },
 };
-
-function persistDemoPath() {
-  try {
-    window.localStorage.setItem(
-      DEMO_PATH_KEY,
-      JSON.stringify({
-        dismissed: state.demoPath.dismissed,
-        collapsed: state.demoPath.collapsed,
-        visitedHeater: state.demoPath.visitedHeater,
-        visitedPayload: state.demoPath.visitedPayload,
-        visitedTrust: state.demoPath.visitedTrust,
-      })
-    );
-  } catch (err) {
-    /* ignore quota / private mode */
-  }
-}
-
-function demoPathPhase() {
-  const d = state.demoPath;
-  if (d.dismissed) return "dismissed";
-  if (!d.visitedHeater) return "heater";
-  if (!d.visitedPayload) return "payload";
-  if (!d.visitedTrust) return "trust";
-  return "done";
-}
-
-function demoPathTargetId() {
-  const phase = demoPathPhase();
-  if (phase === "heater") return "INC-0205";
-  if (phase === "payload") return "INC-0210";
-  return null;
-}
-
-function dismissDemoPath() {
-  state.demoPath.dismissed = true;
-  state.demoPath.collapsed = false;
-  persistDemoPath();
-  renderDemoPath();
-  if (state.view === "incidents") renderIncidents();
-}
-
-function restartDemoPath() {
-  state.demoPath = emptyDemoPathState();
-  persistDemoPath();
-  renderDemoPath();
-  if (state.view === "incidents") renderIncidents();
-  if (state.view === "home") renderDesk();
-}
-
-function setDemoPathCollapsed(collapsed) {
-  if (state.demoPath.dismissed) return;
-  state.demoPath.collapsed = !!collapsed;
-  persistDemoPath();
-  renderDemoPath();
-}
-
-function noteDemoIncident(incidentId) {
-  if (state.demoPath.dismissed) return;
-  let changed = false;
-  if (incidentId === "INC-0205" && !state.demoPath.visitedHeater) {
-    state.demoPath.visitedHeater = true;
-    changed = true;
-  }
-  if (incidentId === "INC-0210" && !state.demoPath.visitedPayload) {
-    state.demoPath.visitedPayload = true;
-    changed = true;
-  }
-  if (changed) {
-    persistDemoPath();
-    renderDemoPath();
-  }
-}
-
-function noteDemoTrust() {
-  if (state.demoPath.dismissed) return;
-  if (!state.demoPath.visitedHeater || !state.demoPath.visitedPayload) {
-    renderDemoPath();
-    return;
-  }
-  if (!state.demoPath.visitedTrust) {
-    state.demoPath.visitedTrust = true;
-    persistDemoPath();
-  }
-  renderDemoPath();
-}
-
-function renderDemoPath() {
-  const root = $("demo-path");
-  if (!root) return;
-  const phase = demoPathPhase();
-
-  if (phase === "dismissed") {
-    root.hidden = false;
-    root.dataset.phase = "dismissed";
-    root.classList.remove("is-collapsed");
-    root.innerHTML = `
-      <div class="demo-path-inner is-slim">
-        <p class="demo-kicker">Demo path dismissed</p>
-        <p class="demo-copy">Restart anytime — INC-0205 → INC-0210 → Trust.</p>
-        <div class="demo-actions">
-          <button type="button" class="btn-bar demo-cta" data-demo-restart>Restart demo</button>
-        </div>
-      </div>`;
-    document.documentElement.style.setProperty("--demo-path", `${root.offsetHeight}px`);
-    return;
-  }
-
-  root.hidden = false;
-  root.dataset.phase = phase;
-
-  const stepIndex = phase === "done" ? 3 : phase === "heater" ? 1 : phase === "payload" ? 2 : 3;
-  const stepLabel =
-    phase === "heater" ? "Heater" : phase === "payload" ? "Payload" : phase === "trust" ? "Proof" : "Done";
-
-  if (state.demoPath.collapsed) {
-    root.classList.add("is-collapsed");
-    root.innerHTML = `
-      <div class="demo-path-inner is-slim is-collapsed">
-        <button type="button" class="demo-collapse-hit" data-demo-expand aria-expanded="false" aria-label="Expand demo path">
-          <span class="demo-brand-mark" aria-hidden="true"></span>
-          <span class="demo-kicker">Demo path · ${stepIndex}/3</span>
-          <span class="demo-collapse-step">${escapeHtml(stepLabel)}</span>
-        </button>
-        <div class="demo-actions">
-          <button type="button" class="text-btn" data-demo-expand>Expand</button>
-        </div>
-      </div>`;
-    document.documentElement.style.setProperty("--demo-path", `${root.offsetHeight}px`);
-    return;
-  }
-
-  root.classList.remove("is-collapsed");
-  const beatHtml = DEMO_BEATS.map((b, i) => {
-    const n = i + 1;
-    const done = n < stepIndex || phase === "done";
-    const on = phase === b.key;
-    return `<div class="demo-beat${done ? " is-done" : ""}${on ? " is-on" : ""}">
-      <span class="demo-beat-node" aria-hidden="true">${done && !on ? "✓" : b.n}</span>
-      <span class="demo-beat-label">${escapeHtml(b.label)}</span>
-      <span class="demo-beat-sub">${escapeHtml(b.sub)}</span>
-    </div>`;
-  }).join('<span class="demo-beat-rail" aria-hidden="true"></span>');
-
-  let thesis = "";
-  let detail = "";
-  let cta = "";
-  let trailing = `<button type="button" class="text-btn demo-skip" data-demo-collapse>Collapse</button>
-    <button type="button" class="text-btn demo-skip" data-demo-skip>Skip</button>`;
-
-  if (phase === "heater") {
-    thesis = "Recommend when earned";
-    detail = "Heater-only bus sag — payload stayed STANDBY; inhibit Heater B.";
-    cta = `<button type="button" class="btn-bar demo-cta" data-demo-cta="heater">Walk INC-0205</button>`;
-  } else if (phase === "payload") {
-    thesis = "Different culprit";
-    detail = "Payload spike on SCIENCE_MODE — do not inhibit the heater.";
-    cta = `<button type="button" class="btn-bar demo-cta" data-demo-cta="payload">Walk INC-0210</button>`;
-  } else if (phase === "trust") {
-    thesis = "Prove it with rates";
-    detail = "Scorecard: diagnosis, false-inhibit, provenance — not a prose claim.";
-    cta = `<button type="button" class="btn-bar demo-cta" data-demo-cta="trust">Open scorecard</button>`;
-  } else {
-    thesis = "Two earned closes · measured judgment";
-    detail = "That’s the product. The rest is evidence assembly.";
-    cta = `<button type="button" class="text-btn demo-skip" data-demo-restart>Restart</button>`;
-    trailing = `<button type="button" class="text-btn demo-skip" data-demo-collapse>Collapse</button>
-      <button type="button" class="btn-bar demo-cta" data-demo-dismiss>Dismiss</button>`;
-  }
-
-  root.innerHTML = `
-    <div class="demo-path-inner">
-      <div class="demo-brand">
-        <span class="demo-brand-mark" aria-hidden="true"></span>
-        <div>
-          <p class="demo-kicker">Demo path${phase === "done" ? "" : ` · ${stepIndex}/3`}</p>
-          <p class="demo-thesis">${escapeHtml(thesis)}</p>
-        </div>
-      </div>
-      <div class="demo-spine" role="list">${beatHtml}</div>
-      <p class="demo-copy">${escapeHtml(detail)}</p>
-      <div class="demo-actions">${cta}${trailing}</div>
-    </div>`;
-  document.documentElement.style.setProperty("--demo-path", `${root.offsetHeight}px`);
-}
 
 const $ = (id) => document.getElementById(id);
 
@@ -1511,8 +1310,7 @@ function incRow(item, all) {
   const copy = tapeCopy({ id: item.run_id });
   const cta = rowCta(item);
   const on = state.view === "case" && item.id === state.incidentId ? "is-on" : "";
-  const demoTarget = item.id === demoPathTargetId() ? "is-demo-target" : "";
-  return `<div class="inc-row tone-${incidentTone(item)} ${on} ${demoTarget} ${st === "recommended" ? "is-ready" : ""}" data-open-case="${item.id}" data-jump="${cta.jump}" role="button" tabindex="0">
+  return `<div class="inc-row tone-${incidentTone(item)} ${on} ${st === "recommended" ? "is-ready" : ""}" data-open-case="${item.id}" data-jump="${cta.jump}" role="button" tabindex="0">
     <span class="id">${item.id}</span>
     <span class="inc-alarm">
       <strong>${escapeHtml(alarmTitle(item.alarm))}</strong>
@@ -1704,7 +1502,6 @@ async function loadTrust() {
   } finally {
     state.trustLoading = false;
     renderTrust();
-    focusDemoScorecard();
   }
 }
 
@@ -1853,15 +1650,6 @@ function renderConnectors() {
   libraryPanel?.classList.toggle("is-source-dim", !state.sourceLinks?.library);
 }
 
-function focusDemoScorecard() {
-  const phase = demoPathPhase();
-  if (phase !== "done" && phase !== "trust") return;
-  if (state.view !== "trust") return;
-  requestAnimationFrame(() => {
-    $("trust-scorecard")?.scrollIntoView({ behavior: "smooth", block: "center" });
-  });
-}
-
 function renderTrust() {
   const t = state.trust;
   const head = $("trust-head");
@@ -1914,9 +1702,6 @@ function renderTrust() {
   const scoreStatus = sc
     ? `${sc.cases_ok}/${sc.cases_total} cases`
     : `${t.eval?.cases ?? 5} cases`;
-  const demoPhase = demoPathPhase();
-  const demoScoreFocus =
-    !state.demoPath.dismissed && (demoPhase === "trust" || demoPhase === "done");
   const scoreRates = sc
     ? [sc.diagnosis, sc.withhold, sc.false_inhibit, sc.provenance].filter(Boolean)
     : [];
@@ -2002,7 +1787,7 @@ function renderTrust() {
         <button type="button" class="btn-ghost btn" data-trust-incidents>Open incidents</button>
       </div>
     </article>
-    <article class="trust-card is-${scoreTone}${demoScoreFocus ? " is-demo-focus" : ""}" id="trust-scorecard">
+    <article class="trust-card is-${scoreTone}" id="trust-scorecard">
       <div class="trust-card-head">
         <div>
           <p class="trust-card-kicker">Validation</p>
@@ -2282,7 +2067,6 @@ function enterCase() {
 
 function enterTrust() {
   setView("trust");
-  noteDemoTrust();
   loadTrust();
   $("stage").scrollTop = 0;
 }
@@ -2329,12 +2113,6 @@ function updateInvestigationChrome() {
   document.body.classList.toggle("has-investigation", hasReport);
   const hero = $("investigation");
   if (hero) hero.classList.toggle("has-report", hasReport);
-  const headCta = $("case-head-cta");
-  if (headCta) {
-    headCta.hidden = filed || hasReport || !state.incidentId;
-    headCta.disabled = state.investigating || !state.incidentId;
-    headCta.textContent = state.investigating ? "Investigating…" : "Run investigation";
-  }
   const rerun = $("rerun-investigation");
   if (rerun) {
     rerun.hidden = filed || !hasReport;
@@ -2346,11 +2124,6 @@ function updateInvestigationChrome() {
     assemble.disabled = state.investigating || !state.incidentId;
     assemble.textContent = state.investigating ? "Investigating…" : "Run investigation";
   }
-  document.querySelectorAll(".investigation-empty-cta").forEach((btn) => {
-    btn.hidden = filed || hasReport;
-    btn.disabled = state.investigating || !state.incidentId;
-    btn.textContent = state.investigating ? "Investigating…" : "Run investigation";
-  });
   const teaser = $("investigation-teaser");
   if (teaser) {
     const guess = workingGuess(analysis());
@@ -2616,33 +2389,58 @@ function sitrep() {
 function renderHomeHandoff() {
   const root = $("home-handoff");
   if (!root) return;
-  const sit = sitrep();
-  const rows = state.incidents.filter((item) => item.run_id === state.deskRunId);
-  const primary = rows[0];
-  const more = rows.length - 1;
 
-  let action = "";
-  if (primary) {
-    const act = caseAction(primary) || rowCta(primary).label;
-    action = `<button type="button" class="btn home-handoff-cta" data-open-case="${escapeHtml(primary.id)}" data-jump="walk">
-      Walk ${escapeHtml(primary.id)}
-    </button>
-    <p class="home-handoff-act">${escapeHtml(act)}${more > 0 ? ` · +${more} more on tape` : ""}</p>`;
-  } else {
-    action = `<button type="button" class="btn-ghost btn home-handoff-cta" data-go-incidents>Open incidents</button>
-      <p class="home-handoff-act">No case on this tape yet</p>`;
-  }
+  const steps = DEMO_STORY.map((beat) => {
+    const primary = beat.primary ? " is-primary" : "";
+    let action = "";
+    if (beat.primary && beat.id) {
+      action = `<button type="button" class="btn home-handoff-cta" data-open-case="${escapeHtml(beat.id)}" data-jump="walk">
+              Open ${escapeHtml(beat.id)}
+            </button>`;
+    } else if (beat.trust) {
+      action = `<button type="button" class="home-demo-link" data-go-trust>
+              Open Trust scorecard
+            </button>`;
+    } else if (beat.id) {
+      action = `<button type="button" class="home-demo-link" data-open-case="${escapeHtml(beat.id)}" data-jump="walk">
+              Open ${escapeHtml(beat.id)}
+            </button>`;
+    }
+    return `<li class="home-demo-step${primary}">
+          <span class="home-demo-n" aria-hidden="true">${escapeHtml(beat.n)}</span>
+          <div class="home-demo-body">
+            <p class="home-demo-title">${escapeHtml(beat.title)}</p>
+            <p class="home-demo-copy">${escapeHtml(beat.blurb)}</p>
+            ${action}
+          </div>
+        </li>`;
+  }).join("");
 
   root.innerHTML = `
-    <div class="home-handoff-status is-${sit.level}">
-      <span class="dot" aria-hidden="true"></span>
-      <div>
-        <p class="home-handoff-k">${escapeHtml(sit.label)}</p>
-        <p class="home-handoff-v">${escapeHtml(sit.headline)}</p>
-      </div>
-    </div>
-    <div class="home-handoff-go">
-      ${action}
+    <div class="home-handoff-start">
+      <p class="home-handoff-label">90-second walkthrough</p>
+      <ol class="home-demo-steps">${steps}</ol>
+    </div>`;
+}
+
+function renderHomeSitrep() {
+  const root = $("home-sitrep");
+  if (!root) return;
+  const sit = sitrep();
+  const rows = state.incidents.filter((item) => item.run_id === state.deskRunId);
+  const more = Math.max(0, rows.length - 1);
+  const tapeNote = more > 0
+    ? ` · +${more} more on tape`
+    : rows.length
+      ? ""
+      : " · no case on this tape yet";
+
+  root.className = `home-board-sitrep is-${sit.level}`;
+  root.innerHTML = `
+    <span class="dot" aria-hidden="true"></span>
+    <div>
+      <p class="home-sitrep-k">${escapeHtml(sit.label)}</p>
+      <p class="home-sitrep-v">${escapeHtml(sit.headline)}${escapeHtml(tapeNote)}</p>
     </div>`;
 }
 
@@ -2698,6 +2496,7 @@ function renderDesk() {
   }
 
   renderHomeHandoff();
+  renderHomeSitrep();
   renderHomeOps();
 }
 
@@ -2758,6 +2557,21 @@ async function goIncidents() {
   enterIncidents();
 }
 
+
+function renderCaseNext() {
+  const root = $("case-next");
+  if (!root) return;
+  const id = state.incidentId;
+  if (id === "INC-0205") {
+    root.hidden = false;
+    root.innerHTML = `<span class="case-next-note">Next:</span>
+      <button type="button" class="home-demo-link" data-open-case="INC-0210" data-jump="walk">same alarm, different culprit — INC-0210</button>`;
+    return;
+  }
+  root.hidden = true;
+  root.innerHTML = "";
+}
+
 function renderAlarm(a) {
   const hero = $("alarm");
   const inc = state.incident;
@@ -2795,6 +2609,7 @@ function renderAlarm(a) {
       }
     }
     $("case-meta").innerHTML = parts.join("");
+    renderCaseNext();
     return;
   }
   const v = a.warn?.value_num ?? sampleAt(series(alarm), a.t)?.value_num;
@@ -2827,6 +2642,7 @@ function renderAlarm(a) {
   }<span class="lim">limit ${fmt(ch.warn_limit, 1)} ${escapeHtml(unit)}</span>`;
   hero.classList.toggle("is-warn", crossed);
   hero.classList.toggle("is-ok", !crossed);
+  renderCaseNext();
 }
 
 /* Same 62% tick as the overview meters: the limit always lands in the same place,
@@ -3172,7 +2988,6 @@ function renderFindings() {
   }
   body.innerHTML = `<div class="investigation-empty">
     <p>Run investigation to stamp this case with a provenance-tagged report.</p>
-    <button type="button" class="btn btn-report investigation-empty-cta">Run investigation</button>
   </div>`;
 }
 
@@ -3192,7 +3007,6 @@ function renderCase() {
 async function openIncident(incidentId, jump) {
   try {
     await loadIncident(incidentId);
-    noteDemoIncident(incidentId);
     if (jump === "closeout") {
       openDoc(incidentId);
     } else if (jump === "findings" || jump === "investigation") {
@@ -3245,9 +3059,9 @@ async function loadIncident(incidentId) {
       state.report = inc.investigation_report;
     }
   }
-  state.evidenceOpen = !state.report;
-  state.procedureOpen = !state.report;
-  state.knowledgeOpen = true;
+  state.evidenceOpen = false;
+  state.procedureOpen = false;
+  state.knowledgeOpen = false;
   state.runId = state.workspace.run_id;
   const a = analysis();
   state.pinT = a?.warn?.time_s ?? a?.heaterCmd?.time_s ?? null;
@@ -3274,7 +3088,7 @@ async function assemble() {
     if (listed && data.status) listed.status = data.status;
     state.evidenceOpen = false;
     state.procedureOpen = false;
-    state.knowledgeOpen = true;
+    state.knowledgeOpen = false;
     renderIncidents();
     renderAlarm(analysis());
     renderDecision(analysis());
@@ -3756,30 +3570,6 @@ function onKnowledgeTyped() {
 }
 
 function bind() {
-  $("demo-path")?.addEventListener("click", (ev) => {
-    if (ev.target.closest("[data-demo-restart]")) {
-      restartDemoPath();
-      return;
-    }
-    if (ev.target.closest("[data-demo-collapse]")) {
-      setDemoPathCollapsed(true);
-      return;
-    }
-    if (ev.target.closest("[data-demo-expand]")) {
-      setDemoPathCollapsed(false);
-      return;
-    }
-    if (ev.target.closest("[data-demo-skip]") || ev.target.closest("[data-demo-dismiss]")) {
-      dismissDemoPath();
-      return;
-    }
-    const cta = ev.target.closest("[data-demo-cta]");
-    if (!cta) return;
-    const action = cta.dataset.demoCta;
-    if (action === "heater") openIncident("INC-0205", "walk");
-    else if (action === "payload") openIncident("INC-0210", "walk");
-    else if (action === "trust") goTrust();
-  });
   $("tab-home").addEventListener("click", () => goHome());
   $("tab-incidents").addEventListener("click", () => goIncidents());
   $("tab-trust").addEventListener("click", () => goTrust());
@@ -3807,6 +3597,10 @@ function bind() {
   $("home").addEventListener("click", (ev) => {
     if (ev.target.closest("[data-go-incidents]")) {
       goIncidents();
+      return;
+    }
+    if (ev.target.closest("[data-go-trust]")) {
+      goTrust();
       return;
     }
     if (ev.target.closest("[data-open-slip]")) {
@@ -3992,6 +3786,15 @@ function bind() {
     pinTape(node.dataset.t);
   });
   $("case-desk").addEventListener("click", (ev) => {
+    if (ev.target.closest("[data-go-trust]")) {
+      goTrust();
+      return;
+    }
+    const openCase = ev.target.closest("[data-open-case]");
+    if (openCase) {
+      openIncident(openCase.dataset.openCase, openCase.dataset.jump);
+      return;
+    }
     const verdict = ev.target.closest("[data-fb-verdict]");
     if (verdict) {
       verdict.closest(".fb-toggle")?.querySelectorAll("[data-fb-verdict]").forEach((btn) => {
@@ -4040,11 +3843,6 @@ function bind() {
     $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   $("findings-body").addEventListener("click", (ev) => {
-    const runBtn = ev.target.closest(".investigation-empty-cta");
-    if (runBtn) {
-      assemble();
-      return;
-    }
     const btn = ev.target.closest("[data-t]");
     if (!btn) return;
     pinTape(btn.dataset.t, { scroll: true });
@@ -4057,7 +3855,6 @@ function bind() {
     renderCase();
   });
   $("assemble").addEventListener("click", assemble);
-  $("case-head-cta")?.addEventListener("click", assemble);
   $("rerun-investigation")?.addEventListener("click", assemble);
   $("evidence-toggle")?.addEventListener("click", () => {
     state.evidenceOpen = !state.evidenceOpen;
@@ -4157,7 +3954,6 @@ function initTheme() {
 async function boot() {
   initTheme();
   bind();
-  renderDemoPath();
   const [runsRes, incidentRes, alarmRes, docsRes] = await Promise.all([
     fetch("/runs"),
     fetch("/incidents"),
@@ -4171,7 +3967,6 @@ async function boot() {
   setStoreStatus(state.runs.length > 0);
   fillCreateForm();
   renderIncidents();
-  renderDemoPath();
   const tape =
     state.incidents.find((item) => item.id === "INC-0205")?.run_id ||
     state.runs.find((run) => run.id === "fault1")?.id ||

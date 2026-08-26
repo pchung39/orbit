@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/overview-dark.png" alt="ORBIT overview — Aurora-1 mission badge, demo path, tape handoff, and channel tiles" width="920" />
+  <img src="docs/screenshots/overview-dark.png" alt="ORBIT overview — Aurora-1 mission badge, 90-second walkthrough, tape sitrep, and channel tiles" width="920" />
 </p>
 
 <p align="center">
@@ -40,13 +40,13 @@ That confounder is the product thesis: evidence assembly with provenance, not vi
 
 ## Demo path (90 seconds)
 
-The console ships a collapsible **Demo path** rail. Follow it cold:
+Overview shows a three-beat walkthrough — no sticky tour banner. Follow it cold:
 
 | Step | Open | What you should see |
 |---|---|---|
-| **01 Heater** | **INC-0205** | Heater only — no payload confounder. Clear close. |
-| **02 Payload** | **INC-0210** | Payload is guilty. Do **not** inhibit Heater B. |
-| **03 Proof** | **Trust → Eval scorecard** | Same rates `python -m eval` writes to disk. |
+| **01 Earn the close** | **Open INC-0205** | Heater only — no payload confounder. Clear close. |
+| **02 Same alarm, different culprit** | **INC-0210** | Payload is guilty. Do **not** inhibit Heater B. |
+| **03 Prove it with rates** | **Trust → Eval scorecard** | Same rates `python -m eval` writes to disk. |
 
 Encore if you have time:
 
@@ -73,11 +73,10 @@ A plausible story is not a cause until the procedure’s number is met. On **INC
 
 ## What you get
 
-1. **Overview** — mission badge, tape handoff, last samples, orbit context, limit-margin meters
+1. **Overview** — mission badge, 90-second walkthrough, tape sitrep, last samples, orbit context, limit-margin meters
 2. **Incidents** — case queue, craft signatures, next-up ordering
-3. **Case** — investigation-first walkthrough: **Run investigation** → **Knowledge** (grounded procedure + priors) → procedure → evidence → decision
+3. **Case** — investigation-first walkthrough: **Run investigation** → **Knowledge** (grounded procedure + priors) → procedure → evidence → decision; quiet next-beat link after INC-0205
 4. **Trust** — **Sources** (telemetry archive + library index), store health, eval scorecard, tape inspect
-5. **Demo path** — collapsible guided tour that ends on proof, not prose
 
 **Open case** asks for an alarm, time, and **archive tape**. ORBIT **seals a time window** (warn ± pad) into a new evidence package for that case — it does not keep a live downlink. Demo path incidents (`INC-0205`, `0210`, …) are pre-seeded and unchanged.
 
@@ -121,7 +120,7 @@ ORBIT is an investigation workbench, not the mission archive. Upstream (demo-loc
 
 | View | What it shows |
 |---|---|
-| **Overview** | Mission badge, Demo path, tape handoff, channel tiles + sparklines, orbit map |
+| **Overview** | Mission badge, 90-second walkthrough, tape sitrep, channel tiles + sparklines, orbit map |
 | **Incidents** | Filterable table, stats, **Next up**, **Signatures**; **Open case** = alarm + time + archive tape → sealed package |
 | **Case** | Investigation hero, contextual knowledge (grounded procedure + priors + search), collapsible procedure & evidence, file decision |
 | **Trust** | **Sources** (Telemetry archive + Library index; on-demand sync), archive/sealed catalog, scorecard, Inspect |
@@ -148,7 +147,7 @@ uvicorn api.app:app --host 127.0.0.1 --port 8000 --reload
 
 Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
 
-**Start here:** follow the in-product **Demo path** (INC-0205 → INC-0210 → Trust scorecard).
+**Start here:** Overview walkthrough → **INC-0205** → **INC-0210** (same alarm, different culprit) → **Trust** scorecard.
 
 **Sources (Trust):** Telemetry **archive** and **Library index** connectors. Sync refreshes the archive catalog or rebuilds embeddings on demand (not a live feed). Opening a case seals a time window from an archive tape into a durable `sealed_…` run for that incident.
 
@@ -235,7 +234,7 @@ simulator/          physics + scenarios
 storage/            ingest, query, local embeddings, trust snapshot, sources, seal windows
 agent/              investigate (rules | claude | openai)
 api/                HTTP + static console
-ui/                 overview, incidents, case, library, trust, demo path, sources
+ui/                 overview, incidents, case, trust, sources
 procedures/         EPS-17, PAY-04, EPS-09
 incidents/          closed priors (INC-0187, INC-0191, INC-0162, …)
 eval/
