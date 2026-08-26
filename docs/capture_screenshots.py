@@ -11,10 +11,8 @@ VIEWPORT = {"width": 1440, "height": 900}
 
 
 def wait_ready(page) -> None:
-    page.wait_for_function(
-        "() => document.getElementById('home-clock')?.textContent !== '--:--:--'",
-        timeout=15000,
-    )
+    page.wait_for_selector("#home-brief .home-brief-title", timeout=15000)
+    page.wait_for_selector("#home-path .home-demo-steps", timeout=15000)
     page.wait_for_timeout(500)
 
 

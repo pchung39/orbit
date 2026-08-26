@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/overview-dark.png" alt="ORBIT overview — Aurora-1 mission badge, 90-second walkthrough, tape sitrep, and channel tiles" width="920" />
+  <img src="docs/screenshots/overview-dark.png" alt="ORBIT overview — Aurora-1 mission badge, product brief, walkthrough, and desk queue" width="920" />
 </p>
 
 <p align="center">
@@ -36,11 +36,11 @@ Healthy Heater B draws ~1.2 A when ON. The fault draws ~3.7 A — about 3×. Two
 
 ORBIT recommends inhibit Heater B — and still does not send the command.
 
-That confounder is the product thesis: evidence assembly with provenance, not vibes and not uplink.
+That confounder is the product thesis: evidence assembly with source tags, not vibes and not uplink.
 
 ## Demo path (90 seconds)
 
-Overview shows a three-beat walkthrough — no sticky tour banner. Follow it cold:
+Overview opens with a product brief and a three-beat walkthrough — no sticky tour banner, no tape wall. Follow it cold:
 
 | Step | Open | What you should see |
 |---|---|---|
@@ -73,12 +73,12 @@ A plausible story is not a cause until the procedure’s number is met. On **INC
 
 ## What you get
 
-1. **Overview** — mission badge, 90-second walkthrough, tape sitrep, last samples, orbit context, limit-margin meters
+1. **Overview** — Aurora-1 mission badge + orbit, product brief, 90-second walkthrough, desk queue
 2. **Incidents** — case queue, craft signatures, next-up ordering
 3. **Case** — investigation-first walkthrough: **Run investigation** → **Knowledge** (grounded procedure + priors) → procedure → evidence → decision; quiet next-beat link after INC-0205
 4. **Trust** — **Sources** (telemetry archive + library index), store health, eval scorecard, tape inspect
 
-**Open case** asks for an alarm, time, and **archive tape**. ORBIT **seals a time window** (warn ± pad) into a new evidence package for that case — it does not keep a live downlink. Demo path incidents (`INC-0205`, `0210`, …) are pre-seeded and unchanged.
+**Open case** asks for an alarm, time, and **upstream archive tape**. ORBIT **fetches a time window** (warn ± pad) from that archive and stores only a **sealed** evidence package — it does not keep a live downlink or require uploading a CSV per case. Demo path incidents (`INC-0205`, `0210`, …) are pre-seeded and unchanged.
 
 ## Architecture (sealed tape)
 
@@ -102,7 +102,7 @@ flowchart LR
   LibSync --> Index
 ```
 
-ORBIT is an investigation workbench, not the mission archive. Upstream (demo-local here) holds full tapes and docs; opening a case materializes a **sealed** telemetry window; Library sync rebuilds the **search index**.
+ORBIT is an investigation workbench, not the mission archive. Upstream (demo-local here) holds full tapes and docs; opening a case **fetches** a window and materializes a **sealed** package in ORBIT; Library sync rebuilds the **search index**.
 
 <p align="center">
   <img src="docs/screenshots/incidents-dark.png" alt="Incidents — case table and craft signature rail" width="920" />
@@ -120,10 +120,10 @@ ORBIT is an investigation workbench, not the mission archive. Upstream (demo-loc
 
 | View | What it shows |
 |---|---|
-| **Overview** | Mission badge, 90-second walkthrough, tape sitrep, channel tiles + sparklines, orbit map |
+| **Overview** | Aurora-1 mission badge, product brief, 90-second walkthrough, desk queue |
 | **Incidents** | Filterable table, stats, **Next up**, **Signatures**; **Open case** = alarm + time + archive tape → sealed package |
 | **Case** | Investigation hero, contextual knowledge (grounded procedure + priors + search), collapsible procedure & evidence, file decision |
-| **Trust** | **Sources** (Telemetry archive + Library index; on-demand sync), archive/sealed catalog, scorecard, Inspect |
+| **Trust** | **Sources** (mission archive catalog + library index), sealed inventory, scorecard, Inspect |
 | **Theme** | Dark default, light optional |
 
 <p align="center">
@@ -149,7 +149,7 @@ Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/).
 
 **Start here:** Overview walkthrough → **INC-0205** → **INC-0210** (same alarm, different culprit) → **Trust** scorecard.
 
-**Sources (Trust):** Telemetry **archive** and **Library index** connectors. Sync refreshes the archive catalog or rebuilds embeddings on demand (not a live feed). Opening a case seals a time window from an archive tape into a durable `sealed_…` run for that incident.
+**Sources (Trust):** Mission **archive** (upstream catalog; refresh verifies reachability) and **Library index** (rebuild embeddings). Opening a case **fetches** a time window from the archive into a durable `sealed_…` run — ORBIT does not store the full orbit as its system of record.
 
 Local DB is `orbit` / `orbit` in `docker-compose.yml` — not a production secret. `.env` is for optional CLI keys only; do not commit it.
 
@@ -183,7 +183,7 @@ Scores a finished report against the matching close, then prints real rates:
 | **Named closes correct** | Heater / payload / battery cases fully passed |
 | **Withheld when bar not met** | Decoy (`marg001`) refused to invent a cause |
 | **No false Heater B inhibit** | Contrast cases that correctly leave the heater alone |
-| **Fact vs inference clean** | Tags present; timeline OBSERVED kept separate from causal HYPOTHESIS |
+| **Source tags** | Tags present; timeline OBSERVED kept separate from causal HYPOTHESIS |
 
 ```bash
 python -m eval                 # run suite, write eval/scorecard.json
@@ -225,7 +225,7 @@ The spec is canonical: [`spec/aurora1_mission_model.yaml`](spec/aurora1_mission_
 | Agent | Tools over the store; `--provider rules` in the UI; Claude/OpenAI CLI-only |
 | Console | FastAPI + instrument UI at `/` |
 | Trust API | `GET /trust` — store, library, investigator health |
-| Eval | Diagnosis / withhold / false-inhibit / provenance scorecard |
+| Eval | Diagnosis / withhold / false-inhibit / source-tag scorecard |
 | Feedback | Operator confirm/reject on working hypothesis |
 
 ```

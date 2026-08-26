@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=know1" />
+    <link rel="stylesheet" href="/static/styles.css?v=dash9" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -50,6 +50,7 @@
     <div class="app">
       <main class="stage" id="stage">
         <section class="home" id="home">
+          <p class="home-board-lede" id="home-lede" hidden></p>
           <header class="home-craft" id="home-craft">
             <div class="home-craft-copy">
               <div class="home-bar-id">
@@ -68,6 +69,7 @@
                   <p class="home-bar-name">Aurora-1</p>
                 </div>
               </div>
+              <div class="home-brief" id="home-brief" aria-label="Product brief"></div>
               <div class="home-craft-readouts">
                 <div class="home-craft-read">
                   <p class="home-craft-read-k">Illumination</p>
@@ -81,63 +83,47 @@
             </div>
             <div class="orbit-wrap home-craft-orbit" id="home-orbit" aria-hidden="true"></div>
           </header>
-
-          <section class="home-handoff" id="home-handoff" aria-label="90-second walkthrough"></section>
-
-          <div class="home-board">
-            <div class="home-board-head">
-              <div>
-                <p class="home-board-kicker">Last samples</p>
-                <h2 class="home-board-title">On this tape</h2>
-                <div class="home-board-sitrep" id="home-sitrep"></div>
-                <p class="home-board-lede" id="home-lede">Recording only — ORBIT does not downlink, detect, or command.</p>
-              </div>
-              <div class="home-board-tape">
-                <p class="home-tapes-label">Tape</p>
-                <button type="button" class="tape-trigger" id="tape-trigger" aria-haspopup="dialog" aria-expanded="false">
-                  <span class="tape-trigger-kind" id="tape-trigger-kind">Control</span>
-                  <span class="tape-trigger-title" id="tape-trigger-title">Heater only</span>
-                  <span class="tape-trigger-count" id="tape-trigger-count"></span>
-                  <svg class="tape-trigger-caret" viewBox="0 0 10 6" aria-hidden="true">
-                    <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <section class="home-channels" id="home-channels" aria-label="Last samples on this tape"></section>
-          </div>
-
-          <p class="home-foot" id="home-ops"></p>
+          <section class="home-path is-collapsed" id="home-path" aria-label="90-second walkthrough"></section>
+          <section class="home-proof" id="home-proof" aria-label="Eval proof" hidden></section>
+          <section class="home-desk" id="home-desk" aria-label="Desk queue"></section>
         </section>
 
         <section class="incidents-desk" id="incidents-desk">
           <header class="inc-head" id="inc-head"></header>
-          <div class="inc-tools">
-            <form class="inc-search" id="inc-search-form">
-              <label class="sr-only" for="inc-q">Search cases</label>
-              <svg class="inc-ico" viewBox="0 0 16 16" aria-hidden="true">
-                <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.5" />
-                <path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-              </svg>
-              <input id="inc-q" name="q" type="search" placeholder="Search by case ID, signature, tape…" autocomplete="off" />
-              <button type="button" class="inc-clear" id="inc-clear" aria-label="Clear search" hidden>×</button>
-            </form>
-            <p class="inc-meta" id="inc-meta"></p>
-          </div>
-          <div class="inc-panel">
-            <div class="inc-ready" id="inc-ready" hidden></div>
-            <div class="inc-list" id="inc-list"></div>
+          <div class="inc-board">
+            <div class="inc-toolbar">
+              <form class="inc-search" id="inc-search-form">
+                <label class="sr-only" for="inc-q">Search cases</label>
+                <svg class="inc-ico" viewBox="0 0 16 16" aria-hidden="true">
+                  <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.5" />
+                  <path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                </svg>
+                <input id="inc-q" name="q" type="search" placeholder="Search by case ID, signature, tape…" autocomplete="off" />
+                <button type="button" class="inc-clear" id="inc-clear" aria-label="Clear search" hidden>×</button>
+              </form>
+              <div class="inc-filters" id="inc-filters" aria-label="Case filters"></div>
+              <p class="inc-meta" id="inc-meta"></p>
+            </div>
+            <div class="inc-panel">
+              <div class="inc-list" id="inc-list"></div>
+            </div>
           </div>
         </section>
 
         <section class="trust-desk" id="trust-desk" aria-label="Trust and data sources">
           <header class="trust-head" id="trust-head"></header>
-          <section class="trust-panel trust-sources-panel" aria-labelledby="trust-connectors-title">
+          <section class="trust-score-panel" id="trust-score-panel" aria-label="Eval scorecard">
+            <div id="trust-scorecard-slot"></div>
+          </section>
+          <section class="trust-panel trust-sources-panel" aria-labelledby="trust-sources-title">
             <header class="trust-panel-head">
               <div>
-                <p class="panel-kicker">Sources</p>
-                <h2 id="trust-connectors-title">Connectors</h2>
-                <p class="trust-panel-lede">Archive adapter and library index. Sync refreshes the catalog or rebuilds embeddings on demand. Opening a case seals a time window — ORBIT does not keep a live downlink.</p>
+                <p class="panel-kicker">Evidence plane</p>
+                <h2 id="trust-sources-title">Sources</h2>
+                <p class="trust-panel-lede">
+                  Mission archive stays upstream. Opening a case fetches a window into a sealed package.
+                  Library is the searchable book ORBIT indexes locally.
+                </p>
               </div>
             </header>
             <div class="trust-connectors" id="trust-connectors"></div>
@@ -146,27 +132,29 @@
               <ul class="trust-activity-list" id="trust-activity-list"></ul>
             </div>
           </section>
-          <div class="trust-grid" id="trust-grid"></div>
-          <section class="trust-panel" aria-labelledby="trust-tapes-title">
-            <header class="trust-panel-head">
-              <div>
-                <p class="panel-kicker">Tape catalog</p>
-                <h2 id="trust-tapes-title">Archive and sealed runs</h2>
-                <p class="trust-panel-lede">Archive tapes feed Overview and sealing. Sealed runs are case evidence packages copied at open.</p>
-              </div>
-            </header>
+          <details class="trust-fold" id="trust-fold-tapes">
+            <summary class="trust-fold-summary">
+              <span>
+                <p class="panel-kicker">Inventory</p>
+                <h2 id="trust-tapes-title">Upstream catalog · sealed in ORBIT</h2>
+              </span>
+              <span class="trust-fold-hint">Browse</span>
+            </summary>
+            <p class="trust-panel-lede">Upstream tapes are seal sources. Sealed runs are the packages ORBIT stores for cases.</p>
             <div class="trust-tapes" id="trust-tapes"></div>
-          </section>
-          <section class="trust-panel" aria-labelledby="trust-library-title">
-            <header class="trust-panel-head">
-              <div>
+          </details>
+          <details class="trust-fold" id="trust-fold-library">
+            <summary class="trust-fold-summary">
+              <span>
                 <p class="panel-kicker">Library index</p>
                 <h2 id="trust-library-title">Searchable sources</h2>
-                <p class="trust-panel-lede">Procedures and prior close-outs in the local search index. Sync rebuilds embeddings on publish.</p>
-              </div>
-            </header>
+              </span>
+              <span class="trust-fold-hint">Browse docs</span>
+            </summary>
+            <p class="trust-panel-lede">Procedures and prior close-outs in the local search index.</p>
             <div class="trust-sources" id="trust-sources"></div>
-          </section>
+          </details>
+          <div class="trust-grid" id="trust-grid"></div>
           <footer class="trust-foot" id="trust-foot"></footer>
         </section>
 
@@ -213,9 +201,9 @@
                     <p class="investigation-teaser" id="investigation-teaser" hidden></p>
                     <details class="prov-ref" id="prov-ref">
                       <summary class="prov-ref-summary">
-                        <span class="prov-ref-label">Provenance key</span>
+                        <span class="prov-ref-label">Source tags</span>
                       </summary>
-                      <ul class="prov-ref-defs" aria-label="Provenance tag definitions">
+                      <ul class="prov-ref-defs" aria-label="Source tag meanings">
                         <li><span class="tag tag-observed">OBSERVED</span><span>in telemetry or the command log</span></li>
                         <li><span class="tag tag-derived">DERIVED</span><span>computed from telemetry</span></li>
                         <li><span class="tag tag-documented">DOCUMENTED</span><span>procedure or prior close-out</span></li>
@@ -230,7 +218,7 @@
                 </div>
                 <div class="findings" id="findings-body">
                   <div class="investigation-empty">
-                    <p>Run investigation to stamp this case with a provenance-tagged report.</p>
+                    <p>Run investigation to stamp this case with a source-tagged report.</p>
                   </div>
                 </div>
               </section>
@@ -402,7 +390,7 @@
             <p class="eyebrow" id="slip-title">Open</p>
             <p class="slip-id" id="slip-id">INC-····</p>
           </div>
-          <p class="slip-stub-note">You already have the alarm. ORBIT seals a time window from the archive — it does not detect.</p>
+          <p class="slip-stub-note">You already have the alarm. ORBIT fetches a time window from the upstream archive and seals it — it does not detect.</p>
         </aside>
         <form class="slip-body" id="new-incident">
           <p class="pick-label">Alarm</p>
@@ -453,20 +441,6 @@
       </div>
     </div>
 
-    <div class="tape-palette-wrap" id="tape-palette" hidden>
-      <div class="tape-palette" role="dialog" aria-modal="true" aria-label="Find a tape">
-        <div class="tape-palette-head">
-          <svg class="lib-ico" viewBox="0 0 16 16" aria-hidden="true">
-            <circle cx="7" cy="7" r="5" fill="none" stroke="currentColor" stroke-width="1.4" />
-            <path d="M11 11l3.5 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-          </svg>
-          <input type="text" id="tape-palette-q" class="tape-palette-input" placeholder="Search tapes…" autocomplete="off" />
-          <button type="button" class="tape-palette-close" id="tape-palette-close" aria-label="Close">Esc</button>
-        </div>
-        <div class="tape-palette-list" id="tape-palette-list" role="listbox" aria-label="Tapes"></div>
-      </div>
-    </div>
-
     <div class="tape-inspector-wrap" id="tape-inspector" hidden>
       <div class="tape-inspector" role="dialog" aria-modal="true" aria-labelledby="inspector-title">
         <header class="tape-inspector-head">
@@ -492,7 +466,7 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=know1" type="module"></script>
+    <script src="/static/app.js?v=dash9" type="module"></script>
 
     <div class="slip-wrap" id="doc-slip" hidden>
       <div class="slip doc-slip" role="dialog" aria-modal="true" aria-labelledby="doc-slip-title">

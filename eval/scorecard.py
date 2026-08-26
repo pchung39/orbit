@@ -4,7 +4,7 @@ Metrics are defined from the harness — not vibes:
 - diagnosis: named closes (heater / payload / battery) fully passed
 - withhold: decoy / insufficient cases refused to invent a cause
 - false_inhibit: contrast cases where inhibit Heater B would be wrong
-- provenance: every report stamps tags AND keeps fact vs inference roles apart
+- source tags: every report stamps OBSERVED/DERIVED/… AND keeps fact vs inference roles apart
 
 Write eval/scorecard.json from `python -m eval` so Trust can show real numbers.
 """
@@ -85,7 +85,7 @@ class Scorecard:
             "headline": (
                 f"{self.diagnosis.passed}/{self.diagnosis.total} named closes · "
                 f"{self.false_inhibit.passed}/{self.false_inhibit.total} no false inhibit · "
-                f"{self.provenance.passed}/{self.provenance.total} provenance clean"
+                f"{self.provenance.passed}/{self.provenance.total} source tags clean"
             ),
         }
 
@@ -195,7 +195,7 @@ def build_scorecard(results: Sequence[Any], provider: str) -> Scorecard:
         ),
         provenance=Rate(
             id="provenance",
-            label="Fact vs inference clean",
+            label="Source tags",
             passed=provenance_ok,
             total=provenance_n,
             definition=(

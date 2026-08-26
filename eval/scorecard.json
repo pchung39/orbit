@@ -35,7 +35,7 @@
   },
   "provenance": {
     "id": "provenance",
-    "label": "Fact vs inference clean",
+    "label": "Source tags",
     "passed": 5,
     "total": 5,
     "definition": "Reports that stamp OBSERVED / DERIVED / DOCUMENTED / HYPOTHESIS and keep timeline facts separate from causal hypothesis language.",
@@ -89,5 +89,5 @@
       "total": 16
     }
   ],
-  "headline": "4/4 named closes \u00b7 3/3 no false inhibit \u00b7 5/5 provenance clean"
+  "headline": "4/4 named closes \u00b7 3/3 no false inhibit \u00b7 5/5 source tags clean"
 }

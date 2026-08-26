@@ -24,6 +24,7 @@ from simulator.simulate import load_and_validate
 from storage.sources import (
     bind_preview,
     list_activity,
+    list_archive_catalog,
     list_connectors,
     parse_alarm_clock,
     resolve_archive_run,
@@ -341,19 +342,26 @@ def open_incident(body: IncidentIn) -> dict[str, Any]:
 
 @app.get("/sources")
 def sources() -> dict[str, Any]:
-    """Archive adapter + library index. Cases seal a window at open — not a live feed."""
+    """Upstream archive catalog + library index. Cases fetch-on-seal — not a live feed."""
     with _conn() as conn:
         ensure_demo_incident(conn)
         connectors = list_connectors(conn)
     return {
         "adapters": "demo-local",
         "note": (
-            "Cases get a sealed evidence package at open; the archive stays outside the case. "
-            "Library sync rebuilds the search index on demand. ORBIT does not detect or command."
+            "Mission archive stays upstream. Opening a case fetches a time window and stores "
+            "only the sealed package in ORBIT. Library rebuilds the search index on demand. "
+            "ORBIT does not detect or command."
         ),
         "connectors": connectors,
         "activity": list_activity(),
     }
+
+
+@app.get("/archive")
+def archive_catalog() -> list[dict[str, Any]]:
+    """Upstream archive tapes available to seal from (metadata + reachability)."""
+    return list_archive_catalog()
 
 
 @app.get("/sources/activity")

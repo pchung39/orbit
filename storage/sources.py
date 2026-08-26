@@ -1,8 +1,9 @@
-"""Demo-local source connectors: telemetry archive + library index.
+"""Demo-local archive adapter + library index.
 
-Archive catalog is available for sealing. Opening a case copies a time
-window into a new sealed run_id. Library sync rebuilds the search index.
-ORBIT does not downlink or detect.
+Upstream archive = catalog of full tapes (CSV stand-in). Opening a case
+*fetches* a time window from that archive and stores only the sealed
+package in ORBIT. Library sync rebuilds the search index.
+ORBIT does not downlink, detect, or keep the full archive as its store.
 """
 
 from __future__ import annotations
@@ -11,16 +12,17 @@ import secrets
 from datetime import datetime, timezone
 from typing import Any
 
+import pandas as pd
+
 from simulator.scenarios import clock_to_s, format_clock
 from simulator.simulate import SPEC_PATH, load_and_validate
 from storage.store import (
     ROOT,
+    SPEC_CHANNELS,
     events_for_run,
     ingest_documents,
-    ingest_run,
     list_documents,
     list_runs,
-    query_channel,
     _ensure_run_csv,
 )
 
@@ -101,7 +103,46 @@ def is_sealed_run_id(run_id: str) -> bool:
     return str(run_id).startswith("sealed_")
 
 
+def _catalog_tuple(run_id: str) -> tuple[str, str, Any, str] | None:
+    for row in _TELEMETRY_CATALOG:
+        if row[0] == run_id:
+            return row
+    return None
+
+
+def list_archive_catalog() -> list[dict[str, Any]]:
+    """Upstream archive inventory (metadata). Does not require Postgres ingest."""
+    spec = load_and_validate(SPEC_PATH)
+    out: list[dict[str, Any]] = []
+    for run_id, scenario, path, notes in _TELEMETRY_CATALOG:
+        _ensure_run_csv(spec, run_id, path)
+        entry: dict[str, Any] = {
+            "id": run_id,
+            "scenario": scenario,
+            "notes": notes,
+            "kind": "archive",
+            "adapter": ADAPTER,
+            "available": path.exists(),
+            "source_csv": str(path) if path.exists() else None,
+            "samples": 0,
+            "clock_start": None,
+            "clock_end": None,
+        }
+        if path.exists():
+            try:
+                df = pd.read_csv(path, usecols=["time_s", "timestamp"])
+                if len(df):
+                    entry["samples"] = int(len(df))
+                    entry["clock_start"] = format_clock(float(df["time_s"].iloc[0]))
+                    entry["clock_end"] = format_clock(float(df["time_s"].iloc[-1]))
+            except Exception:
+                entry["available"] = False
+        out.append(entry)
+    return out
+
+
 def archive_runs(conn: Any) -> list[dict[str, Any]]:
+    """Legacy: archive rows still cached in Postgres (demo inspect / seeds)."""
     return [row for row in list_runs(conn) if not is_sealed_run_id(row["id"])]
 
 
@@ -117,7 +158,7 @@ def bind_preview(alarm: str) -> dict[str, str] | None:
         "run_id": meta["run_id"],
         "label": meta["label"],
         "adapter": ADAPTER,
-        "summary": f"Will seal a window from archive {meta['run_id']} · {meta['label']}",
+        "summary": f"Will fetch+seal a window from archive {meta['run_id']} · {meta['label']}",
     }
 
 
@@ -144,25 +185,25 @@ def parse_alarm_clock(alarm_time: str | None) -> str:
 
 
 def resolve_archive_run(conn: Any, alarm: str, source_run_id: str | None = None) -> tuple[str, str]:
-    """Pick an archive (non-sealed) run to seal from. Returns (run_id, label)."""
-    archives = {row["id"] for row in archive_runs(conn)}
+    """Pick an upstream archive tape to seal from. Returns (run_id, label)."""
+    catalog = {row["id"]: row for row in list_archive_catalog() if row.get("available")}
     if source_run_id:
         if is_sealed_run_id(source_run_id):
             raise ValueError(f"{source_run_id} is already a sealed package — pick an archive tape")
-        if source_run_id not in archives:
-            raise ValueError(f"unknown archive run {source_run_id} — refresh Telemetry archive on Trust")
+        if source_run_id not in catalog:
+            raise ValueError(f"unknown archive run {source_run_id} — refresh the archive catalog on Trust")
         preferred = ALARM_BIND.get(alarm)
         label = (preferred or {}).get("label") or source_run_id
         return source_run_id, label
 
     preferred = ALARM_BIND.get(alarm)
-    if preferred and preferred["run_id"] in archives:
+    if preferred and preferred["run_id"] in catalog:
         return preferred["run_id"], preferred["label"]
 
-    run_id = _fallback_run_with_crossing(conn, alarm, archives)
+    run_id = _fallback_run_with_crossing(alarm, set(catalog))
     if run_id is None:
         raise ValueError(
-            f"no archive tape available for {alarm} — refresh the Telemetry archive on Trust"
+            f"no archive tape available for {alarm} — refresh the archive catalog on Trust"
         )
     return run_id, "first archive tape with a warn crossing"
 
@@ -175,8 +216,8 @@ def bind_run_for_alarm(conn: Any, alarm: str, alarm_time: str | None = None) -> 
     return run_id, notes
 
 
-def _fallback_run_with_crossing(conn: Any, alarm: str, runs: set[str]) -> str | None:
-    """Prefer any archive run whose alarm channel crosses its warn limit."""
+def _fallback_run_with_crossing(alarm: str, runs: set[str]) -> str | None:
+    """Prefer any catalog tape whose alarm channel crosses its warn limit."""
     spec = load_and_validate(SPEC_PATH)
     meta = (spec.get("channels") or {}).get(alarm) or {}
     warn = meta.get("warn_limit")
@@ -185,10 +226,16 @@ def _fallback_run_with_crossing(conn: Any, alarm: str, runs: set[str]) -> str | 
         return next(iter(sorted(runs)), None)
 
     for run_id in sorted(runs):
-        rows = query_channel(conn, run_id, alarm)
-        for row in rows:
-            val = row.get("value_num")
-            if val is None:
+        entry = _catalog_tuple(run_id)
+        if not entry or not entry[2].exists():
+            continue
+        try:
+            df = pd.read_csv(entry[2], usecols=["time_s", alarm])
+        except Exception:
+            continue
+        for _, row in df.iterrows():
+            val = row.get(alarm)
+            if pd.isna(val):
                 continue
             v = float(val)
             w = float(warn)
@@ -198,19 +245,19 @@ def _fallback_run_with_crossing(conn: Any, alarm: str, runs: set[str]) -> str | 
     return next(iter(sorted(runs)), None)
 
 
-def _warn_crossing_time(conn: Any, run_id: str, alarm: str) -> float | None:
+def _warn_crossing_time_df(df: Any, alarm: str) -> float | None:
     spec = load_and_validate(SPEC_PATH)
     meta = (spec.get("channels") or {}).get(alarm) or {}
     warn = meta.get("warn_limit")
     direction = meta.get("limit_direction")
-    if warn is None:
+    if warn is None or alarm not in df.columns:
         return None
-    for row in query_channel(conn, run_id, alarm):
-        val = row.get("value_num")
-        if val is None:
+    w = float(warn)
+    for _, row in df.iterrows():
+        val = row.get(alarm)
+        if pd.isna(val):
             continue
         v = float(val)
-        w = float(warn)
         crossed = (direction == "below" and v < w) or (direction == "above" and v > w)
         if crossed:
             return float(row["time_s"])
@@ -236,22 +283,28 @@ def seal_run_window(
     pad_before_s: float = PAD_BEFORE_S,
     pad_after_s: float = PAD_AFTER_S,
 ) -> tuple[str, str]:
-    """Copy archive telemetry/events in a time window into a new sealed run_id.
+    """Fetch a time window from the upstream archive CSV and store only the sealed package.
 
-    Returns (sealed_run_id, notes).
+    Returns (sealed_run_id, notes). Full archive tapes are not required in Postgres.
     """
     if is_sealed_run_id(source_run_id):
         raise ValueError(f"{source_run_id} is already sealed")
 
-    source = conn.execute(
-        "SELECT id, scenario, source_csv, started_at, notes FROM runs WHERE id = %s",
-        (source_run_id,),
-    ).fetchone()
-    if source is None:
+    entry = _catalog_tuple(source_run_id)
+    if entry is None:
         raise ValueError(f"unknown archive run {source_run_id}")
+    _, scenario, path, _notes = entry
+    spec = load_and_validate(SPEC_PATH)
+    _ensure_run_csv(spec, source_run_id, path)
+    if not path.exists():
+        raise ValueError(f"archive tape {source_run_id} not available upstream")
+
+    df = pd.read_csv(path)
+    if "time_s" not in df.columns:
+        raise ValueError(f"archive tape {source_run_id} missing time_s")
 
     clock = parse_alarm_clock(alarm_time)
-    center = _warn_crossing_time(conn, source_run_id, alarm)
+    center = _warn_crossing_time_df(df, alarm)
     if center is None:
         try:
             center = float(clock_to_s(clock))
@@ -260,75 +313,81 @@ def seal_run_window(
 
     t0 = max(0.0, float(center) - float(pad_before_s))
     t1 = float(center) + float(pad_after_s)
-    sealed_id = _unique_sealed_id(conn, source_run_id, center)
+    window = df[(df["time_s"] >= t0) & (df["time_s"] <= t1)]
+    if window.empty:
+        raise ValueError(
+            f"no telemetry in window for {source_run_id} around {format_clock(center)} — "
+            "check alarm time or refresh the archive catalog"
+        )
 
+    sealed_id = _unique_sealed_id(conn, source_run_id, center)
+    started = str(window["timestamp"].iloc[0])
     notes = (
         f"sealed from {source_run_id} · {alarm} @ {format_clock(center)} · "
-        f"window {format_clock(t0)}–{format_clock(t1)} · {ADAPTER}"
+        f"window {format_clock(t0)}–{format_clock(t1)} · fetch-on-seal · {ADAPTER}"
     )
     conn.execute(
         "INSERT INTO runs (id, scenario, source_csv, started_at, notes) VALUES (%s, %s, %s, %s, %s)",
-        (
-            sealed_id,
-            f"sealed:{source.get('scenario') or source_run_id}",
-            source.get("source_csv"),
-            source.get("started_at"),
-            notes,
-        ),
+        (sealed_id, f"sealed:{scenario}", str(path), started, notes),
     )
-    conn.execute(
-        "INSERT INTO telemetry (run_id, time_s, timestamp, channel, value_num, value_text) "
-        "SELECT %s, time_s, timestamp, channel, value_num, value_text "
-        "FROM telemetry WHERE run_id = %s AND time_s >= %s AND time_s <= %s",
-        (sealed_id, source_run_id, t0, t1),
-    )
-    conn.execute(
-        "INSERT INTO events (run_id, time_s, timestamp, event_type, channel, detail) "
-        "SELECT %s, time_s, timestamp, event_type, channel, detail "
-        "FROM events WHERE run_id = %s AND time_s >= %s AND time_s <= %s",
-        (sealed_id, source_run_id, t0, t1),
-    )
-    n = int(
-        conn.execute(
-            "SELECT COUNT(*) AS n FROM telemetry WHERE run_id = %s",
-            (sealed_id,),
-        ).fetchone()["n"]
-    )
-    if n == 0:
-        conn.execute("DELETE FROM events WHERE run_id = %s", (sealed_id,))
-        conn.execute("DELETE FROM runs WHERE id = %s", (sealed_id,))
-        conn.commit()
-        raise ValueError(
-            f"no telemetry in window for {source_run_id} around {format_clock(center)} — "
-            "check alarm time or refresh the archive"
+
+    rows: list[tuple[Any, ...]] = []
+    for rec in window.to_dict(orient="records"):
+        time_s = float(rec["time_s"])
+        timestamp = str(rec["timestamp"])
+        for channel in SPEC_CHANNELS:
+            if channel not in rec:
+                continue
+            raw = rec[channel]
+            if channel == "PAY.mode":
+                rows.append((sealed_id, time_s, timestamp, channel, None, str(raw)))
+            else:
+                try:
+                    rows.append((sealed_id, time_s, timestamp, channel, float(raw), None))
+                except (TypeError, ValueError):
+                    rows.append((sealed_id, time_s, timestamp, channel, None, str(raw)))
+    with conn.cursor() as cur:
+        cur.executemany(
+            "INSERT INTO telemetry (run_id, time_s, timestamp, channel, value_num, value_text) "
+            "VALUES (%s, %s, %s, %s, %s, %s)",
+            rows,
         )
+
+    event_rows = []
+    for time_s, event_type, channel, detail in events_for_run(spec, source_run_id):
+        if time_s < t0 or time_s > t1:
+            continue
+        idx = (window["time_s"] - time_s).abs().idxmin()
+        ts = str(window.loc[idx, "timestamp"])
+        event_rows.append((sealed_id, time_s, ts, event_type, channel, detail))
+    if event_rows:
+        with conn.cursor() as cur:
+            cur.executemany(
+                "INSERT INTO events (run_id, time_s, timestamp, event_type, channel, detail) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                event_rows,
+            )
+
     conn.commit()
+    n = len(window)
     _push_activity(
         "telemetry",
-        f"Sealed {sealed_id} from {source_run_id} · {format_clock(t0)}–{format_clock(t1)}",
-        {"sealed_run_id": sealed_id, "source_run_id": source_run_id, "samples": n},
+        f"Fetched+sealed {sealed_id} from archive {source_run_id} · {format_clock(t0)}–{format_clock(t1)}",
+        {"sealed_run_id": sealed_id, "source_run_id": source_run_id, "frames": n},
     )
     return sealed_id, notes
 
 
 def sync_telemetry(conn: Any) -> dict[str, Any]:
-    """Refresh archive catalog runs (does not delete sealed packages)."""
-    spec = load_and_validate(SPEC_PATH)
-    total_samples = 0
-    run_ids: list[str] = []
-    for run_id, scenario, path, notes in _TELEMETRY_CATALOG:
-        _ensure_run_csv(spec, run_id, path)
-        if not path.exists():
-            continue
-        n = ingest_run(conn, path, run_id, scenario, events_for_run(spec, run_id), notes)
-        total_samples += n
-        run_ids.append(run_id)
+    """Refresh upstream archive catalog (ensure tapes exist). Does not load full orbits into ORBIT."""
+    catalog = list_archive_catalog()
+    available = [row for row in catalog if row.get("available")]
     at = _now_iso()
     _last_sync["telemetry"] = at
     _push_activity(
         "telemetry",
-        f"Archive refreshed · {len(run_ids)} tapes · {total_samples:,} sample frames",
-        {"runs": run_ids, "samples": total_samples},
+        f"Archive catalog refreshed · {len(available)}/{len(catalog)} tapes reachable upstream",
+        {"runs": [row["id"] for row in available]},
     )
     return connector_telemetry(conn)
 
@@ -350,17 +409,19 @@ def sync_library(conn: Any) -> dict[str, Any]:
 
 
 def connector_telemetry(conn: Any) -> dict[str, Any]:
-    archives = archive_runs(conn)
+    catalog = list_archive_catalog()
+    available = [row for row in catalog if row.get("available")]
     sealed = sealed_runs(conn)
     last = _last_sync.get("telemetry")
-    status = "synced" if archives else "empty"
+    status = "ready" if available else "empty"
     return {
         "id": "telemetry",
         "kind": "telemetry",
-        "name": "Telemetry archive",
+        "role": "upstream",
+        "name": "Mission archive",
         "description": (
-            "Upstream catalog for sealing. Opening a case copies a time window into a "
-            "sealed evidence package — not a live downlink."
+            "Upstream tape catalog. Opening a case fetches a warn±pad window and stores "
+            "only that sealed package in ORBIT — not the full orbit, not a live downlink."
         ),
         "adapter": ADAPTER,
         "auto": False,
@@ -368,10 +429,11 @@ def connector_telemetry(conn: Any) -> dict[str, Any]:
         "last_sync_at": last,
         "next_sync_at": None,
         "schedule": "on demand",
+        "action_label": "Refresh catalog",
         "stats": {
-            "runs": len(archives),
+            "catalog": len(available),
             "sealed": len(sealed),
-            "label": f"{len(archives)} archive · {len(sealed)} sealed",
+            "label": f"{len(available)} upstream · {len(sealed)} sealed in ORBIT",
         },
     }
 
@@ -381,14 +443,15 @@ def connector_library(conn: Any) -> dict[str, Any]:
     procedures = sum(1 for d in docs if d.get("kind") == "procedure")
     incidents = sum(1 for d in docs if d.get("kind") == "incident")
     last = _last_sync.get("library")
-    status = "synced" if docs else "empty"
+    status = "ready" if docs else "empty"
     return {
         "id": "library",
         "kind": "library",
+        "role": "index",
         "name": "Library index",
         "description": (
-            "Searchable procedures and prior close-outs. Sync rebuilds local embeddings "
-            "on publish — not a live docs feed."
+            "Procedures and prior close-outs ORBIT searches during investigation. "
+            "Rebuild embeddings on publish — not a live docs feed."
         ),
         "adapter": ADAPTER,
         "auto": False,
@@ -396,6 +459,7 @@ def connector_library(conn: Any) -> dict[str, Any]:
         "last_sync_at": last,
         "next_sync_at": None,
         "schedule": "on publish",
+        "action_label": "Rebuild index",
         "stats": {
             "documents": len(docs),
             "procedures": procedures,

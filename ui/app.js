@@ -8,8 +8,6 @@ const TRACE_CATALOG = [
   { id: "EPS.solar_array_current", title: "Solar array current", color: "var(--ch-solar)" },
 ];
 
-const TAPE_ORDER = ["eps204", "marg001", "fault1", "pay002", "batt003", "nominal", "inc0187", "inc0191", "inc0162"];
-
 const RUN_COPY = {
   eps204: { kind: "Demo", title: "Heater + confounder", note: "Heater 3×. SCIENCE_MODE makes the payload look guilty." },
   marg001: { kind: "Decoy", title: "Marginal loads", note: "Same shape as EPS-204. Heater ~1.7× — hold, do not inhibit." },
@@ -369,88 +367,6 @@ function tapeCopy(run) {
   return RUN_COPY[run.id] || { kind: "Tape", title: run.id, note: run.notes || "Telemetry tape" };
 }
 
-function sortTapes(runs) {
-  return [...runs].sort((a, b) => {
-    const ia = TAPE_ORDER.indexOf(a.id);
-    const ib = TAPE_ORDER.indexOf(b.id);
-    const ra = ia === -1 ? 100 : ia;
-    const rb = ib === -1 ? 100 : ib;
-    return ra - rb || a.id.localeCompare(b.id);
-  });
-}
-
-function renderTapeTrigger() {
-  const run = state.runs.find((r) => r.id === state.deskRunId);
-  const copy = run ? tapeCopy(run) : { kind: "Tape", title: state.deskRunId || "—" };
-  if ($("tape-trigger-kind")) $("tape-trigger-kind").textContent = copy.kind;
-  if ($("tape-trigger-title")) $("tape-trigger-title").textContent = copy.title;
-  const n = state.runs.length;
-  if ($("tape-trigger-count")) $("tape-trigger-count").textContent = n ? `${n} tapes` : "";
-}
-
-function tapeItem(run, query) {
-  const copy = tapeCopy(run);
-  const on = run.id === state.deskRunId ? "is-on" : "";
-  return `<button type="button" class="tape-row ${on}" role="option" aria-selected="${on ? "true" : "false"}" data-tape="${escapeHtml(run.id)}">
-    <span class="tape-row-kind">${escapeHtml(copy.kind)}</span>
-    <span class="tape-row-title">${highlightTerms(copy.title, query)}</span>
-    ${copy.note ? `<span class="tape-row-note">${highlightTerms(copy.note, query)}</span>` : ""}
-  </button>`;
-}
-
-function tapeGroup(title, html) {
-  if (!html) return "";
-  return `<section class="tape-palette-group">
-    <p class="family-head">${escapeHtml(title)}</p>${html}
-  </section>`;
-}
-
-function renderTapePalette() {
-  const list = $("tape-palette-list");
-  if (!list) return;
-  const q = state.tapePaletteQuery.trim().toLowerCase();
-  const tapes = sortTapes(state.runs).filter((run) => {
-    if (!q) return true;
-    const copy = tapeCopy(run);
-    return `${copy.kind} ${copy.title} ${copy.note || ""} ${run.id}`.toLowerCase().includes(q);
-  });
-  if (!tapes.length) {
-    list.innerHTML = `<p class="lib-hint">Nothing matched “${escapeHtml(state.tapePaletteQuery.trim())}”.</p>`;
-    return;
-  }
-  const groups = new Map();
-  for (const run of tapes) {
-    const kind = tapeCopy(run).kind;
-    if (!groups.has(kind)) groups.set(kind, []);
-    groups.get(kind).push(run);
-  }
-  list.innerHTML = [...groups.entries()]
-    .map(([kind, runs]) => tapeGroup(`${kind} · ${runs.length}`, runs.map((r) => tapeItem(r, q)).join("")))
-    .join("");
-}
-
-function openTapePalette() {
-  state.tapePaletteOpen = true;
-  state.tapePaletteQuery = "";
-  const wrap = $("tape-palette");
-  const q = $("tape-palette-q");
-  const trigger = $("tape-trigger");
-  if (wrap) wrap.hidden = false;
-  if (trigger) trigger.setAttribute("aria-expanded", "true");
-  if (q) q.value = "";
-  renderTapePalette();
-  q?.focus();
-}
-
-function closeTapePalette() {
-  state.tapePaletteOpen = false;
-  const wrap = $("tape-palette");
-  const trigger = $("tape-trigger");
-  if (wrap) wrap.hidden = true;
-  if (trigger) trigger.setAttribute("aria-expanded", "false");
-  trigger?.focus();
-}
-
 const PROC_BOOK = {
   "EPS-17": {
     title: "EPS low-voltage response",
@@ -504,7 +420,6 @@ function tracesToDraw() {
   return TRACE_CATALOG.map((ch) => ({ ...ch, primary: ch.id === alarm }));
 }
 
-const SOURCE_LINKS_KEY = "orbit-source-links";
 const DEMO_STORY = [
   {
     id: "INC-0205",
@@ -528,29 +443,6 @@ const DEMO_STORY = [
   },
 ];
 
-function emptySourceLinks() {
-  /* Demo default: show the connected UI without requiring a manual Connect click. */
-  return { telemetry: true, library: true };
-}
-
-function loadSourceLinks() {
-  /* Demo spoof: always present as connected so the linked UI is visible. */
-  return emptySourceLinks();
-}
-
-function persistSourceLinks() {
-  try {
-    window.localStorage.setItem(SOURCE_LINKS_KEY, JSON.stringify(state.sourceLinks));
-  } catch (err) {
-    /* ignore quota */
-  }
-}
-
-function setSourceLinked(id, linked) {
-  state.sourceLinks = { ...state.sourceLinks, [id]: !!linked };
-  persistSourceLinks();
-}
-
 const state = {
   view: "home",
   runs: [],
@@ -562,10 +454,10 @@ const state = {
   workspace: null,
   desk: null,
   deskRunId: "fault1",
-  tapePaletteOpen: false,
-  tapePaletteQuery: "",
   incidentFilter: "all",
+  incidentFamily: "all",
   incidentQuery: "",
+  pathExpanded: false,
   window: "focus",
   pinT: null,
   hoverT: null,
@@ -591,8 +483,7 @@ const state = {
   sources: null,
   sourcesLoading: false,
   sourcesSyncing: null,
-  sourcesJustConnected: null,
-  sourceLinks: loadSourceLinks(),
+  archiveCatalog: [],
   inspector: {
     open: false,
     runId: null,
@@ -1182,11 +1073,56 @@ function incidentSearchText(item, all) {
     .toLowerCase();
 }
 
+
+function renderIncFilters(all, counts) {
+  const root = $("inc-filters");
+  if (!root) return;
+  const statusCounts = {
+    all: counts.nAll,
+    open: counts.nOpen,
+    ready: counts.nReady,
+    filed: counts.nFiled,
+  };
+  const statusOpts = INC_FILTERS.map((f) => {
+    const n = statusCounts[f.id] ?? 0;
+    const selected = state.incidentFilter === f.id ? " selected" : "";
+    return `<option value="${escapeHtml(f.id)}"${selected}>${escapeHtml(f.label)} (${n})</option>`;
+  }).join("");
+
+  const present = new Set(all.map(incidentCategoryOf));
+  const familyOpts = [
+    { id: "all", label: "All" },
+    ...INC_CATEGORY_ORDER.filter((key) => present.has(key)).map((key) => ({
+      id: key,
+      label: INC_CATEGORY_LABELS[key],
+    })),
+  ];
+  const family = state.incidentFamily || "all";
+  const familyHtml = familyOpts
+    .map((f) => {
+      const selected = family === f.id ? " selected" : "";
+      return `<option value="${escapeHtml(f.id)}"${selected}>${escapeHtml(f.label)}</option>`;
+    })
+    .join("");
+
+  root.innerHTML = `
+    <label class="inc-select">
+      <span class="inc-select-label">Status</span>
+      <select id="inc-status" data-inc-status>${statusOpts}</select>
+    </label>
+    <label class="inc-select">
+      <span class="inc-select-label">Signature</span>
+      <select id="inc-family" data-inc-family>${familyHtml}</select>
+    </label>`;
+}
+
 function filterIncidents(all) {
   const status = INC_FILTERS.find((f) => f.id === state.incidentFilter) || INC_FILTERS[0];
   const q = (state.incidentQuery || "").trim().toLowerCase();
+  const family = state.incidentFamily || "all";
   return all.filter((item) => {
     if (!status.match(item)) return false;
+    if (family !== "all" && incidentCategoryOf(item) !== family) return false;
     if (q && !incidentSearchText(item, all).includes(q)) return false;
     return true;
   });
@@ -1221,39 +1157,30 @@ function renderIncidents() {
 
   const hero = $("inc-head");
   if (hero) {
-    hero.innerHTML = `<div>
-      <p class="craft-kicker">Aurora-1 · case log</p>
-      <h1>Incidents</h1>
-      <p class="inc-lede">Walk a case you already opened, or open one from an alarm you already have. ORBIT does not detect anomalies and does not uplink commands.</p>
-      <div class="inc-stats">
-        ${[
-          { id: "open", n: nOpen, label: "Open" },
-          { id: "ready", n: nReady, label: "Ready to file" },
-          { id: "filed", n: nFiled, label: "Filed" },
-        ]
-          .map(
-            (s) =>
-              `<button type="button" class="inc-stat tone-${s.id} ${state.incidentFilter === s.id ? "is-on" : ""}" data-filter="${s.id}">
-                <span class="n">${s.n}</span><span class="l">${s.label}</span>
-              </button>`
-          )
-          .join("")}
-      </div>
-    </div>
-    <button type="button" class="btn" data-open-slip>Open case</button>`;
+    hero.innerHTML = `
+      <p class="inc-kicker">
+        <span class="inc-kicker-craft">Aurora-1</span>
+        <span class="inc-kicker-rule" aria-hidden="true"></span>
+        <span class="inc-kicker-role">case log</span>
+      </p>
+      <h1 class="inc-title">Incidents</h1>`;
   }
+  renderIncFilters(all, { nOpen, nReady, nFiled, nAll: all.length });
 
   const meta = $("inc-meta");
   if (meta) {
     const q = (state.incidentQuery || "").trim();
-    const statusNote =
-      state.incidentFilter !== "all"
-        ? INC_FILTERS.find((f) => f.id === state.incidentFilter)?.label || ""
-        : "";
-    meta.textContent = `${rows.length} case${rows.length === 1 ? "" : "s"}${q ? ` matching “${q}”` : ""}${statusNote ? ` · ${statusNote}` : ""}`;
+    const notes = [];
+    if (state.incidentFilter !== "all") {
+      notes.push(INC_FILTERS.find((f) => f.id === state.incidentFilter)?.label || "");
+    }
+    if (state.incidentFamily && state.incidentFamily !== "all") {
+      notes.push(INC_CATEGORY_LABELS[state.incidentFamily] || state.incidentFamily);
+    }
+    const note = notes.filter(Boolean).join(" · ");
+    meta.textContent = `${rows.length} case${rows.length === 1 ? "" : "s"}${q ? ` matching “${q}”` : ""}${note ? ` · ${note}` : ""}`;
   }
 
-  renderIncReady(all);
   renderIncidentList(rows, all);
 }
 
@@ -1279,30 +1206,7 @@ function renderIncidentList(rows, all) {
       </section>`
     )
     .join("");
-}
-
-/* Ready-to-file queue — inline band above the categorized list. */
-function renderIncReady(all) {
-  const root = $("inc-ready");
-  if (!root) return;
-  const ready = all.filter((item) => item.status === "recommended");
-  if (!ready.length) {
-    root.hidden = true;
-    root.innerHTML = "";
-    return;
-  }
-  root.hidden = false;
-  root.innerHTML = `
-    <p class="inc-ready-label">${ready.length} ready to file</p>
-    ${ready
-      .map(
-        (item) => `<button type="button" class="inc-ready-item" data-open-case="${escapeHtml(item.id)}">
-          <span class="id">${escapeHtml(item.id)}</span>
-          <span class="act">${escapeHtml(caseAction(item) || "Review report")}</span>
-          <span class="why">${escapeHtml(alarmTitle(item.alarm))}</span>
-        </button>`
-      )
-      .join("")}`;
+  if (state.view === "home") renderHomeDesk();
 }
 
 function incRow(item, all) {
@@ -1383,22 +1287,47 @@ function updateBindPreview() {
   const ch = state.alarms.find((item) => item.id === alarm);
   const suggested = ch?.bind?.run_id;
   if (!alarm) {
-    el.textContent = "Pick an alarm, then an archive tape. ORBIT will seal a time window for the case.";
+    el.textContent = "Pick an alarm, then an upstream archive tape. ORBIT will fetch and seal a time window.";
     return;
   }
   if (runId && suggested && runId === suggested) {
-    el.textContent = `Will seal a window from archive ${runId}${ch?.bind?.label ? ` · ${ch.bind.label}` : ""}. Not a live downlink.`;
+    el.textContent = `Will fetch+seal a window from archive ${runId}${ch?.bind?.label ? ` · ${ch.bind.label}` : ""}. Not a live downlink.`;
     return;
   }
   if (runId) {
-    el.textContent = `Will seal a window from archive ${runId}. Suggested archive for this alarm was ${suggested || "any available"}.`;
+    el.textContent = `Will fetch+seal a window from archive ${runId}. Suggested archive for this alarm was ${suggested || "any available"}.`;
     return;
   }
-  el.textContent = "Select an archive tape to seal from.";
+  el.textContent = "Select an upstream archive tape to fetch+seal from.";
 }
 
 function archiveRunsOnly() {
+  const catalog = state.archiveCatalog || [];
+  if (catalog.length) {
+    return catalog
+      .filter((run) => run.available !== false)
+      .map((run) => ({
+        id: run.id,
+        notes: run.notes,
+        samples: run.samples,
+        clock_start: run.clock_start,
+        clock_end: run.clock_end,
+        kind: "archive",
+      }));
+  }
   return (state.runs || []).filter((run) => !String(run.id).startsWith("sealed_"));
+}
+
+const TAPE_ORDER = ["eps204", "marg001", "fault1", "pay002", "batt003", "nominal", "inc0187", "inc0191", "inc0162"];
+
+function sortTapes(runs) {
+  return [...runs].sort((a, b) => {
+    const ia = TAPE_ORDER.indexOf(a.id);
+    const ib = TAPE_ORDER.indexOf(b.id);
+    const ra = ia === -1 ? 100 : ia;
+    const rb = ib === -1 ? 100 : ib;
+    return ra - rb || a.id.localeCompare(b.id);
+  });
 }
 
 function fillCreateForm() {
@@ -1501,11 +1430,13 @@ async function loadTrust() {
     }
   } finally {
     state.trustLoading = false;
+    await loadArchiveCatalog();
     renderTrust();
+    if (state.view === "home") renderHomeProof();
   }
 }
 
-async function syncSource(connectorId, { connect = true } = {}) {
+async function syncSource(connectorId) {
   if (state.sourcesSyncing) return;
   state.sourcesSyncing = connectorId;
   renderTrust();
@@ -1524,22 +1455,11 @@ async function syncSource(connectorId, { connect = true } = {}) {
     if (data.connector && !(state.sources.connectors || []).some((c) => c.id === data.connector.id)) {
       state.sources.connectors = [...(state.sources.connectors || []), data.connector];
     }
-    if (connect) {
-      setSourceLinked(connectorId, true);
-      state.sourcesJustConnected = connectorId;
-    }
     await loadTrust();
     await loadBootstrapLists();
-    if (state.sourcesJustConnected) {
-      window.setTimeout(() => {
-        if (state.sourcesJustConnected === connectorId) {
-          state.sourcesJustConnected = null;
-          renderTrust();
-        }
-      }, 2800);
-    }
+    if (connectorId === "telemetry") await loadArchiveCatalog();
   } catch (err) {
-    window.alert(err.message || "Sync failed");
+    window.alert(err.message || "Refresh failed");
     renderTrust();
   } finally {
     state.sourcesSyncing = null;
@@ -1547,10 +1467,14 @@ async function syncSource(connectorId, { connect = true } = {}) {
   }
 }
 
-function disconnectSource(connectorId) {
-  setSourceLinked(connectorId, false);
-  if (state.sourcesJustConnected === connectorId) state.sourcesJustConnected = null;
-  renderTrust();
+async function loadArchiveCatalog() {
+  try {
+    const res = await fetch("/archive");
+    if (!res.ok) throw new Error(`archive ${res.status}`);
+    state.archiveCatalog = await res.json();
+  } catch (err) {
+    state.archiveCatalog = state.archiveCatalog || [];
+  }
 }
 
 async function loadBootstrapLists() {
@@ -1558,15 +1482,10 @@ async function loadBootstrapLists() {
     const [runsRes, alarmRes] = await Promise.all([fetch("/runs"), fetch("/entry-alarms")]);
     if (runsRes.ok) state.runs = await runsRes.json();
     if (alarmRes.ok) state.alarms = await alarmRes.json();
+    await loadArchiveCatalog();
   } catch (err) {
     /* keep existing */
   }
-}
-
-function connectorTone(status, linked) {
-  if (linked) return "ok";
-  if (status === "synced" || status === "empty") return "warn";
-  return "bad";
 }
 
 function formatSyncAt(iso) {
@@ -1593,39 +1512,36 @@ function renderConnectors() {
 
   const connectors = state.sources?.connectors || [];
   if (!connectors.length) {
-    root.innerHTML = `<p class="trust-empty">Connectors unavailable. Is the API running?</p>`;
+    root.innerHTML = `<p class="trust-empty">Sources unavailable. Is the API running?</p>`;
     if (activityRoot) activityRoot.hidden = true;
     return;
   }
 
   root.innerHTML = connectors
     .map((c) => {
-      const linked = !!state.sourceLinks?.[c.id];
       const syncing = state.sourcesSyncing === c.id;
-      const just = state.sourcesJustConnected === c.id;
-      const tone = connectorTone(c.status, linked);
+      const tone = c.status === "ready" || c.status === "synced" ? "ok" : c.status === "empty" ? "warn" : "warn";
       const label = c.stats?.label || "";
-      const linkLabel = linked ? "Connected" : "Not connected";
-      const primary = linked
-        ? `<button type="button" class="btn-ghost btn" data-source-sync="${escapeHtml(c.id)}" ${syncing ? "disabled" : ""}>${syncing ? "Syncing…" : "Sync now"}</button>
-           <button type="button" class="text-btn" data-source-disconnect="${escapeHtml(c.id)}" ${syncing ? "disabled" : ""}>Disconnect</button>`
-        : `<button type="button" class="btn" data-source-connect="${escapeHtml(c.id)}" ${syncing ? "disabled" : ""}>${syncing ? "Connecting…" : "Connect"}</button>`;
-      return `<article class="trust-connector is-${tone} ${linked ? "is-linked" : "is-unlinked"} ${just ? "is-just-linked" : ""} ${syncing ? "is-syncing" : ""}">
+      const role = c.role === "upstream" ? "Upstream" : c.role === "index" ? "In ORBIT" : escapeHtml(c.adapter || "demo-local");
+      const statusLabel = c.status === "ready" || c.status === "synced" ? "Ready" : "Empty";
+      const action = c.action_label || (c.id === "library" ? "Rebuild index" : "Refresh catalog");
+      return `<article class="trust-connector is-${tone} is-linked">
         <div class="trust-card-head">
           <div>
-            <p class="trust-card-kicker">${escapeHtml(c.adapter || "demo-local")}</p>
+            <p class="trust-card-kicker">${role}</p>
             <h3>${escapeHtml(c.name)}</h3>
           </div>
-          <span class="trust-link-badge ${linked ? "is-on" : ""}">${linkLabel}</span>
+          <span class="trust-link-badge is-on">${statusLabel}</span>
         </div>
         <p class="trust-note">${escapeHtml(c.description || "")}</p>
-        <div class="trust-connector-stats ${linked ? "is-live" : ""}">
+        <div class="trust-connector-stats is-live">
           <div class="trust-metric"><span class="k">Inventory</span><span class="v">${escapeHtml(label || "—")}</span></div>
-          <div class="trust-metric"><span class="k">Last sync</span><span class="v">${escapeHtml(formatSyncAt(c.last_sync_at))}</span></div>
-          <div class="trust-metric"><span class="k">Schedule</span><span class="v">${escapeHtml(c.schedule || (linked ? "on demand" : "paused"))}</span></div>
+          <div class="trust-metric"><span class="k">Last refresh</span><span class="v">${escapeHtml(formatSyncAt(c.last_sync_at))}</span></div>
+          <div class="trust-metric"><span class="k">Schedule</span><span class="v">${escapeHtml(c.schedule || "on demand")}</span></div>
         </div>
-        ${just ? `<p class="trust-connect-flash" role="status">Linked — inventory refreshed below.</p>` : ""}
-        <div class="trust-card-actions">${primary}</div>
+        <div class="trust-card-actions">
+          <button type="button" class="btn-ghost btn" data-source-sync="${escapeHtml(c.id)}" ${syncing ? "disabled" : ""}>${syncing ? "Working…" : escapeHtml(action)}</button>
+        </div>
       </article>`;
     })
     .join("");
@@ -1641,13 +1557,6 @@ function renderConnectors() {
       )
       .join("");
   }
-
-  const tapesPanel = $("trust-tapes")?.closest(".trust-panel");
-  const libraryPanel = $("trust-sources")?.closest(".trust-panel");
-  tapesPanel?.classList.toggle("is-source-linked", !!state.sourceLinks?.telemetry);
-  tapesPanel?.classList.toggle("is-source-dim", !state.sourceLinks?.telemetry);
-  libraryPanel?.classList.toggle("is-source-linked", !!state.sourceLinks?.library);
-  libraryPanel?.classList.toggle("is-source-dim", !state.sourceLinks?.library);
 }
 
 function renderTrust() {
@@ -1665,6 +1574,8 @@ function renderTrust() {
     tapes.innerHTML = `<p class="trust-empty">Loading…</p>`;
     sources.innerHTML = "";
     foot.textContent = "";
+    const slot = $("trust-scorecard-slot");
+    if (slot) slot.innerHTML = `<p class="trust-empty">Loading scorecard…</p>`;
     const connectors = $("trust-connectors");
     if (connectors) connectors.innerHTML = `<p class="trust-empty">Loading connectors…</p>`;
     return;
@@ -1675,6 +1586,8 @@ function renderTrust() {
     tapes.innerHTML = `<p class="trust-empty">Run <code>docker compose up -d</code> and sync Telemetry on Trust, or <code>python -m storage ingest</code>.</p>`;
     sources.innerHTML = "";
     foot.textContent = "";
+    const slot = $("trust-scorecard-slot");
+    if (slot) slot.innerHTML = "";
     renderConnectors();
     return;
   }
@@ -1689,7 +1602,7 @@ function renderTrust() {
 
   head.innerHTML = `
     <h1>Can I trust this console?</h1>
-    <p class="trust-head-lede">Where ORBIT's numbers come from, and what is ingested for investigation.</p>
+    <p class="trust-head-lede">Where evidence comes from: upstream archive for sealing, local library index, eval rates. ORBIT stores sealed packages — not the full mission archive.</p>
     <div class="trust-summary">
       <span class="trust-pill is-${storeTone}"><span class="dot"></span>Telemetry store</span>
       <span class="trust-pill is-${libraryTone}"><span class="dot"></span>Library index</span>
@@ -1727,7 +1640,7 @@ function renderTrust() {
       </div>
       <p class="trust-note">No scorecard yet. Run <code>${escapeHtml(
         t.eval?.command || "python -m eval"
-      )}</code> to write diagnosis, false-inhibit, and provenance rates.</p>`;
+      )}</code> to write diagnosis, false-inhibit, and source-tag rates.</p>`;
 
   grid.innerHTML = `
     <article class="trust-card is-${storeTone}">
@@ -1786,8 +1699,11 @@ function renderTrust() {
       <div class="trust-card-actions">
         <button type="button" class="btn-ghost btn" data-trust-incidents>Open incidents</button>
       </div>
-    </article>
-    <article class="trust-card is-${scoreTone}" id="trust-scorecard">
+    </article>`;
+
+  const slot = $("trust-scorecard-slot");
+  if (slot) {
+    slot.innerHTML = `<article class="trust-card trust-scorecard-hero is-${scoreTone}" id="trust-scorecard">
       <div class="trust-card-head">
         <div>
           <p class="trust-card-kicker">Validation</p>
@@ -1797,17 +1713,29 @@ function renderTrust() {
       </div>
       ${scoreBody}
     </article>`;
+  }
 
-  const runRows = (t.runs || []).map((run) => {
+  const catalog = state.archiveCatalog?.length
+    ? state.archiveCatalog
+    : (t.runs || []).filter((run) => !String(run.id).startsWith("sealed_"));
+  const sealed = (t.runs || []).filter((run) => String(run.id).startsWith("sealed_"));
+  const inventory = [
+    ...catalog.map((run) => ({ ...run, _kind: "archive" })),
+    ...sealed.map((run) => ({ ...run, _kind: "sealed" })),
+  ];
+  const runRows = inventory.map((run) => {
+    const sealedRow = run._kind === "sealed" || String(run.id).startsWith("sealed_");
     const copy = tapeCopy(run);
-    const sealed = String(run.id).startsWith("sealed_");
     const on = run.id === state.deskRunId ? "is-on" : "";
     const span =
       run.clock_start && run.clock_end ? `${run.clock_start} → ${run.clock_end}` : "—";
-    const kind = sealed ? "Sealed" : copy.kind;
-    const title = sealed ? "Sealed evidence" : copy.title;
+    const kind = sealedRow ? "Sealed" : "Upstream";
+    const title = sealedRow ? "Sealed evidence" : copy.title;
     const note = copy.note || run.notes || "";
-    return `<div class="trust-row ${on} ${sealed ? "is-sealed" : "is-archive"}">
+    const actions = sealedRow
+      ? `<button type="button" class="text-btn" data-trust-inspect="${escapeHtml(run.id)}">Inspect</button><button type="button" class="text-btn" data-trust-tape="${escapeHtml(run.id)}">${run.id === state.deskRunId ? "Selected" : "View"}</button>`
+      : `<span class="trust-row-muted">Seal source</span>`;
+    return `<div class="trust-row ${on} ${sealedRow ? "is-sealed" : "is-archive"}">
       <span class="id" title="${escapeHtml(run.id)}">${escapeHtml(run.id)}</span>
       <div class="trust-row-copy">
         <strong>${escapeHtml(title)}</strong>
@@ -1816,13 +1744,13 @@ function renderTrust() {
       <span class="kind">${escapeHtml(kind)}</span>
       <span class="n">${span}</span>
       <span class="n">${(run.samples || 0).toLocaleString()}</span>
-      <span class="act trust-row-actions"><button type="button" class="text-btn" data-trust-inspect="${escapeHtml(run.id)}">Inspect</button><button type="button" class="text-btn" data-trust-tape="${escapeHtml(run.id)}">${run.id === state.deskRunId ? "Selected" : "View"}</button></span>
+      <span class="act trust-row-actions">${actions}</span>
     </div>`;
   });
   tapes.innerHTML =
     runRows.length > 0
       ? `<div class="trust-cols"><span>Run</span><span>Title</span><span>Kind</span><span>Span</span><span>Samples</span><span></span></div>${runRows.join("")}`
-      : `<p class="trust-empty">No archive tapes yet. Sync Telemetry archive on Trust.</p>`;
+      : `<p class="trust-empty">No upstream catalog yet. Refresh the mission archive on Trust.</p>`;
 
   const docRows = (t.documents || []).map((doc) => {
     const kindCls = doc.kind === "procedure" ? "kind-procedure" : "kind-incident";
@@ -2047,7 +1975,7 @@ function setView(view) {
 
 function enterHome() {
   setView("home");
-  renderDesk();
+  renderHome();
   updateReadouts();
   $("stage").scrollTop = 0;
 }
@@ -2187,91 +2115,17 @@ function initSpine() {
   }
 }
 
-function channelInk(id) {
-  if (id.includes("heater")) return "var(--ch-heater)";
-  if (id.includes("PAY") || id.includes("payload")) return "var(--ch-payload)";
-  if (id.includes("solar")) return "var(--ch-solar)";
-  if (id.includes("battery")) return "var(--ch-batt)";
-  if (id.includes("bus_current")) return "var(--ch-busi)";
-  return "var(--ch-bus)";
-}
-
-function sparkGeom(ch) {
-  const W = 260;
-  const H = 44;
-  const padT = 4;
-  const padB = 4;
-  const isMode = ch.id === "PAY.mode";
-  const vals = (ch.spark || []).map((p) =>
-    isMode ? (p.value_text === "SCIENCE_MODE" ? 1 : 0) : p.value_num
-  );
-  const nums = vals.filter((v) => v != null);
-  if (nums.length < 2) return null;
-  let lo = Math.min(...nums);
-  let hi = Math.max(...nums);
-  if (!isMode && ch.warn_limit != null) {
-    lo = Math.min(lo, Number(ch.warn_limit));
-    hi = Math.max(hi, Number(ch.warn_limit));
-  }
-  if (hi === lo) {
-    lo -= 0.5;
-    hi += 0.5;
-  }
-  const span = hi - lo;
-  lo -= span * 0.12;
-  hi += span * 0.12;
-  return {
-    W,
-    H,
-    vals,
-    isMode,
-    x: (i) => (i / Math.max(1, ch.spark.length - 1)) * W,
-    y: (v) => padT + (1 - (v - lo) / (hi - lo)) * (H - padT - padB),
-  };
-}
-
-function sparkSvg(ch) {
-  const g = sparkGeom(ch);
-  if (!g) return "";
-  const parts = [];
-  (ch.spark || []).forEach((p, i) => {
-    const v = g.vals[i];
-    if (v == null) return;
-    if (!parts.length) {
-      parts.push(`M${g.x(i).toFixed(1)} ${g.y(v).toFixed(1)}`);
-      return;
-    }
-    if (g.isMode) {
-      parts.push(`H${g.x(i).toFixed(1)}`);
-      parts.push(`V${g.y(v).toFixed(1)}`);
-    } else {
-      parts.push(`L${g.x(i).toFixed(1)} ${g.y(v).toFixed(1)}`);
-    }
-  });
-  const warn =
-    !g.isMode && ch.warn_limit != null
-      ? `<line x1="0" x2="${g.W}" y1="${g.y(Number(ch.warn_limit)).toFixed(1)}" y2="${g.y(Number(ch.warn_limit)).toFixed(1)}" stroke="var(--warn)" stroke-dasharray="3 3" stroke-width="1" opacity="0.7"/>`
-      : "";
-  return `<svg class="ch-spark" viewBox="0 0 ${g.W} ${g.H}" preserveAspectRatio="none" aria-hidden="true">
-    ${warn}
-    <path d="${parts.join(" ")}" fill="none" stroke="${channelInk(ch.id)}" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
-    <g class="spark-dot"></g>
-    <rect class="spark-hit" x="0" y="0" width="${g.W}" height="${g.H}" fill="transparent"/>
-  </svg>`;
-}
-
 function orbitSvg(orbit) {
-  if (!orbit) return "";
-  const theta = Number(orbit.phase || 0) * Math.PI * 2;
+  const o = orbit || { phase: 0.18, illumination: "sun", period_min: 94 };
+  const theta = Number(o.phase || 0) * Math.PI * 2;
   const cx = 158;
   const cy = 70;
   const rx = 112;
   const ry = 40;
   const x = (cx + rx * Math.cos(theta)).toFixed(1);
   const y = (cy + ry * Math.sin(theta)).toFixed(1);
-  const sun = orbit.illumination === "sun";
+  const sun = o.illumination === "sun";
   const mark = sun ? "#7ff0d4" : "#f2a33c";
-  /* Sun sits at the orbit focus; teal arc is the sunlit half; craft dot colour = current illumination. */
   return `<svg class="orbit-map" viewBox="0 0 320 148" aria-hidden="true">
     <defs>
       <radialGradient id="orbit-sun">
@@ -2299,105 +2153,44 @@ function orbitSvg(orbit) {
   </svg>`;
 }
 
-function tileValue(ch, sample) {
-  const row = sample || ch;
-  if (ch.id === "PAY.mode") return row.value_text || "—";
-  return row.value_num != null ? fmt(row.value_num, 2) : "—";
-}
-
-function tileLimit(ch, sample) {
-  const row = sample || ch;
-  if (ch.id === "PAY.mode") return row.clock ? `${row.clock} on tape` : "On this tape";
-  if (ch.crossed) {
-    return `Warn ${ch.crossed.clock} · limit ${ch.warn_limit} ${ch.unit || ""}`.trim();
-  }
-  if (ch.warn_limit != null) return `Limit ${ch.warn_limit} ${ch.unit || ""}`.trim();
-  return row.clock ? `${row.clock} on tape` : "No warn on this channel";
-}
-
-/* How far this reading sits from its warn limit, so the operator doesn't do the
-   arithmetic. The meter's tick sits at the limit; fill past it means outside. */
-function marginMeter(ch) {
-  if (ch.id === "PAY.mode") return "";
-  const value = ch.value_num;
-  const warn = ch.warn_limit == null ? null : Number(ch.warn_limit);
-  if (value == null || warn == null || !Number.isFinite(warn) || warn === 0) return "";
-  const below = ch.limit_direction === "below";
-  const ratio = value / warn;
-  const past = below ? warn - value : value - warn;
-  const pct = Math.abs(past / warn) * 100;
-  const outside = past > 0;
-  const label = outside
-    ? `${pct.toFixed(pct < 10 ? 1 : 0)}% past warn`
-    : `${pct.toFixed(pct < 10 ? 1 : 0)}% margin`;
-  /* The tick sits at 62% of the track; scale so the limit always lands on it. */
-  const fill = below
-    ? Math.min(100, (1 / Math.max(ratio, 1e-6)) * 62)
-    : Math.min(100, ratio * 62);
-  return `<p class="ch-margin">
-    <span class="ch-meter"><i style="width:${fill.toFixed(0)}%"></i></span>
-    <span class="pct">${label}</span>
-  </p>`;
-}
-
-function sitrep() {
-  const chans = state.desk?.channels || [];
+function renderHomeCraft() {
+  const craft = $("home-craft");
   const orbit = state.desk?.orbit;
-  const warns = chans.filter((ch) => ch.id !== "PAY.mode" && (ch.state === "warn" || ch.state === "critical"));
-  const crits = warns.filter((ch) => ch.state === "critical");
-  const mode = chans.find((ch) => ch.id === "PAY.mode");
-  const illum = orbit?.illumination === "sun" ? "Sunlit" : orbit ? "Eclipse" : "Tape";
-  const worst = crits[0] || warns[0];
-  const level = crits.length ? "crit" : warns.length ? "warn" : "ok";
-  const onTape = state.incidents.filter((item) => item.run_id === state.deskRunId);
-  const label = crits.length
-    ? "Tape · past crit"
-    : warns.length
-      ? "Tape · past warn"
-      : "Tape · inside limits";
-  const headline = worst
-    ? `${worst.title} ${tileValue(worst)} ${worst.unit || ""}`.replace(/\s+/g, " ").trim()
-    : "Last sample inside limits";
-  const others = warns.length - 1;
-  const title = worst
-    ? `${worst.title} ${worst.state === "critical" ? "past crit" : "past warn"}${others > 0 ? ` · ${others} more outside limits` : ""}`
-    : "Last sample inside limits";
-  const lines = [];
-  for (const ch of warns) {
-    const at = ch.crossed?.clock ? ` at ${ch.crossed.clock}` : "";
-    lines.push(`${ch.title} is ${tileValue(ch)} ${ch.unit || ""}${at}.`.replace(/\s+/g, " ").trim());
+  if (craft) {
+    craft.classList.toggle("is-sun", orbit?.illumination === "sun");
+    craft.classList.toggle("is-eclipse", Boolean(orbit) && orbit.illumination !== "sun");
   }
-  if (mode?.value_text) lines.push(`Payload is ${String(mode.value_text).replaceAll("_", " ")}.`);
-  if (!warns.length) {
-    lines.push("Last sample on this tape is inside limits. Open a case only if you already have an alarm.");
+  if ($("home-illum")) {
+    const illum = orbit?.illumination === "sun" ? "Sunlit" : orbit ? "Eclipse" : "Orbit";
+    $("home-illum").textContent = illum;
   }
-  if (onTape.length) {
-    lines.push(`${onTape.length} case${onTape.length === 1 ? "" : "s"} on this tape.`);
+  if ($("home-orbit-meta")) {
+    $("home-orbit-meta").textContent = orbit?.period_min ? `${orbit.period_min} min` : "LEO";
   }
-  return {
-    level,
-    label,
-    headline,
-    title,
-    lede: lines.join(" "),
-    illum,
-    warn: warns.length > 0,
-    caseCount: onTape.length,
-  };
+  if ($("home-orbit")) $("home-orbit").innerHTML = orbitSvg(orbit);
 }
 
-function renderHomeHandoff() {
-  const root = $("home-handoff");
+function renderHomeBrief() {
+  const root = $("home-brief");
   if (!root) return;
+  root.innerHTML = `
+    <p class="home-brief-eyebrow">Investigation workbench</p>
+    <p class="home-brief-lede">
+      Assembles sealed evidence, the procedure, and a similar prior into a source-tagged report —
+      then stops at a human decision. Filing records the close; it never uplinks.
+    </p>`;
+}
+
+function renderHomePath() {
+  const root = $("home-path");
+  if (!root) return;
+  const expanded = Boolean(state.pathExpanded);
+  root.classList.toggle("is-collapsed", !expanded);
 
   const steps = DEMO_STORY.map((beat) => {
     const primary = beat.primary ? " is-primary" : "";
     let action = "";
-    if (beat.primary && beat.id) {
-      action = `<button type="button" class="btn home-handoff-cta" data-open-case="${escapeHtml(beat.id)}" data-jump="walk">
-              Open ${escapeHtml(beat.id)}
-            </button>`;
-    } else if (beat.trust) {
+    if (beat.trust) {
       action = `<button type="button" class="home-demo-link" data-go-trust>
               Open Trust scorecard
             </button>`;
@@ -2417,126 +2210,103 @@ function renderHomeHandoff() {
   }).join("");
 
   root.innerHTML = `
-    <div class="home-handoff-start">
-      <p class="home-handoff-label">90-second walkthrough</p>
+    <div class="home-path-head">
+      <p class="home-path-label">90-second walkthrough</p>
+      <button type="button" class="home-path-toggle" id="home-path-toggle" aria-expanded="${expanded ? "true" : "false"}" aria-controls="home-path-body">
+        ${expanded ? "Hide steps" : "Show steps"}
+      </button>
+    </div>
+    <div class="home-path-body" id="home-path-body">
       <ol class="home-demo-steps">${steps}</ol>
     </div>`;
 }
 
-function renderHomeSitrep() {
-  const root = $("home-sitrep");
-  if (!root) return;
-  const sit = sitrep();
-  const rows = state.incidents.filter((item) => item.run_id === state.deskRunId);
-  const more = Math.max(0, rows.length - 1);
-  const tapeNote = more > 0
-    ? ` · +${more} more on tape`
-    : rows.length
-      ? ""
-      : " · no case on this tape yet";
-
-  root.className = `home-board-sitrep is-${sit.level}`;
-  root.innerHTML = `
-    <span class="dot" aria-hidden="true"></span>
-    <div>
-      <p class="home-sitrep-k">${escapeHtml(sit.label)}</p>
-      <p class="home-sitrep-v">${escapeHtml(sit.headline)}${escapeHtml(tapeNote)}</p>
-    </div>`;
+function deskQueueItems(limit = 5) {
+  const all = [...state.incidents];
+  all.sort((a, b) => {
+    const ra = a.status === "recommended" ? 0 : a.status === "open" ? 1 : 2;
+    const rb = b.status === "recommended" ? 0 : b.status === "open" ? 1 : 2;
+    if (ra !== rb) return ra - rb;
+    return String(a.id).localeCompare(String(b.id));
+  });
+  return all.slice(0, limit);
 }
 
-function renderHomeOps() {
-  const root = $("home-ops");
+function renderHomeDesk() {
+  const root = $("home-desk");
   if (!root) return;
   const all = state.incidents;
   const openN = all.filter((item) => item.status === "open").length;
   const readyN = all.filter((item) => item.status === "recommended").length;
   const filedN = all.filter((item) => item.status === "filed").length;
-  root.innerHTML = `<button type="button" class="text-btn" data-go-incidents>${openN} open · ${readyN} ready · ${filedN} filed — all incidents</button>`;
+  const rows = deskQueueItems(5);
+  const list = rows.length
+    ? rows
+        .map((item) => {
+          const cta = rowCta(item);
+          const copy = tapeCopy({ id: item.run_id });
+          const ready = item.status === "recommended" ? " is-ready" : "";
+          return `<button type="button" class="home-desk-row${ready}" data-open-case="${escapeHtml(item.id)}" data-jump="${escapeHtml(cta.jump)}">
+            <span class="id">${escapeHtml(item.id)}</span>
+            <span class="alarm">${escapeHtml(alarmTitle(item.alarm))}</span>
+            <span class="meta">${escapeHtml(statusLabel(item.status))} · ${escapeHtml(copy.title)}</span>
+            <span class="act">${escapeHtml(cta.label)}</span>
+          </button>`;
+        })
+        .join("")
+    : `<p class="home-desk-empty">No cases yet. Open a case from an alarm you already have.</p>`;
+
+  root.innerHTML = `
+    <div class="home-desk-head">
+      <div>
+        <p class="home-desk-kicker">Desk</p>
+        <h2 class="home-desk-title">Next up</h2>
+      </div>
+      <div class="home-desk-actions">
+        <button type="button" class="text-btn" data-go-incidents>${openN} open · ${readyN} ready · ${filedN} filed — all</button>
+        <button type="button" class="btn-ghost btn home-desk-open" data-open-slip>Open case</button>
+      </div>
+    </div>
+    <div class="home-desk-list">${list}</div>`;
 }
 
-function renderDesk() {
-  const desk = state.desk;
-  const orbit = desk?.orbit;
-  if ($("home-illum")) {
-    const illum = orbit?.illumination === "sun" ? "Sunlit" : orbit ? "Eclipse" : "";
-    $("home-illum").textContent = illum || "—";
-  }
-  if ($("home-orbit-meta")) {
-    $("home-orbit-meta").textContent = orbit ? `${orbit.period_min} min orbit` : "—";
-  }
-  const craft = $("home-craft");
-  if (craft) {
-    craft.classList.toggle("is-sun", orbit?.illumination === "sun");
-    craft.classList.toggle("is-eclipse", Boolean(orbit) && orbit.illumination !== "sun");
-  }
-  if ($("home-orbit")) $("home-orbit").innerHTML = orbitSvg(orbit);
-
-  renderTapeTrigger();
-
-  const channels = $("home-channels");
-  if (channels) {
-    channels.innerHTML = (desk?.channels || [])
-      .map((ch) => {
-        const tone = ch.state === "critical" ? "is-crit" : ch.state === "warn" ? "is-warn" : "";
-        const isMode = ch.id === "PAY.mode";
-        const science = isMode && ch.value_text === "SCIENCE_MODE" ? "is-science" : "";
-        const unit = isMode ? "" : ch.unit || "";
-        const badge = ch.state === "critical" ? "Crit" : ch.state === "warn" ? "Warn" : "Nominal";
-        return `<article class="ch-tile ${tone} ${science} ${isMode ? "is-mode" : ""}" data-ch="${escapeHtml(ch.id)}">
-          <p class="ch-kicker"><span>${escapeHtml(ch.subsystem || "")}</span><span class="st">${badge}</span></p>
-          <h3>${escapeHtml(ch.title)}</h3>
-          <p class="ch-read"><span class="ch-value">${escapeHtml(tileValue(ch))}</span><span class="ch-unit">${escapeHtml(unit)}</span></p>
-          ${marginMeter(ch)}
-          <p class="ch-limit">${escapeHtml(tileLimit(ch))}</p>
-          ${sparkSvg(ch)}
-        </article>`;
-      })
-      .join("");
-    bindDeskSparks();
-  }
-
-  renderHomeHandoff();
-  renderHomeSitrep();
-  renderHomeOps();
-}
-
-function bindDeskSparks() {
-  const root = $("home-channels");
+function renderHomeProof() {
+  const root = $("home-proof");
   if (!root) return;
-  root.querySelectorAll("[data-ch]").forEach((el) => {
-    const id = el.dataset.ch;
-    const ch = (state.desk?.channels || []).find((row) => row.id === id);
-    const hit = el.querySelector(".spark-hit");
-    if (!ch || !hit) return;
-    const g = sparkGeom(ch);
-    const show = (sample) => {
-      const value = el.querySelector(".ch-value");
-      const limit = el.querySelector(".ch-limit");
-      const dot = el.querySelector(".spark-dot");
-      if (value) value.textContent = tileValue(ch, sample);
-      if (limit && sample) limit.textContent = `${sample.clock} on tape`;
-      if (dot && g && sample) {
-        const i = (ch.spark || []).indexOf(sample);
-        const v = g.vals[i];
-        if (i >= 0 && v != null) {
-          dot.innerHTML = `<circle cx="${g.x(i).toFixed(1)}" cy="${g.y(v).toFixed(1)}" r="3.2" fill="${channelInk(ch.id)}"/>`;
-        }
-      }
-    };
-    hit.addEventListener("mousemove", (ev) => {
-      const rect = hit.getBoundingClientRect();
-      const frac = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
-      const i = Math.round(frac * Math.max(0, (ch.spark || []).length - 1));
-      show(ch.spark[i]);
-    });
-    hit.addEventListener("mouseleave", () => {
-      show(ch);
-      const dot = el.querySelector(".spark-dot");
-      if (dot) dot.innerHTML = "";
-      const limit = el.querySelector(".ch-limit");
-      if (limit) limit.textContent = tileLimit(ch);
-    });
-  });
+  const sc = state.trust?.eval?.scorecard;
+  if (!sc) {
+    root.hidden = true;
+    root.innerHTML = "";
+    return;
+  }
+  const rates = [sc.diagnosis, sc.withhold, sc.false_inhibit, sc.provenance].filter(Boolean).slice(0, 4);
+  root.hidden = false;
+  root.innerHTML = `
+    <div class="home-proof-head">
+      <div>
+        <p class="home-proof-kicker">Eval proof</p>
+        <p class="home-proof-title">${escapeHtml(sc.headline || `${sc.cases_ok}/${sc.cases_total} harness cases`)}</p>
+      </div>
+      <button type="button" class="text-btn" data-go-trust>Full scorecard</button>
+    </div>
+    <div class="home-proof-chips">
+      ${rates
+        .map(
+          (r) => `<button type="button" class="home-proof-chip" data-go-trust title="${escapeHtml(r.definition || "")}">
+            <span class="k">${escapeHtml(r.label)}</span>
+            <span class="v">${escapeHtml(r.display || `${r.passed}/${r.total}`)}</span>
+          </button>`
+        )
+        .join("")}
+    </div>`;
+}
+
+function renderHome() {
+  renderHomeCraft();
+  renderHomeBrief();
+  renderHomePath();
+  renderHomeProof();
+  renderHomeDesk();
 }
 
 async function loadDesk(runId) {
@@ -2545,12 +2315,18 @@ async function loadDesk(runId) {
   if (!res.ok) throw new Error(`desk ${res.status}`);
   state.desk = await res.json();
   state.deskRunId = state.desk.run_id || wanted;
-  if (state.view === "home") renderDesk();
+  if (state.view === "home") renderHomeCraft();
 }
 
 async function goHome() {
   enterHome();
-  if (!state.desk) await loadDesk(state.deskRunId);
+  if (!state.desk) {
+    try {
+      await loadDesk(state.deskRunId);
+    } catch (err) {
+      /* craft falls back to a static orbit */
+    }
+  }
 }
 
 async function goIncidents() {
@@ -2987,7 +2763,7 @@ function renderFindings() {
     return;
   }
   body.innerHTML = `<div class="investigation-empty">
-    <p>Run investigation to stamp this case with a provenance-tagged report.</p>
+    <p>Run investigation to stamp this case with a source-tagged report.</p>
   </div>`;
 }
 
@@ -3576,25 +3352,12 @@ function bind() {
   $("store-status").addEventListener("click", () => goTrust());
   $("back-incidents").addEventListener("click", () => goIncidents());
   $("go-home-brand").addEventListener("click", () => goHome());
-  $("tape-trigger").addEventListener("click", () => {
-    if (state.tapePaletteOpen) closeTapePalette();
-    else openTapePalette();
-  });
-  $("tape-palette-close").addEventListener("click", closeTapePalette);
-  $("tape-palette").addEventListener("click", (ev) => {
-    if (ev.target.id === "tape-palette") closeTapePalette();
-  });
-  $("tape-palette-q").addEventListener("input", (ev) => {
-    state.tapePaletteQuery = ev.target.value;
-    renderTapePalette();
-  });
-  $("tape-palette-list").addEventListener("click", (ev) => {
-    const btn = ev.target.closest("[data-tape]");
-    if (!btn) return;
-    loadDesk(btn.dataset.tape);
-    closeTapePalette();
-  });
   $("home").addEventListener("click", (ev) => {
+    if (ev.target.closest("#home-path-toggle")) {
+      state.pathExpanded = !state.pathExpanded;
+      renderHomePath();
+      return;
+    }
     if (ev.target.closest("[data-go-incidents]")) {
       goIncidents();
       return;
@@ -3615,14 +3378,21 @@ function bind() {
       openSlip();
       return;
     }
-    const filter = ev.target.closest("[data-filter]");
-    if (filter) {
-      state.incidentFilter = filter.dataset.filter;
+    const btn = ev.target.closest("[data-open-case]");
+    if (btn) openIncident(btn.dataset.openCase, btn.dataset.jump);
+  });
+  $("incidents-desk").addEventListener("change", (ev) => {
+    const status = ev.target.closest("[data-inc-status]");
+    if (status) {
+      state.incidentFilter = status.value;
       renderIncidents();
       return;
     }
-    const btn = ev.target.closest("[data-open-case]");
-    if (btn) openIncident(btn.dataset.openCase, btn.dataset.jump);
+    const family = ev.target.closest("[data-inc-family]");
+    if (family) {
+      state.incidentFamily = family.value;
+      renderIncidents();
+    }
   });
   $("incidents-desk").addEventListener("keydown", (ev) => {
     if (ev.key !== "Enter" && ev.key !== " ") return;
@@ -3689,19 +3459,9 @@ function bind() {
     renderIncidents();
   });
   $("trust-desk").addEventListener("click", (ev) => {
-    const connectBtn = ev.target.closest("[data-source-connect]");
-    if (connectBtn) {
-      syncSource(connectBtn.dataset.sourceConnect, { connect: true });
-      return;
-    }
     const syncBtn = ev.target.closest("[data-source-sync]");
     if (syncBtn) {
-      syncSource(syncBtn.dataset.sourceSync, { connect: true });
-      return;
-    }
-    const disconnectBtn = ev.target.closest("[data-source-disconnect]");
-    if (disconnectBtn) {
-      disconnectSource(disconnectBtn.dataset.sourceDisconnect);
+      syncSource(syncBtn.dataset.sourceSync);
       return;
     }
     if (ev.target.closest("[data-trust-overview]")) {
@@ -3709,8 +3469,9 @@ function bind() {
       return;
     }
     if (ev.target.closest("[data-trust-library]")) {
-      const first = (state.docs || []).find((d) => libraryKind(d) === "procedure") || state.docs?.[0];
-      if (first) openDoc(first.id);
+      const fold = $("trust-fold-library");
+      if (fold) fold.open = true;
+      fold?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     if (ev.target.closest("[data-trust-incidents]")) {
@@ -3721,7 +3482,6 @@ function bind() {
     if (tape) {
       loadDesk(tape.dataset.trustTape).then(() => {
         if (state.view === "trust") renderTrust();
-        goHome();
       });
       return;
     }
@@ -3902,10 +3662,6 @@ function bind() {
       return;
     }
     if (ev.key !== "Escape") return;
-    if (state.tapePaletteOpen) {
-      closeTapePalette();
-      return;
-    }
     if ($("doc-slip") && !$("doc-slip").hidden) {
       closeDocSlip();
       return;
@@ -3964,20 +3720,29 @@ async function boot() {
   state.incidents = await incidentRes.json();
   state.alarms = await alarmRes.json();
   state.docs = docsRes.ok ? await docsRes.json() : [];
+  await loadArchiveCatalog();
   setStoreStatus(state.runs.length > 0);
   fillCreateForm();
   renderIncidents();
-  const tape =
+  state.deskRunId =
     state.incidents.find((item) => item.id === "INC-0205")?.run_id ||
     state.runs.find((run) => run.id === "fault1")?.id ||
     state.runs.find((run) => run.id === "eps204")?.id ||
     state.runs[0]?.id ||
     "fault1";
   enterHome();
-  await loadDesk(tape);
+  try {
+    await loadDesk(state.deskRunId);
+  } catch (err) {
+    /* craft keeps static orbit */
+  }
+  loadTrust().catch(() => {});
 }
 
 boot().catch((err) => {
   const lede = $("home-lede");
-  if (lede) lede.textContent = err.message;
+  if (lede) {
+    lede.hidden = false;
+    lede.textContent = err.message;
+  }
 });
