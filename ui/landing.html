@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ORBIT — investigate spacecraft alarms</title>
+    <meta
+      name="description"
+      content="ORBIT turns a spacecraft alarm into a defendable recommendation — locked evidence, receipts on every claim, and a hard stop before uplink."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Syne:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/static/landing.css?v=8" />
+  </head>
+  <body>
+    <a class="skip" href="#enter">Skip to enter desk</a>
+
+    <header class="hero">
+      <div class="hero-bg" aria-hidden="true"></div>
+
+      <div class="orbit-stage" aria-hidden="true">
+        <svg viewBox="0 0 960 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <radialGradient id="core-glow" cx="38%" cy="32%" r="65%">
+              <stop offset="0%" stop-color="#1a3a42" />
+              <stop offset="45%" stop-color="#0c1922" />
+              <stop offset="100%" stop-color="#05080c" />
+            </radialGradient>
+            <radialGradient id="core-sheen" cx="32%" cy="28%" r="55%">
+              <stop offset="0%" stop-color="#7ff0d4" stop-opacity="0.35" />
+              <stop offset="40%" stop-color="#2ad3a8" stop-opacity="0.08" />
+              <stop offset="100%" stop-color="#2ad3a8" stop-opacity="0" />
+            </radialGradient>
+            <linearGradient id="ring-fade" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#2ad3a8" stop-opacity="0" />
+              <stop offset="35%" stop-color="#2ad3a8" stop-opacity="0.85" />
+              <stop offset="65%" stop-color="#e8f0f6" stop-opacity="0.55" />
+              <stop offset="100%" stop-color="#2ad3a8" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+
+          <ellipse class="orbit-path-soft" cx="480" cy="320" rx="430" ry="172" transform="rotate(-18 480 320)" />
+          <ellipse class="orbit-path" cx="480" cy="320" rx="430" ry="172" transform="rotate(-18 480 320)" />
+
+          <!-- ORBIT core: abstract world + signal ring (not mission-specific) -->
+          <g class="orbit-core" transform="translate(480 320)">
+            <circle r="62" fill="url(#core-glow)" />
+            <circle r="62" fill="url(#core-sheen)" />
+            <circle r="62" stroke="rgba(232,240,246,0.22)" stroke-width="1" />
+            <ellipse cx="0" cy="0" rx="58" ry="18" transform="rotate(-28)" stroke="rgba(232,240,246,0.12)" stroke-width="1" />
+            <ellipse cx="0" cy="0" rx="58" ry="34" transform="rotate(-28)" stroke="rgba(42,211,168,0.16)" stroke-width="1" />
+            <path
+              d="M -44 -18 C -20 -40 22 -38 44 -12"
+              stroke="#2ad3a8"
+              stroke-width="1.6"
+              stroke-linecap="round"
+              opacity="0.55"
+            />
+            <ellipse
+              class="core-ring"
+              cx="0"
+              cy="0"
+              rx="86"
+              ry="26"
+              transform="rotate(-28)"
+              stroke="url(#ring-fade)"
+              stroke-width="2"
+            />
+            <circle cx="74" cy="-28" r="4.5" fill="#2ad3a8" />
+            <circle cx="74" cy="-28" r="9" stroke="#2ad3a8" stroke-width="1" opacity="0.35" />
+          </g>
+
+          <g>
+            <animateMotion dur="28s" repeatCount="indefinite" path="M 120 360 A 420 168 -18 1 1 119.9 360.1" rotate="auto" />
+            <rect x="-10" y="-3" width="20" height="6" rx="1.5" fill="#e8f0f6" />
+            <rect x="6" y="-1.5" width="8" height="3" rx="0.8" fill="#2ad3a8" />
+          </g>
+        </svg>
+      </div>
+
+      <div class="topbar">
+        <span class="topbar-spacer" aria-hidden="true"></span>
+        <a class="topbar-link" href="/app">Desk</a>
+      </div>
+
+      <div class="hero-copy">
+        <p class="brand">ORBIT</p>
+        <h1 class="headline">Close the case. Don’t risk the craft.</h1>
+        <p class="lede">
+          ORBIT turns a spacecraft alarm into a defendable recommendation in minutes —
+          locked evidence, receipts on every claim, and a hard stop before anyone can uplink.
+        </p>
+        <div class="cta-row">
+          <a class="cta" id="enter" href="/app">
+            Try the demo
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M3 8h9M8 3.5 12.5 8 8 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </a>
+          <span class="cta-note">Works in the browser</span>
+        </div>
+      </div>
+    </header>
+
+    <section class="band reveal" aria-labelledby="band-title">
+      <div class="band-inner">
+        <p class="band-kicker">How it works</p>
+        <h2 class="band-title" id="band-title">Faster closes. Safer ones.</h2>
+        <ol class="beats">
+          <li class="beat">
+            <span class="beat-n">01</span>
+            <div>
+              <h3>Lock the evidence</h3>
+              <p>Freeze the exact window around the alarm so the investigation can’t drift while you work.</p>
+            </div>
+          </li>
+          <li class="beat">
+            <span class="beat-n">02</span>
+            <div>
+              <h3>Show the work</h3>
+              <p>Data, procedure, and a similar past case — each claim tagged so you can trust it or challenge it.</p>
+            </div>
+          </li>
+          <li class="beat">
+            <span class="beat-n">03</span>
+            <div>
+              <h3>File the call</h3>
+              <p>Approve the recommendation and save it. ORBIT cannot command the spacecraft — by design.</p>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="story reveal" id="story" aria-labelledby="story-title">
+      <div class="story-head">
+        <p class="band-kicker">Investigation</p>
+        <h2 class="band-title" id="story-title">Watch ORBIT think through a case.</h2>
+        <p class="panel-lede">
+          From the alarm on the craft, through every source it touches, to a hypothesis you can challenge.
+        </p>
+      </div>
+
+      <div class="story-frame" data-act="0" aria-hidden="true">
+        <!-- Act 0: spacecraft alert -->
+        <div class="story-act act-alert">
+          <div class="story-craft">
+            <svg viewBox="0 0 240 140" class="story-craft-svg" fill="none" aria-hidden="true">
+              <defs>
+                <linearGradient id="craft-body" x1="40" y1="70" x2="200" y2="70" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#c5d4e0" />
+                  <stop offset="0.45" stop-color="#e8f0f6" />
+                  <stop offset="1" stop-color="#8aa0b3" />
+                </linearGradient>
+                <linearGradient id="craft-wing" x1="100" y1="40" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+                  <stop stop-color="#2ad3a8" stop-opacity="0.85" />
+                  <stop offset="1" stop-color="#1a8f74" stop-opacity="0.35" />
+                </linearGradient>
+              </defs>
+              <!-- soft orbital hint -->
+              <ellipse cx="120" cy="78" rx="96" ry="14" stroke="rgba(232,240,246,0.12)" stroke-width="1" />
+              <!-- solar wings -->
+              <path d="M78 58 L42 48 L38 68 L78 72 Z" fill="url(#craft-wing)" opacity="0.9" />
+              <path d="M162 58 L198 48 L202 68 L162 72 Z" fill="url(#craft-wing)" opacity="0.9" />
+              <path d="M78 78 L42 88 L38 72 L78 70 Z" fill="url(#craft-wing)" opacity="0.55" />
+              <path d="M162 78 L198 88 L202 72 L162 70 Z" fill="url(#craft-wing)" opacity="0.55" />
+              <!-- bus / body -->
+              <rect x="88" y="54" width="64" height="28" rx="6" fill="url(#craft-body)" />
+              <rect x="96" y="60" width="20" height="8" rx="1.5" fill="#0c1922" opacity="0.55" />
+              <rect x="120" y="60" width="24" height="8" rx="1.5" fill="#0c1922" opacity="0.35" />
+              <!-- antenna -->
+              <path d="M120 54 V40" stroke="#e8f0f6" stroke-width="1.5" stroke-linecap="round" />
+              <circle cx="120" cy="36" r="3.5" fill="#2ad3a8" />
+              <circle cx="120" cy="36" r="7" stroke="#2ad3a8" stroke-width="1" opacity="0.35" />
+              <!-- thruster glow -->
+              <ellipse cx="84" cy="68" rx="5" ry="3" fill="#7ff0d4" opacity="0.5" />
+              <ellipse cx="156" cy="68" rx="5" ry="3" fill="#7ff0d4" opacity="0.5" />
+            </svg>
+            <div class="story-alert">
+              <span class="story-alert-pulse"></span>
+              <span class="story-alert-label">WARN</span>
+              <span class="story-alert-ch">EPS.bus_voltage</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Act 1: sources → ORBIT -->
+        <div class="story-act act-ingest">
+          <div class="story-ingest">
+            <div class="story-src" data-src="0">
+              <span class="story-src-k">Telemetry</span>
+              <span class="story-src-v">Sealed window</span>
+            </div>
+            <div class="story-src" data-src="1">
+              <span class="story-src-k">Procedure</span>
+              <span class="story-src-v">EPS-17</span>
+            </div>
+            <div class="story-src" data-src="2">
+              <span class="story-src-k">Prior case</span>
+              <span class="story-src-v">INC-0187</span>
+            </div>
+            <div class="story-brain">
+              <span class="story-brain-ring"></span>
+              <span class="story-brain-ring story-brain-ring-2"></span>
+              <span class="story-brain-core">ORBIT</span>
+            </div>
+            <span class="story-packet" data-pkt="0"></span>
+            <span class="story-packet" data-pkt="1"></span>
+            <span class="story-packet" data-pkt="2"></span>
+          </div>
+        </div>
+
+        <!-- Act 2: dissect → timeline -->
+        <div class="story-act act-dissect">
+          <div class="story-bits">
+            <span class="story-bit" data-bit="0">HEATER_B_ENABLE</span>
+            <span class="story-bit" data-bit="1">bus 26.1 V</span>
+            <span class="story-bit" data-bit="2">heater 3.1×</span>
+            <span class="story-bit" data-bit="3">SCIENCE_MODE</span>
+            <span class="story-bit" data-bit="4">EPS-17 §4</span>
+            <span class="story-bit" data-bit="5">INC-0187 match</span>
+          </div>
+          <ol class="story-timeline">
+            <li><span class="t">14:28</span><span class="e">HEATER_B_ENABLE</span><span class="tag tag-o">OBSERVED</span></li>
+            <li><span class="t">14:29</span><span class="e">SCIENCE_MODE</span><span class="tag tag-o">OBSERVED</span></li>
+            <li><span class="t">14:32</span><span class="e">Bus crossed warn</span><span class="tag tag-o">OBSERVED</span></li>
+            <li><span class="t">14:32</span><span class="e">Heater 3.1× healthy</span><span class="tag tag-d">DERIVED</span></li>
+          </ol>
+        </div>
+
+        <!-- Act 3: hypothesis -->
+        <div class="story-act act-hyp">
+          <div class="story-hyp">
+            <p class="story-hyp-kicker"><span class="tag tag-h">HYPOTHESIS</span></p>
+            <p class="story-hyp-claim">Heater B is the load. Inhibit it and watch the bus recover.</p>
+            <p class="story-hyp-sub">Payload SCIENCE_MODE is a confounder — not the cause.</p>
+            <p class="story-hyp-rec">Recommend · Inhibit Heater B · <em>not sent</em></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="story-chrome">
+        <p class="story-caption" id="story-caption">A spacecraft throws a bus-voltage warn</p>
+        <div class="story-dots" role="tablist" aria-label="Investigation steps">
+          <button type="button" class="story-dot is-on" data-act-btn="0" aria-label="Alarm"></button>
+          <button type="button" class="story-dot" data-act-btn="1" aria-label="Sources"></button>
+          <button type="button" class="story-dot" data-act-btn="2" aria-label="Timeline"></button>
+          <button type="button" class="story-dot" data-act-btn="3" aria-label="Hypothesis"></button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel panel-split reveal" aria-labelledby="seal-title">
+      <div class="panel-copy">
+        <p class="band-kicker">Evidence</p>
+        <h2 class="band-title" id="seal-title">Stop drowning in the full archive.</h2>
+        <p class="panel-lede">
+          Open a case and ORBIT freezes only the window that matters.
+          You work a locked package — not a live stream that keeps moving under you.
+        </p>
+      </div>
+      <div class="viz viz-seal" aria-hidden="true">
+        <div class="viz-tape">
+          <span class="viz-tape-line"></span>
+          <span class="viz-tape-line"></span>
+          <span class="viz-tape-line"></span>
+          <span class="viz-window"></span>
+        </div>
+        <p class="viz-lock">Evidence locked</p>
+      </div>
+    </section>
+
+    <section class="panel panel-split panel-flip reveal" aria-labelledby="tags-title">
+      <div class="panel-copy">
+        <p class="band-kicker">Clarity</p>
+        <h2 class="band-title" id="tags-title">Trust the answer — or tear it apart.</h2>
+        <p class="panel-lede">
+          Same source tags as in the desk: OBSERVED, DERIVED, DOCUMENTED, HYPOTHESIS.
+          You always know what was measured versus what was judged.
+        </p>
+      </div>
+      <div class="viz viz-tags" aria-hidden="true">
+        <p class="viz-claim">Heater draw is about 3× normal</p>
+        <div class="viz-tag-row">
+          <span class="viz-tag is-observed">OBSERVED</span>
+          <span class="viz-tag is-derived">DERIVED</span>
+          <span class="viz-tag is-documented">DOCUMENTED</span>
+          <span class="viz-tag is-hypothesis">HYPOTHESIS</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel panel-split reveal" aria-labelledby="stop-title">
+      <div class="panel-copy">
+        <p class="band-kicker">Safety</p>
+        <h2 class="band-title" id="stop-title">Help the operator. Never touch the vehicle.</h2>
+        <p class="panel-lede">
+          Get a clear recommended action without the risk of an accidental uplink.
+          The last step stays human — and “not sent” — every time.
+        </p>
+      </div>
+      <div class="viz viz-stop" aria-hidden="true">
+        <div class="viz-cmd">
+          <span class="viz-cmd-label">TURN OFF HEATER B</span>
+          <span class="viz-cmd-bar"></span>
+        </div>
+        <div class="viz-block">
+          <span class="viz-block-x"></span>
+          <span class="viz-block-copy">Not sent</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="close reveal" aria-labelledby="close-title">
+      <p class="band-kicker">Demo</p>
+      <h2 class="band-title" id="close-title">See the advantage on a live case.</h2>
+      <p class="panel-lede close-lede">
+        Open the desk, run a sample alarm, and watch a recommendation land with receipts — still never uplinked.
+      </p>
+      <a class="cta" href="/app">
+        Open the desk
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M3 8h9M8 3.5 12.5 8 8 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+        </svg>
+      </a>
+    </section>
+
+    <footer class="foot">
+      <span>ORBIT · spacecraft investigation desk</span>
+      <a href="/app">Skip to desk</a>
+    </footer>
+
+    <script src="/static/landing.js?v=8"></script>
+  </body>
+</html>

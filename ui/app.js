@@ -1,9 +1,15 @@
 const ALARM = "EPS.bus_voltage";
 const API = "/api";
+const APP_BASE = "/app";
 
 function apiUrl(path) {
   if (!path.startsWith("/")) path = `/${path}`;
   return `${API}${path}`;
+}
+
+function appPath(path = "") {
+  if (!path || path === "/") return APP_BASE;
+  return `${APP_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 const TRACE_CATALOG = [
@@ -1984,23 +1990,29 @@ function setView(view) {
 let syncingFromHistory = false;
 
 function pathForView(view, incidentId = state.incidentId) {
-  if (view === "incidents") return "/incidents";
-  if (view === "trust") return "/trust";
-  if (view === "case" && incidentId) return `/incidents/${encodeURIComponent(incidentId)}`;
-  return "/";
+  if (view === "incidents") return appPath("/incidents");
+  if (view === "trust") return appPath("/trust");
+  if (view === "case" && incidentId) return appPath(`/incidents/${encodeURIComponent(incidentId)}`);
+  return appPath();
 }
 
 function syncUrl(view, { replace = false } = {}) {
   if (syncingFromHistory) return;
   const incidentId = view === "case" ? state.incidentId : null;
   const path = pathForView(view, incidentId);
-  const same = location.pathname === path;
+  const same = location.pathname === path || location.pathname === `${path}/`;
   const method = replace || same ? "replaceState" : "pushState";
   history[method]({ view, incidentId }, "", path);
 }
 
 function parsePath(pathname) {
-  const path = (pathname || "/").replace(/\/+$/, "") || "/";
+  let path = (pathname || "/").replace(/\/+$/, "") || "/";
+  if (path === APP_BASE || path === "/") {
+    return { view: "home", incidentId: null };
+  }
+  if (path.startsWith(`${APP_BASE}/`)) {
+    path = path.slice(APP_BASE.length) || "/";
+  }
   const caseMatch = path.match(/^\/incidents\/([^/]+)$/);
   if (caseMatch) {
     return { view: "case", incidentId: decodeURIComponent(caseMatch[1]) };

@@ -6,7 +6,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 OUT = Path(__file__).resolve().parent / "screenshots"
-BASE = "http://127.0.0.1:8000/"
+BASE = "http://127.0.0.1:8000/app/"
 VIEWPORT = {"width": 1440, "height": 900}
 
 

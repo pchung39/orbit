@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, FastAPI, HTTPException, Query
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -750,36 +750,66 @@ def _spa_index() -> FileResponse:
     return FileResponse(UI_DIR / "index.html")
 
 
+def _landing() -> FileResponse:
+    return FileResponse(UI_DIR / "landing.html")
+
+
 app.include_router(api)
 # Mount before SPA catch-all so /static/* is not swallowed.
 app.mount("/static", StaticFiles(directory=UI_DIR), name="static")
 
 
 @app.get("/")
+def marketing_home() -> FileResponse:
+    return _landing()
+
+
+@app.get("/app")
+@app.get("/app/")
 def spa_home() -> FileResponse:
     return _spa_index()
 
 
-@app.get("/incidents")
+@app.get("/app/incidents")
 def spa_incidents() -> FileResponse:
     return _spa_index()
 
 
-@app.get("/trust")
+@app.get("/app/trust")
 def spa_trust() -> FileResponse:
     return _spa_index()
 
 
-@app.get("/incidents/{incident_id}")
+@app.get("/app/incidents/{incident_id}")
 def spa_case(incident_id: str) -> FileResponse:
     return _spa_index()
 
 
+# Legacy console paths → /app (bookmarks + old links).
+@app.get("/incidents")
+def legacy_incidents() -> RedirectResponse:
+    return RedirectResponse(url="/app/incidents", status_code=307)
+
+
+@app.get("/trust")
+def legacy_trust() -> RedirectResponse:
+    return RedirectResponse(url="/app/trust", status_code=307)
+
+
+@app.get("/incidents/{incident_id}")
+def legacy_case(incident_id: str) -> RedirectResponse:
+    return RedirectResponse(url=f"/app/incidents/{incident_id}", status_code=307)
+
+
 @app.get("/{full_path:path}")
 def spa_fallback(full_path: str) -> FileResponse:
-    """SPA fallback for unknown non-API paths. Do not swallow /api or /static."""
+    """SPA fallback under /app/*. Do not swallow /api or /static."""
     if full_path == "api" or full_path.startswith("api/") or full_path.startswith("static/"):
         raise HTTPException(404, "Not found")
+    if full_path == "app" or full_path.startswith("app/"):
+        if "." in full_path.rsplit("/", 1)[-1]:
+            raise HTTPException(404, "Not found")
+        return _spa_index()
     if "." in full_path.rsplit("/", 1)[-1]:
         raise HTTPException(404, "Not found")
-    return _spa_index()
+    raise HTTPException(404, "Not found")

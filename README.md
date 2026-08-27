@@ -145,7 +145,7 @@ python -m storage ingest
 uvicorn api.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/). Console routes: `/`, `/incidents`, `/trust`, `/incidents/INC-0205`. JSON APIs live under `/api` (e.g. `GET /api/incidents`). Load balancer probe: `GET /health` (also `/api/health`).
+Open [http://127.0.0.1:8000/](http://127.0.0.1:8000/) for the marketing entry, then **Enter the desk** → [http://127.0.0.1:8000/app](http://127.0.0.1:8000/app). Desk routes: `/app`, `/app/incidents`, `/app/trust`, `/app/incidents/INC-0205`. JSON under `/api`. Probe: `GET /health` (also `/api/health`).
 
 **Start here:** Overview walkthrough → **INC-0205** → **INC-0210** (same alarm, different culprit) → **Trust** scorecard.
 
@@ -223,7 +223,7 @@ The spec is canonical: [`spec/aurora1_mission_model.yaml`](spec/aurora1_mission_
 | Simulator | Nominal + EPS-204 + fault1 + INC-0187 + PAY-002 + INC-0191 + BATT-003 + INC-0162 + marg001 |
 | Store | Postgres / pgvector — runs, telemetry, events, procedures, incidents |
 | Agent | Tools over the store; `--provider rules` in the UI; Claude/OpenAI CLI-only |
-| Console | FastAPI SPA at `/`, `/incidents`, `/trust`, `/incidents/{id}`; JSON under `/api` |
+| Console | Marketing at `/`; desk SPA at `/app`, `/app/incidents`, `/app/trust`, `/app/incidents/{id}`; JSON under `/api` |
 | Trust API | `GET /api/trust` — store, library, investigator health |
 | Eval | Diagnosis / withhold / false-inhibit / source-tag scorecard |
 | Feedback | Operator confirm/reject on working hypothesis |
