@@ -191,12 +191,14 @@ python -m eval --scorecard-only
 python -m eval --compare-only  # compare candidate vs eval/baseline.json
 python -m eval --compare-baseline   # full suite, then compare
 python -m eval --promote-baseline   # promote candidate after PASS
-python -m unittest eval.test_release_gate -v
+python -m unittest eval.test_release_gate eval.test_explorer -v
 ```
 
 Default is `--provider rules` (no paid LLM). Green on this harness is the bar: **5 cases** (four closes + one withheld). Trust reads `eval/scorecard.json` so the console shows the same numbers.
 
-**Release gate:** Trust **Eval scorecard** loads baseline comparison automatically (`PASS`, `BLOCKED`, or `INSUFFICIENT_COVERAGE` vs `eval/baseline.json`). Full-suite runs also write `eval/candidate.json` (check-level detail) and `eval/comparison.json`. Promotion is explicit — a passing candidate does not overwrite the baseline automatically. Demo seed: `eval/baselines/seed-rules.fixture.json` (fixture-backed, not flight history).
+**Release gate:** Trust **Eval Explorer** loads baseline comparison automatically (`PASS`, `BLOCKED`, or `INSUFFICIENT_COVERAGE` vs `eval/baseline.json`). Full-suite runs also write `eval/candidate.json` (check-level detail) and `eval/comparison.json`. Promotion is explicit — a passing candidate does not overwrite the baseline automatically. Demo seed: `eval/baselines/seed-rules.fixture.json` (fixture-backed, not flight history).
+
+**Eval Explorer (Trust UI):** `/app/trust` shows the suite index — four headline metrics, five harness cases with critical-failure flags, and baseline deltas when a baseline exists. Click a case for scenario contract, observed evidence snapshot, the actual report (with provenance tags), expandable per-check results, and deterministic safety/trust interpretation. API: `GET /api/eval/explorer`, enriched `GET /api/eval/cases/{id}`. Latest candidate run only — not a run history archive.
 
 **Current rules scorecard:** 4/4 named closes · 1/1 withheld · 3/3 no false Heater B inhibit · 5/5 fact vs inference clean.
 

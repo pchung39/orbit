@@ -496,6 +496,7 @@ const state = {
   trustSub: "overview",
   releaseCaseId: null,
   releaseCompare: null,
+  evalExplorer: null,
   releaseLoading: false,
   releaseCase: null,
   sources: null,
@@ -1429,12 +1430,14 @@ function trustStatusLabel(tone) {
 async function loadTrust() {
   state.trustLoading = true;
   state.releaseCompare = null;
+  state.evalExplorer = null;
   renderTrust();
   try {
-    const [trustRes, sourcesRes, compareRes] = await Promise.all([
+    const [trustRes, sourcesRes, compareRes, explorerRes] = await Promise.all([
       fetch(apiUrl("/trust")),
       fetch(apiUrl("/sources")),
       fetch(apiUrl("/eval/compare")),
+      fetch(apiUrl("/eval/explorer")),
     ]);
     if (!trustRes.ok) throw new Error(`trust ${trustRes.status}`);
     state.trust = await trustRes.json();
@@ -1457,6 +1460,11 @@ async function loadTrust() {
         warnings: [],
       };
     }
+    if (explorerRes.ok) {
+      state.evalExplorer = await explorerRes.json();
+    } else {
+      state.evalExplorer = null;
+    }
   } catch (err) {
     state.trust = null;
     state.sources = null;
@@ -1469,6 +1477,7 @@ async function loadTrust() {
       blockers: [],
       warnings: [],
     };
+    state.evalExplorer = null;
     setStoreStatus(false, "NO STORE");
     if ($("trust-head")) {
       $("trust-head").innerHTML = `<h1>Trust</h1><p class="trust-head-lede">${escapeHtml(err.message)}</p>`;
@@ -1610,10 +1619,11 @@ function releaseVerdictTone(rec) {
   return "insufficient";
 }
 
-function buildScorecardHtml(trust, cmp, loading) {
+function buildScorecardHtml(trust, cmp, explorer, loading) {
   const sc = trust?.eval?.scorecard;
   const cmpData = cmp || {};
-  const rec = cmpData.recommendation;
+  const ex = explorer || {};
+  const rec = cmpData.recommendation ?? ex.recommendation;
   const hasBaseline = Boolean(cmpData.baseline?.baseline_id || cmpData.baseline?.run_id);
   const hasCompare = Boolean(rec);
   const releaseTone = rec ? releaseVerdictTone(rec) : null;
@@ -1637,7 +1647,7 @@ function buildScorecardHtml(trust, cmp, loading) {
       <div class="trust-card-head">
         <div>
           <p class="trust-card-kicker">Validation</p>
-          <h3>Eval scorecard</h3>
+          <h3>Eval Explorer</h3>
         </div>
         <span class="trust-status warn">Loading…</span>
       </div>
@@ -1712,17 +1722,32 @@ function buildScorecardHtml(trust, cmp, loading) {
         ? `<p class="trust-score-baseline-hint is-pending">Checking approved baseline…</p>`
         : "";
 
-  const caseRows = cmpData.cases?.rows?.length
-    ? cmpData.cases.rows
-    : (sc?.cases || []).map((row) => ({
+  const explorerCases = ex.cases?.length ? ex.cases : null;
+  const cmpCaseRows = cmpData.cases?.rows?.length ? cmpData.cases.rows : null;
+  const scCaseRows = sc?.cases?.length ? sc.cases : null;
+
+  const caseRows = explorerCases
+    ? explorerCases.map((row) => ({
         id: row.id,
         label: row.label,
-        baseline_ok: null,
         candidate_ok: row.ok,
-        status: row.ok ? "unchanged" : "regressed",
+        status: row.baseline_status || (row.ok ? "unchanged" : "regressed"),
         passed: row.passed,
         total: row.total,
-      }));
+        critical_failure: row.critical_failure,
+      }))
+    : cmpCaseRows
+      ? cmpCaseRows
+      : (scCaseRows || []).map((row) => ({
+          id: row.id,
+          label: row.label,
+          baseline_ok: null,
+          candidate_ok: row.ok,
+          status: row.ok ? "unchanged" : "regressed",
+          passed: row.passed,
+          total: row.total,
+          critical_failure: false,
+        }));
 
   const caseSummary = cmpData.cases
     ? `${cmpData.cases.improved ?? 0} improved · ${cmpData.cases.unchanged ?? 0} unchanged · ${cmpData.cases.regressed ?? 0} regressed`
@@ -1733,11 +1758,14 @@ function buildScorecardHtml(trust, cmp, loading) {
   const caseTable =
     caseRows.length > 0
       ? `<div class="trust-score-cases">
-          <div class="trust-score-cases-head">
+          <div class="trust-score-cases-head eval-check-table-head">
             <span>Harness cases</span>
             ${caseSummary ? `<span class="summary">${escapeHtml(caseSummary)}</span>` : ""}
           </div>
-          <div class="trust-score-case-rows">
+          <div class="trust-score-case-rows eval-explorer-case-rows">
+            <div class="eval-explorer-case-cols" aria-hidden="true">
+              <span>Case</span><span>Scenario</span><span>Checks</span><span>Critical</span><span>Status</span>
+            </div>
             ${caseRows
               .map((row) => {
                 const badgeCls =
@@ -1753,10 +1781,14 @@ function buildScorecardHtml(trust, cmp, loading) {
                     : row.candidate_ok
                       ? "ok"
                       : "fail";
-                return `<button type="button" class="trust-score-case-row is-${mark}" data-release-case="${escapeHtml(row.id)}">
+                const criticalHtml = row.critical_failure
+                  ? `<span class="eval-check-critical">yes</span>`
+                  : `<span class="eval-check-ok">—</span>`;
+                return `<button type="button" class="trust-score-case-row eval-explorer-case-row is-${mark}" data-release-case="${escapeHtml(row.id)}">
                   <code class="id">${escapeHtml(row.id)}</code>
                   <span class="label">${escapeHtml(row.label || "")}</span>
                   <span class="checks">${escapeHtml(checks)}</span>
+                  ${criticalHtml}
                   <span class="trust-release-badge ${badgeCls}">${escapeHtml(hasBaseline ? row.status || "—" : mark)}</span>
                 </button>`;
               })
@@ -1795,16 +1827,24 @@ function buildScorecardHtml(trust, cmp, loading) {
       ? `<div class="trust-card-actions"><button type="button" class="btn btn-primary" data-promote-baseline>Promote candidate to baseline</button></div>`
       : "";
 
+  const runMeta = ex.run
+    ? `<p class="trust-score-run-meta">Latest run <code>${escapeHtml(ex.run.run_id || "—")}</code> · <code>${escapeHtml(ex.run.provider || sc?.provider || "rules")}</code> · ${escapeHtml(formatSyncAt(ex.run.generated_at || sc?.generated_at))}</p>`
+    : "";
+
+  const disclosureHtml = ex.disclosure
+    ? `<p class="eval-disclosure">${escapeHtml(ex.disclosure)}</p>`
+    : "";
+
   const scoreBody = sc
-    ? `${sc.headline ? `<p class="trust-score-headline">${escapeHtml(sc.headline)}</p>` : ""}
+    ? `${ex.headline || sc.headline ? `<p class="trust-score-headline">${escapeHtml(ex.headline || sc.headline || "")}</p>` : ""}
+      ${runMeta}
       ${compareLane}
       ${metricHtml ? `<div class="trust-metrics trust-score-metrics">${metricHtml}</div>` : ""}
       ${calloutHtml}
       ${caseTable}
       ${promoteBtn}
-      <p class="trust-note">Last run <code>${escapeHtml(sc.provider || "rules")}</code> · ${escapeHtml(
-        sc.generated_at || "—"
-      )}. Refresh with <code>${escapeHtml(trust?.eval?.command || "python -m eval")}</code>. Simulator-grounded suite only — aggregate gains never override restraint or provenance blockers.</p>`
+      ${disclosureHtml}
+      <p class="trust-note">Refresh with <code>${escapeHtml(trust?.eval?.command || "python -m eval")}</code>. Latest candidate run only — simulator-grounded suite.</p>`
     : `<div class="trust-metrics">
         <div class="trust-metric"><span class="k">Harness cases</span><span class="v">${trust?.eval?.cases ?? 5}</span></div>
         <div class="trust-metric"><span class="k">Fault families</span><span class="v">${trust?.spec?.fault_families ?? 3}</span></div>
@@ -1812,6 +1852,7 @@ function buildScorecardHtml(trust, cmp, loading) {
       </div>
       ${compareLane}
       ${calloutHtml}
+      ${disclosureHtml}
       <p class="trust-note">No scorecard yet. Run <code>${escapeHtml(
         trust?.eval?.command || "python -m eval"
       )}</code> to write diagnosis, false-inhibit, and source-tag rates.</p>`;
@@ -1821,7 +1862,7 @@ function buildScorecardHtml(trust, cmp, loading) {
     <div class="trust-card-head">
       <div>
         <p class="trust-card-kicker">Validation</p>
-        <h3>Eval scorecard</h3>
+        <h3>Eval Explorer</h3>
       </div>
       <div class="trust-score-badges">
         <span class="trust-status ${scoreTone}">${escapeHtml(scoreStatus)}</span>
@@ -1854,7 +1895,7 @@ function renderTrust() {
     foot.textContent = "";
     const slot = $("trust-scorecard-slot");
     if (slot) {
-      slot.innerHTML = buildScorecardHtml(null, state.releaseCompare, true);
+      slot.innerHTML = buildScorecardHtml(null, state.releaseCompare, state.evalExplorer, true);
     }
     renderConnectors();
     _syncTrustPanels();
@@ -1867,7 +1908,7 @@ function renderTrust() {
     sources.innerHTML = "";
     foot.textContent = "";
     const slot = $("trust-scorecard-slot");
-    if (slot) slot.innerHTML = buildScorecardHtml(null, state.releaseCompare, false);
+    if (slot) slot.innerHTML = buildScorecardHtml(null, state.releaseCompare, state.evalExplorer, false);
     renderConnectors();
     _syncTrustPanels();
     return;
@@ -1893,7 +1934,7 @@ function renderTrust() {
 
   const slot = $("trust-scorecard-slot");
   if (slot) {
-    slot.innerHTML = buildScorecardHtml(t, state.releaseCompare, false);
+    slot.innerHTML = buildScorecardHtml(t, state.releaseCompare, state.evalExplorer, false);
   }
 
   grid.innerHTML = `
@@ -2048,28 +2089,91 @@ async function loadReleaseCase(caseId) {
   }
 }
 
-function buildEvalCaseHeadHtml(caseId, cand, loading) {
+function highlightProvenanceTags(text) {
+  const escaped = escapeHtml(text || "");
+  return escaped.replace(/\[(OBSERVED|DERIVED|DOCUMENTED|HYPOTHESIS)\]/gi, (_, tag) => {
+    const upper = tag.toUpperCase();
+    return `<span class="provenance-tag is-${upper}">[${upper}]</span>`;
+  });
+}
+
+function buildEvalCheckTableHtml(checksEnriched) {
+  if (!checksEnriched?.length) return `<p class="trust-empty">No check results.</p>`;
+  return `<div class="eval-check-table">${checksEnriched
+    .map((c) => {
+      const cls = c.passed ? "is-pass" : "is-fail";
+      const critical = c.critical ? `<span class="eval-check-critical">critical</span>` : "";
+      const body = `<p><span class="k">Result</span> ${escapeHtml(c.detail || "—")}</p>${
+        c.expected_hint ? `<p><span class="k">Expected</span> ${escapeHtml(c.expected_hint)}</p>` : ""
+      }`;
+      return `<details class="eval-check-row ${cls}${c.critical ? " is-critical" : ""}">
+        <summary>
+          <span class="eval-check-name">${escapeHtml(c.label || c.id)}</span>
+          <span class="eval-check-status">${c.passed ? "PASS" : "FAIL"}</span>
+          ${critical}
+        </summary>
+        <div class="eval-check-body">${body}</div>
+      </details>`;
+    })
+    .join("")}</div>`;
+}
+
+function buildEvalCaseHeadHtml(caseId, cand, data, loading) {
   const contract = cand?.contract || {};
   const label = contract.label || "";
   const passed = cand?.passed;
   const total = cand?.total;
   const ok = cand?.ok;
-  const statusTone = ok === false ? "bad" : ok === true ? "ok" : "warn";
-  const statusLabel =
-    passed != null && total != null ? `${passed}/${total} passed` : loading ? "Loading…" : "—";
+  const tone = ok === false ? "fail" : ok === true ? "pass" : loading ? "loading" : "neutral";
+  const pct =
+    passed != null && total != null && total > 0 ? Math.round((100 * passed) / total) : null;
+  const hasCritical = (data?.critical_failures || []).length > 0;
 
-  return `<header class="eval-case-head">
-    <button type="button" class="eval-case-back" data-trust-back>← Eval scorecard</button>
-    <div class="eval-case-head-main">
-      <div class="eval-case-title">
-        <p class="trust-card-kicker">Harness case</p>
-        <h2>
-          <code class="eval-case-id">${escapeHtml(caseId)}</code>
-          ${label ? `<span class="eval-case-label">${escapeHtml(label)}</span>` : ""}
-        </h2>
-      </div>
-      <span class="trust-status ${statusTone}">${escapeHtml(statusLabel)}</span>
+  const metaChips = cand
+    ? [
+        contract.alarm ? `<span class="eval-case-chip"><span class="k">Alarm</span>${escapeHtml(contract.alarm)}</span>` : "",
+        contract.root_cause
+          ? `<span class="eval-case-chip"><span class="k">Expected</span>${escapeHtml(contract.root_cause)}</span>`
+          : "",
+        contract.action
+          ? `<span class="eval-case-chip"><span class="k">Action</span>${escapeHtml(contract.action)}</span>`
+          : "",
+      ]
+        .filter(Boolean)
+        .join("")
+    : "";
+
+  const verdictHtml =
+    passed != null && total != null
+      ? `<div class="eval-case-verdict is-${tone}" aria-label="${passed} of ${total} checks passed">
+          <div class="eval-case-verdict-ring" style="--pct: ${pct ?? 0}"></div>
+          <div class="eval-case-verdict-copy">
+            <strong>${escapeHtml(String(passed))}<span class="eval-case-verdict-denom">/${escapeHtml(String(total))}</span></strong>
+            <span>${ok ? "passed" : "failed"}</span>
+          </div>
+        </div>`
+      : `<div class="eval-case-verdict is-${tone}"><div class="eval-case-verdict-copy"><strong>${loading ? "…" : "—"}</strong></div></div>`;
+
+  return `<header class="eval-case-head is-${tone}${hasCritical ? " is-critical" : ""}">
+    <div class="eval-case-head-glow" aria-hidden="true"></div>
+    <div class="eval-case-head-top">
+      <button type="button" class="eval-case-back" data-trust-back>
+        <span class="eval-case-back-icon" aria-hidden="true">←</span>
+        Eval Explorer
+      </button>
+      <span class="eval-case-kicker">Harness case</span>
     </div>
+    <div class="eval-case-head-core">
+      <div class="eval-case-identity">
+        <code class="eval-case-id">${escapeHtml(caseId)}</code>
+        ${label ? `<h2 class="eval-case-title">${escapeHtml(label)}</h2>` : ""}
+      </div>
+      <div class="eval-case-head-aside">
+        ${verdictHtml}
+        ${hasCritical ? `<span class="eval-case-critical-pill">Critical failure</span>` : ""}
+      </div>
+    </div>
+    ${metaChips ? `<div class="eval-case-meta">${metaChips}</div>` : ""}
     <p class="eval-case-lede">Scenario contract, evidence snapshot, and per-check results from the latest candidate run.</p>
   </header>`;
 }
@@ -2082,63 +2186,87 @@ function renderReleaseCase() {
   const caseId = state.releaseCaseId || "—";
 
   if (state.releaseLoading) {
-    slot.innerHTML = `${buildEvalCaseHeadHtml(caseId, null, true)}<p class="trust-empty">Loading case detail…</p>`;
+    slot.innerHTML = `${buildEvalCaseHeadHtml(caseId, null, null, true)}<p class="trust-empty">Loading case detail…</p>`;
     return;
   }
 
   const data = state.releaseCase;
   if (!data || data.error) {
-    slot.innerHTML = `${buildEvalCaseHeadHtml(caseId, null, false)}<p class="trust-empty">${escapeHtml(data?.error || "Case detail unavailable. Run python -m eval.")}</p>`;
+    slot.innerHTML = `${buildEvalCaseHeadHtml(caseId, null, data, false)}<p class="trust-empty">${escapeHtml(data?.error || "Case detail unavailable. Run python -m eval.")}</p>`;
     return;
   }
 
   const cand = data.candidate || {};
   const contract = cand.contract || {};
   const observed = cand.observed || {};
-  const checks = cand.checks || [];
+  const checksEnriched = data.checks_enriched?.length ? data.checks_enriched : null;
+  const interpretation = data.interpretation || [];
+  const boundaries = data.boundaries || [];
+  const safetyExpectation = data.safety_expectation || "";
+  const comparison = data.comparison;
+  const disclosure = data.disclosure || "";
+
   const withhold = cand.withhold_explanation
     ? `<div class="trust-release-warnings"><h3>Why withholding is correct</h3><p class="trust-release-lede" style="white-space:pre-wrap">${escapeHtml(cand.withhold_explanation)}</p></div>`
     : "";
 
-  const checkRows = checks
-    .map((c) => {
-      const cls = c.passed ? "is-pass" : "is-fail";
-      return `<div class="trust-check-row ${cls}"><span class="trust-check-id">${escapeHtml(c.id)}</span> — ${escapeHtml(c.detail || "")}</div>`;
-    })
-    .join("");
+  const comparisonHtml = comparison
+    ? `<p class="trust-note">vs baseline: ${escapeHtml(comparison.status || "—")}${
+        comparison.check_regressions?.length
+          ? ` · regressed checks: ${comparison.check_regressions.map((id) => escapeHtml(id)).join(", ")}`
+          : ""
+      }</p>`
+    : "";
+
+  const interpretationHtml = interpretation.length
+    ? `<article class="trust-card eval-interpretation">
+        <div class="trust-card-head"><div><p class="trust-card-kicker">Trust</p><h3>Safety / trust interpretation</h3></div></div>
+        <ul class="eval-interpretation-list">${interpretation.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>
+        ${boundaries.length ? `<ul class="eval-boundaries-list">${boundaries.map((b) => `<li>${escapeHtml(b)}</li>`).join("")}</ul>` : ""}
+      </article>`
+    : "";
 
   slot.innerHTML = `
-    ${buildEvalCaseHeadHtml(caseId, cand, false)}
+    ${buildEvalCaseHeadHtml(caseId, cand, data, false)}
     <div class="eval-case-body">
       <article class="trust-card">
         <div class="trust-card-head"><div><p class="trust-card-kicker">Scenario contract</p><h3>${escapeHtml(contract.label || caseId)}</h3></div></div>
         <div class="trust-metrics">
           <div class="trust-metric"><span class="k">Alarm</span><span class="v">${escapeHtml(contract.alarm || "—")}</span></div>
-          <div class="trust-metric"><span class="k">Expected</span><span class="v">${escapeHtml(contract.root_cause || "—")}</span></div>
-          <div class="trust-metric"><span class="k">Action</span><span class="v">${escapeHtml(contract.action || "—")}</span></div>
+          <div class="trust-metric"><span class="k">Expected close</span><span class="v">${escapeHtml(contract.root_cause || "—")}</span></div>
+          <div class="trust-metric"><span class="k">Expected action</span><span class="v">${escapeHtml(contract.action || "—")}</span></div>
           <div class="trust-metric"><span class="k">Procedure</span><span class="v">${escapeHtml(contract.procedure || "—")}</span></div>
         </div>
         <p class="trust-note">Confounder: ${escapeHtml(contract.confounder || "none")} · Similar prior: ${escapeHtml(contract.similar || "—")}</p>
+        ${safetyExpectation ? `<p class="eval-safety-expectation"><span class="k">Safety expectation</span> ${escapeHtml(safetyExpectation)}</p>` : ""}
       </article>
       <article class="trust-card">
-        <div class="trust-card-head"><div><p class="trust-card-kicker">Evidence snapshot</p><h3>At warn crossing</h3></div></div>
+        <div class="trust-card-head"><div><p class="trust-card-kicker">Evidence snapshot</p><h3>Observed at warn crossing</h3></div></div>
         <div class="trust-metrics">
           <div class="trust-metric"><span class="k">Warn clock</span><span class="v">${escapeHtml(observed.warn_clock || "—")}</span></div>
           <div class="trust-metric"><span class="k">Heater A</span><span class="v">${observed.heater_a != null ? fmt(observed.heater_a, 2) : "—"}</span></div>
           <div class="trust-metric"><span class="k">Payload A</span><span class="v">${observed.payload_a != null ? fmt(observed.payload_a, 2) : "—"}</span></div>
           <div class="trust-metric"><span class="k">SCIENCE_MODE</span><span class="v">${observed.has_science ? "yes" : "no"}</span></div>
         </div>
+        <p class="trust-note">Observed telemetry sample only — not a full mission tape replay.</p>
+      </article>
+      <article class="trust-card">
+        <div class="trust-card-head"><div><p class="trust-card-kicker">Investigation</p><h3>Actual report</h3></div></div>
+        <div class="trust-report-block eval-report-block">${highlightProvenanceTags(cand.report || "—")}</div>
       </article>
       <article class="trust-card">
         <div class="trust-card-head"><div><p class="trust-card-kicker">Checks</p><h3>${cand.passed ?? "—"}/${cand.total ?? "—"} passed</h3></div></div>
-        ${checkRows}
+        ${checksEnriched ? buildEvalCheckTableHtml(checksEnriched) : (cand.checks || [])
+              .map((c) => {
+                const cls = c.passed ? "is-pass" : "is-fail";
+                return `<div class="trust-check-row ${cls}"><span class="trust-check-id">${escapeHtml(c.id)}</span> — ${escapeHtml(c.detail || "")}</div>`;
+              })
+              .join("")}
+        ${comparisonHtml}
         ${withhold}
-        <p class="trust-note">Human decision boundary: ORBIT stops at a recommended action — it does not command the spacecraft.</p>
       </article>
-      <article class="trust-card">
-        <div class="trust-card-head"><div><p class="trust-card-kicker">Generated report</p><h3>Candidate markdown</h3></div></div>
-        <div class="trust-report-block">${escapeHtml(cand.report || "—")}</div>
-      </article>
+      ${interpretationHtml}
+      ${disclosure ? `<p class="eval-disclosure">${escapeHtml(disclosure)}</p>` : ""}
     </div>`;
 }
 

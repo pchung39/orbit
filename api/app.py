@@ -33,6 +33,7 @@ from storage.sources import (
 )
 from eval.bundle import PromoteError, promote_candidate_to_baseline
 from eval.compare import run_compare
+from eval.explorer import build_explorer_case_detail, build_explorer_index
 from storage.store import (
     connect,
     create_incident,
@@ -54,6 +55,7 @@ from storage.store import (
     _load_eval_baseline,
     _load_eval_candidate,
     _load_eval_comparison,
+    _load_eval_scorecard,
 )
 
 UI_DIR = Path(__file__).resolve().parent.parent / "ui"
@@ -271,6 +273,19 @@ def eval_compare() -> dict[str, Any]:
     return run_compare(write=True)
 
 
+@api.get("/eval/explorer")
+def eval_explorer() -> dict[str, Any]:
+    """Eval Explorer index — cases, metrics, and run metadata."""
+    candidate = _load_eval_candidate()
+    if not candidate:
+        raise HTTPException(404, "no candidate run — run python -m eval")
+    comparison = _load_eval_comparison()
+    if comparison is None and _load_eval_baseline():
+        comparison = run_compare(write=False)
+    scorecard = _load_eval_scorecard()
+    return build_explorer_index(candidate, comparison, scorecard)
+
+
 @api.get("/eval/baseline")
 def eval_baseline() -> dict[str, Any]:
     data = _load_eval_baseline()
@@ -322,14 +337,21 @@ def eval_case_detail(case_id: str) -> dict[str, Any]:
     entry = cases[case_id]
     baseline = _load_eval_baseline()
     baseline_entry = (baseline.get("cases") or {}).get(case_id) if baseline else None
+    comparison = _load_eval_comparison()
+    if comparison is None and baseline:
+        comparison = run_compare(write=False)
+    explorer = build_explorer_case_detail(
+        case_id,
+        entry,
+        baseline_entry,
+        comparison,
+        baseline,
+    )
     return {
         "id": case_id,
         "candidate": entry,
         "baseline": baseline_entry,
-        "boundaries": [
-            "ORBIT assembles tagged reports; it does not command the spacecraft.",
-            "Recommended actions stop at a human decision — not executed on the craft.",
-        ],
+        **explorer,
     }
 
 

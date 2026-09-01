@@ -143,6 +143,7 @@ class ReleaseGateTests(unittest.TestCase):
         self.assertIn("cases", result)
         js = APP_JS.read_text(encoding="utf-8")
         self.assertIn("releaseCompare", js)
+        self.assertIn("evalExplorer", js)
         self.assertNotIn("4/4 named closes", js)
 
     def test_seed_fixture_matches_suite(self) -> None:
