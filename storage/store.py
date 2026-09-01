@@ -619,6 +619,9 @@ def store_trust_snapshot(conn: psycopg.Connection, spec: dict[str, Any]) -> dict
             "command": "python -m eval",
             "provider_default": "rules",
             "scorecard": _load_eval_scorecard(),
+            "candidate_available": _eval_candidate_available(),
+            "baseline_available": _eval_baseline_available(),
+            "comparison": _load_eval_comparison(),
         },
         "runs": run_rows,
         "documents": [dict(row) for row in docs],
@@ -635,6 +638,37 @@ def _load_eval_scorecard() -> dict[str, Any] | None:
         return data if isinstance(data, dict) else None
     except (OSError, ValueError):
         return None
+
+
+def _load_eval_json(filename: str) -> dict[str, Any] | None:
+    path = ROOT / "eval" / filename
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _eval_candidate_available() -> bool:
+    return (ROOT / "eval" / "candidate.json").exists()
+
+
+def _eval_baseline_available() -> bool:
+    return (ROOT / "eval" / "baseline.json").exists()
+
+
+def _load_eval_baseline() -> dict[str, Any] | None:
+    return _load_eval_json("baseline.json")
+
+
+def _load_eval_candidate() -> dict[str, Any] | None:
+    return _load_eval_json("candidate.json")
+
+
+def _load_eval_comparison() -> dict[str, Any] | None:
+    return _load_eval_json("comparison.json")
 
 
 def get_document(conn: psycopg.Connection, doc_id: str) -> dict[str, Any] | None:

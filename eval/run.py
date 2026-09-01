@@ -15,7 +15,14 @@ from dataclasses import asdict, dataclass
 from agent.investigate import investigate
 from agent.tools import Tools
 from agent.tracing import flush_tracing, init_tracing
+from eval.bundle import (
+    BASELINE_PATH,
+    build_run_bundle,
+    promote_candidate_to_baseline,
+    write_candidate,
+)
 from eval.cases import CASES, Case
+from eval.compare import print_comparison, run_compare
 from eval.feedback import export_jsonl, load_feedback_rows, print_summary
 from eval.score import Check, Observed, score
 from eval.scorecard import build_scorecard, print_scorecard, write_scorecard
@@ -33,6 +40,8 @@ class CaseResult:
     total: int
     ok: bool
     checks: list[Check]
+    report: str = ""
+    observed: Observed | None = None
 
 
 def observe(case: Case) -> Observed:
@@ -68,6 +77,8 @@ def run_case(case: Case, provider: str, model: str | None) -> CaseResult:
         total=len(checks),
         ok=all(c.passed for c in checks),
         checks=checks,
+        report=report,
+        observed=observed,
     )
 
 
@@ -111,6 +122,30 @@ def main() -> None:
         action="store_true",
         help="print the last written eval/scorecard.json without re-running cases",
     )
+    parser.add_argument(
+        "--compare-baseline",
+        nargs="?",
+        const=str(BASELINE_PATH),
+        default=None,
+        metavar="PATH",
+        help="after full suite, compare candidate vs baseline (default eval/baseline.json)",
+    )
+    parser.add_argument(
+        "--compare-only",
+        action="store_true",
+        help="compare existing candidate vs baseline without re-running cases",
+    )
+    parser.add_argument(
+        "--promote-baseline",
+        action="store_true",
+        help="promote eval/candidate.json to eval/baseline.json (requires PASS or --force)",
+    )
+    parser.add_argument("--promote-note", default=None, help="note stored on promoted baseline")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="with --promote-baseline, promote without PASS verdict",
+    )
     args = parser.parse_args()
 
     if args.feedback:
@@ -131,6 +166,24 @@ def main() -> None:
         print(json.dumps(data, indent=2))
         sys.exit(0 if data.get("ok") else 1)
 
+    if args.promote_baseline:
+        try:
+            path = promote_candidate_to_baseline(note=args.promote_note, force=args.force)
+            print(f"promoted candidate → {path}")
+            sys.exit(0)
+        except Exception as exc:
+            print(str(exc), file=sys.stderr)
+            sys.exit(1)
+
+    if args.compare_only:
+        from pathlib import Path
+
+        baseline_path = Path(args.compare_baseline) if args.compare_baseline else BASELINE_PATH
+        result = run_compare(baseline_path=baseline_path)
+        print_comparison(result)
+        rec = result.get("recommendation")
+        sys.exit(0 if rec == "PASS" else 1)
+
     selected = [c for c in CASES if args.case is None or c.id == args.case]
     init_tracing()
     try:
@@ -144,8 +197,9 @@ def main() -> None:
                         "scorecard": card.as_dict(),
                         "results": [
                             {
-                                **{k: v for k, v in asdict(r).items() if k != "checks"},
+                                **{k: v for k, v in asdict(r).items() if k not in ("checks", "observed")},
                                 "checks": [asdict(c) for c in r.checks],
+                                "observed": asdict(r.observed) if r.observed else None,
                             }
                             for r in results
                         ],
@@ -158,13 +212,26 @@ def main() -> None:
             print()
             print_scorecard(card)
 
-        # Full suite only — don't overwrite the Trust artifact with a single-case run.
+        comparison_result = None
         if args.case is None:
             path = write_scorecard(card)
+            bundle = build_run_bundle(results, card, args.provider, args.model, kind="candidate")
+            cand_path = write_candidate(bundle)
             if not args.json:
                 print(f"wrote {path}")
+                print(f"wrote {cand_path}")
+            if args.compare_baseline is not None:
+                from pathlib import Path
 
-        sys.exit(0 if all(r.ok for r in results) else 1)
+                comparison_result = run_compare(baseline_path=Path(args.compare_baseline))
+                if not args.json:
+                    print()
+                    print_comparison(comparison_result)
+
+        exit_code = 0 if all(r.ok for r in results) else 1
+        if comparison_result and comparison_result.get("recommendation") != "PASS":
+            exit_code = 1
+        sys.exit(exit_code)
     finally:
         flush_tracing()
 

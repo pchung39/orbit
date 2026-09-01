@@ -493,6 +493,11 @@ const state = {
   openDoc: null,
   trust: null,
   trustLoading: false,
+  trustSub: "overview",
+  releaseCaseId: null,
+  releaseCompare: null,
+  releaseLoading: false,
+  releaseCase: null,
   sources: null,
   sourcesLoading: false,
   sourcesSyncing: null,
@@ -1423,9 +1428,14 @@ function trustStatusLabel(tone) {
 
 async function loadTrust() {
   state.trustLoading = true;
+  state.releaseCompare = null;
   renderTrust();
   try {
-    const [trustRes, sourcesRes] = await Promise.all([fetch(apiUrl("/trust")), fetch(apiUrl("/sources"))]);
+    const [trustRes, sourcesRes, compareRes] = await Promise.all([
+      fetch(apiUrl("/trust")),
+      fetch(apiUrl("/sources")),
+      fetch(apiUrl("/eval/compare")),
+    ]);
     if (!trustRes.ok) throw new Error(`trust ${trustRes.status}`);
     state.trust = await trustRes.json();
     setStoreStatus(state.trust.store?.linked, state.trust.store?.linked ? "STORE OK" : "NO STORE");
@@ -1434,9 +1444,31 @@ async function loadTrust() {
     } else {
       state.sources = null;
     }
+    if (compareRes.ok) {
+      state.releaseCompare = await compareRes.json();
+    } else {
+      state.releaseCompare = {
+        error: `compare ${compareRes.status}`,
+        recommendation: "INSUFFICIENT_COVERAGE",
+        explanation: "Could not load release comparison.",
+        metrics: [],
+        cases: { improved: 0, unchanged: 0, regressed: 0, rows: [] },
+        blockers: [],
+        warnings: [],
+      };
+    }
   } catch (err) {
     state.trust = null;
     state.sources = null;
+    state.releaseCompare = {
+      error: err.message,
+      recommendation: "INSUFFICIENT_COVERAGE",
+      explanation: "Trust or release API unavailable.",
+      metrics: [],
+      cases: { improved: 0, unchanged: 0, regressed: 0, rows: [] },
+      blockers: [],
+      warnings: [],
+    };
     setStoreStatus(false, "NO STORE");
     if ($("trust-head")) {
       $("trust-head").innerHTML = `<h1>Trust</h1><p class="trust-head-lede">${escapeHtml(err.message)}</p>`;
@@ -1572,7 +1604,240 @@ function renderConnectors() {
   }
 }
 
+function releaseVerdictTone(rec) {
+  if (rec === "PASS") return "pass";
+  if (rec === "BLOCKED") return "blocked";
+  return "insufficient";
+}
+
+function buildScorecardHtml(trust, cmp, loading) {
+  const sc = trust?.eval?.scorecard;
+  const cmpData = cmp || {};
+  const rec = cmpData.recommendation;
+  const hasBaseline = Boolean(cmpData.baseline?.baseline_id || cmpData.baseline?.run_id);
+  const hasCompare = Boolean(rec);
+  const releaseTone = rec ? releaseVerdictTone(rec) : null;
+
+  let scoreTone = sc ? (sc.ok ? "ok" : "bad") : "warn";
+  if (releaseTone === "blocked") scoreTone = "bad";
+  else if (releaseTone === "insufficient") scoreTone = "warn";
+
+  const scoreStatus = sc
+    ? `${sc.cases_ok}/${sc.cases_total} cases`
+    : `${trust?.eval?.cases ?? 5} cases`;
+
+  const releaseBadge = hasCompare
+    ? `<span class="trust-score-release is-${releaseTone}" title="${escapeHtml(cmpData.explanation || "")}">Release · ${escapeHtml(rec)}</span>`
+    : loading
+      ? `<span class="trust-score-release is-pending">Release · …</span>`
+      : "";
+
+  if (loading && !sc) {
+    return `<article class="trust-card trust-scorecard-hero is-warn is-loading" id="trust-scorecard">
+      <div class="trust-card-head">
+        <div>
+          <p class="trust-card-kicker">Validation</p>
+          <h3>Eval scorecard</h3>
+        </div>
+        <span class="trust-status warn">Loading…</span>
+      </div>
+      <p class="trust-note">Loading harness results and baseline comparison…</p>
+    </article>`;
+  }
+
+  const scoreRates = sc
+    ? [sc.diagnosis, sc.withhold, sc.false_inhibit, sc.provenance].filter(Boolean)
+    : [];
+  const cmpMetrics = cmpData.metrics || [];
+  const metricById = Object.fromEntries(cmpMetrics.map((m) => [m.id, m]));
+
+  const metricHtml = scoreRates.length
+    ? scoreRates
+        .map((r) => {
+          const cm = metricById[r.id];
+          const hasRef = cm && cm.baseline_passed != null;
+          let refHtml = "";
+          if (hasRef) {
+            const delta = cm.delta;
+            const deltaStr = delta === 0 ? "±0" : `${delta > 0 ? "+" : ""}${delta}`;
+            const deltaCls = delta > 0 ? "is-up" : delta < 0 ? "is-down" : "";
+            refHtml = `<span class="ref">baseline ${cm.baseline_passed}/${cm.baseline_total} <span class="delta ${deltaCls}">${deltaStr}</span></span>`;
+          } else if (loading && sc) {
+            refHtml = `<span class="ref is-pending">baseline …</span>`;
+          }
+          const cellTone = cm && cm.delta < 0 ? "is-regressed" : cm && cm.delta > 0 ? "is-improved" : "";
+          return `<div class="trust-score-metric ${cellTone}" title="${escapeHtml(r.definition || r.label || "")}">
+            <span class="k">${escapeHtml(r.label)}</span>
+            <span class="v">${escapeHtml(r.display || `${r.passed}/${r.total}`)}</span>
+            ${refHtml}
+          </div>`;
+        })
+        .join("")
+    : cmpMetrics.length
+      ? cmpMetrics
+          .map((m) => {
+            const hasRef = m.baseline_passed != null;
+            const delta = m.delta;
+            let refHtml = "";
+            if (hasRef) {
+              const deltaStr = delta === 0 ? "±0" : `${delta > 0 ? "+" : ""}${delta}`;
+              const deltaCls = delta > 0 ? "is-up" : delta < 0 ? "is-down" : "";
+              refHtml = `<span class="ref">baseline ${m.baseline_passed}/${m.baseline_total} <span class="delta ${deltaCls}">${deltaStr}</span></span>`;
+            }
+            const cellTone = delta < 0 ? "is-regressed" : delta > 0 ? "is-improved" : "";
+            return `<div class="trust-score-metric ${cellTone}" title="${escapeHtml(m.definition || m.label || "")}">
+              <span class="k">${escapeHtml(m.label || m.id || "")}</span>
+              <span class="v">${m.candidate_passed}/${m.candidate_total}</span>
+              ${refHtml}
+            </div>`;
+          })
+          .join("")
+      : "";
+
+  const compareLane = hasBaseline
+    ? `<div class="trust-score-compare">
+        <div class="trust-score-compare-side is-baseline">
+          <span class="lane-k">Approved baseline</span>
+          <span class="lane-v"><code>${escapeHtml(cmpData.baseline?.baseline_id || cmpData.baseline?.run_id || "—")}</code> · ${escapeHtml(cmpData.baseline?.agent?.provider || "rules")} · ${escapeHtml(formatSyncAt(cmpData.baseline?.approved_at || cmpData.baseline?.generated_at))}</span>
+        </div>
+        <span class="trust-score-compare-vs" aria-hidden="true">vs</span>
+        <div class="trust-score-compare-side is-candidate">
+          <span class="lane-k">Latest candidate</span>
+          <span class="lane-v"><code>${escapeHtml(cmpData.candidate?.run_id || sc?.provider || "rules")}</code> · ${escapeHtml(cmpData.candidate?.agent?.provider || sc?.provider || "rules")} · ${escapeHtml(formatSyncAt(cmpData.candidate?.generated_at || sc?.generated_at))}</span>
+        </div>
+      </div>`
+    : hasCompare && rec === "INSUFFICIENT_COVERAGE"
+      ? `<p class="trust-score-baseline-hint">No approved baseline yet — run <code>${escapeHtml(trust?.eval?.command || "python -m eval")}</code>, then <code>python -m eval --promote-baseline --force</code> after a green full suite.</p>`
+      : loading
+        ? `<p class="trust-score-baseline-hint is-pending">Checking approved baseline…</p>`
+        : "";
+
+  const caseRows = cmpData.cases?.rows?.length
+    ? cmpData.cases.rows
+    : (sc?.cases || []).map((row) => ({
+        id: row.id,
+        label: row.label,
+        baseline_ok: null,
+        candidate_ok: row.ok,
+        status: row.ok ? "unchanged" : "regressed",
+        passed: row.passed,
+        total: row.total,
+      }));
+
+  const caseSummary = cmpData.cases
+    ? `${cmpData.cases.improved ?? 0} improved · ${cmpData.cases.unchanged ?? 0} unchanged · ${cmpData.cases.regressed ?? 0} regressed`
+    : sc
+      ? `${sc.cases_ok}/${sc.cases_total} passing on latest run`
+      : "";
+
+  const caseTable =
+    caseRows.length > 0
+      ? `<div class="trust-score-cases">
+          <div class="trust-score-cases-head">
+            <span>Harness cases</span>
+            ${caseSummary ? `<span class="summary">${escapeHtml(caseSummary)}</span>` : ""}
+          </div>
+          <div class="trust-score-case-rows">
+            ${caseRows
+              .map((row) => {
+                const badgeCls =
+                  row.status === "regressed"
+                    ? "is-regressed"
+                    : row.status === "improved"
+                      ? "is-improved"
+                      : "is-unchanged";
+                const mark = row.candidate_ok ? "pass" : "fail";
+                const checks =
+                  row.passed != null && row.total != null
+                    ? `${row.passed}/${row.total}`
+                    : row.candidate_ok
+                      ? "ok"
+                      : "fail";
+                return `<button type="button" class="trust-score-case-row is-${mark}" data-release-case="${escapeHtml(row.id)}">
+                  <code class="id">${escapeHtml(row.id)}</code>
+                  <span class="label">${escapeHtml(row.label || "")}</span>
+                  <span class="checks">${escapeHtml(checks)}</span>
+                  <span class="trust-release-badge ${badgeCls}">${escapeHtml(hasBaseline ? row.status || "—" : mark)}</span>
+                </button>`;
+              })
+              .join("")}
+          </div>
+        </div>`
+      : "";
+
+  const blockers = cmpData.blockers || [];
+  const warnings = cmpData.warnings || [];
+  const coverage = cmpData.coverage_issues || [];
+  let calloutHtml = "";
+  if (cmpData.error) {
+    calloutHtml = `<div class="trust-score-callout is-error"><strong>Comparison unavailable</strong><p>${escapeHtml(cmpData.error)}</p></div>`;
+  } else if (rec === "BLOCKED" && blockers.length) {
+    calloutHtml = `<div class="trust-score-callout is-blocked"><strong>Release blocked</strong><ul>${blockers
+      .map(
+        (b) =>
+          `<li><code>${escapeHtml(b.case_id)}</code> · <code>${escapeHtml(b.check_id)}</code> — ${escapeHtml(b.detail || "")}</li>`
+      )
+      .join("")}</ul></div>`;
+  } else if (rec === "INSUFFICIENT_COVERAGE" && coverage.length) {
+    calloutHtml = `<div class="trust-score-callout is-insufficient"><strong>Coverage gap</strong><ul>${coverage
+      .map((issue) => `<li><code>${escapeHtml(issue)}</code></li>`)
+      .join("")}</ul></div>`;
+  } else if (warnings.length) {
+    calloutHtml = `<div class="trust-score-callout is-warn"><strong>Non-critical warnings</strong><ul>${warnings
+      .map((w) => `<li>${escapeHtml(w.message || "")}</li>`)
+      .join("")}</ul></div>`;
+  } else if (hasCompare && rec === "PASS" && cmpData.explanation) {
+    calloutHtml = `<p class="trust-score-release-note">${escapeHtml(cmpData.explanation)}</p>`;
+  }
+
+  const promoteBtn =
+    rec === "PASS"
+      ? `<div class="trust-card-actions"><button type="button" class="btn btn-primary" data-promote-baseline>Promote candidate to baseline</button></div>`
+      : "";
+
+  const scoreBody = sc
+    ? `${sc.headline ? `<p class="trust-score-headline">${escapeHtml(sc.headline)}</p>` : ""}
+      ${compareLane}
+      ${metricHtml ? `<div class="trust-metrics trust-score-metrics">${metricHtml}</div>` : ""}
+      ${calloutHtml}
+      ${caseTable}
+      ${promoteBtn}
+      <p class="trust-note">Last run <code>${escapeHtml(sc.provider || "rules")}</code> · ${escapeHtml(
+        sc.generated_at || "—"
+      )}. Refresh with <code>${escapeHtml(trust?.eval?.command || "python -m eval")}</code>. Simulator-grounded suite only — aggregate gains never override restraint or provenance blockers.</p>`
+    : `<div class="trust-metrics">
+        <div class="trust-metric"><span class="k">Harness cases</span><span class="v">${trust?.eval?.cases ?? 5}</span></div>
+        <div class="trust-metric"><span class="k">Fault families</span><span class="v">${trust?.spec?.fault_families ?? 3}</span></div>
+        <div class="trust-metric"><span class="k">Default</span><span class="v">${escapeHtml(trust?.eval?.provider_default || "rules")}</span></div>
+      </div>
+      ${compareLane}
+      ${calloutHtml}
+      <p class="trust-note">No scorecard yet. Run <code>${escapeHtml(
+        trust?.eval?.command || "python -m eval"
+      )}</code> to write diagnosis, false-inhibit, and source-tag rates.</p>`;
+
+  const releaseClass = releaseTone ? ` release-${releaseTone}` : "";
+  return `<article class="trust-card trust-scorecard-hero is-${scoreTone}${releaseClass}" id="trust-scorecard">
+    <div class="trust-card-head">
+      <div>
+        <p class="trust-card-kicker">Validation</p>
+        <h3>Eval scorecard</h3>
+      </div>
+      <div class="trust-score-badges">
+        <span class="trust-status ${scoreTone}">${escapeHtml(scoreStatus)}</span>
+        ${releaseBadge}
+      </div>
+    </div>
+    ${scoreBody}
+  </article>`;
+}
+
 function renderTrust() {
+  if (state.trustSub === "releaseCase") {
+    _syncTrustPanels();
+    return;
+  }
+
   const t = state.trust;
   const head = $("trust-head");
   const grid = $("trust-grid");
@@ -1588,9 +1853,11 @@ function renderTrust() {
     sources.innerHTML = "";
     foot.textContent = "";
     const slot = $("trust-scorecard-slot");
-    if (slot) slot.innerHTML = `<p class="trust-empty">Loading scorecard…</p>`;
-    const connectors = $("trust-connectors");
-    if (connectors) connectors.innerHTML = `<p class="trust-empty">Loading connectors…</p>`;
+    if (slot) {
+      slot.innerHTML = buildScorecardHtml(null, state.releaseCompare, true);
+    }
+    renderConnectors();
+    _syncTrustPanels();
     return;
   }
   if (!t) {
@@ -1600,8 +1867,9 @@ function renderTrust() {
     sources.innerHTML = "";
     foot.textContent = "";
     const slot = $("trust-scorecard-slot");
-    if (slot) slot.innerHTML = "";
+    if (slot) slot.innerHTML = buildScorecardHtml(null, state.releaseCompare, false);
     renderConnectors();
+    _syncTrustPanels();
     return;
   }
 
@@ -1623,37 +1891,10 @@ function renderTrust() {
       <span class="trust-pill is-${storeTone}"><span class="dot"></span>${escapeHtml(t.mission || "Aurora-1")}</span>
     </div>`;
 
-  const sc = t.eval?.scorecard;
-  const scoreTone = sc ? (sc.ok ? "ok" : "bad") : "warn";
-  const scoreStatus = sc
-    ? `${sc.cases_ok}/${sc.cases_total} cases`
-    : `${t.eval?.cases ?? 5} cases`;
-  const scoreRates = sc
-    ? [sc.diagnosis, sc.withhold, sc.false_inhibit, sc.provenance].filter(Boolean)
-    : [];
-  const scoreBody = sc
-    ? `<p class="trust-score-headline">${escapeHtml(sc.headline || "")}</p>
-      <div class="trust-metrics trust-score-metrics">
-        ${scoreRates
-          .map(
-            (r) => `<div class="trust-metric" title="${escapeHtml(r.definition || "")}">
-          <span class="k">${escapeHtml(r.label)}</span>
-          <span class="v">${escapeHtml(r.display || `${r.passed}/${r.total}`)}</span>
-        </div>`
-          )
-          .join("")}
-      </div>
-      <p class="trust-note">Last run <code>${escapeHtml(sc.provider || "rules")}</code> · ${escapeHtml(
-        sc.generated_at || "—"
-      )}. Refresh with <code>${escapeHtml(t.eval?.command || "python -m eval")}</code>.</p>`
-    : `<div class="trust-metrics">
-        <div class="trust-metric"><span class="k">Harness cases</span><span class="v">${t.eval?.cases ?? 5}</span></div>
-        <div class="trust-metric"><span class="k">Fault families</span><span class="v">${t.spec?.fault_families ?? 3}</span></div>
-        <div class="trust-metric"><span class="k">Default</span><span class="v">${escapeHtml(t.eval?.provider_default || "rules")}</span></div>
-      </div>
-      <p class="trust-note">No scorecard yet. Run <code>${escapeHtml(
-        t.eval?.command || "python -m eval"
-      )}</code> to write diagnosis, false-inhibit, and source-tag rates.</p>`;
+  const slot = $("trust-scorecard-slot");
+  if (slot) {
+    slot.innerHTML = buildScorecardHtml(t, state.releaseCompare, false);
+  }
 
   grid.innerHTML = `
     <article class="trust-card is-${storeTone}">
@@ -1714,20 +1955,6 @@ function renderTrust() {
       </div>
     </article>`;
 
-  const slot = $("trust-scorecard-slot");
-  if (slot) {
-    slot.innerHTML = `<article class="trust-card trust-scorecard-hero is-${scoreTone}" id="trust-scorecard">
-      <div class="trust-card-head">
-        <div>
-          <p class="trust-card-kicker">Validation</p>
-          <h3>Eval scorecard</h3>
-        </div>
-        <span class="trust-status ${scoreTone}">${escapeHtml(scoreStatus)}</span>
-      </div>
-      ${scoreBody}
-    </article>`;
-  }
-
   const catalog = state.archiveCatalog?.length
     ? state.archiveCatalog
     : (t.runs || []).filter((run) => !String(run.id).startsWith("sealed_"));
@@ -1783,6 +2010,175 @@ function renderTrust() {
 
   foot.textContent = `Spec: ${t.spec?.fault_families ?? 0} fault families · ${t.store?.events ?? 0} scripted events in store · Health endpoint /health (also /api/health)`;
   renderConnectors();
+  _syncTrustPanels();
+}
+
+function _syncTrustPanels() {
+  const releaseCase = state.trustSub === "releaseCase";
+  const overview = state.trustSub === "overview";
+  $("trust-score-panel")?.toggleAttribute("hidden", !overview);
+  $("trust-release-case-panel")?.toggleAttribute("hidden", !releaseCase);
+  $("trust-head")?.toggleAttribute("hidden", releaseCase);
+  const foldables = ["trust-fold-tapes", "trust-fold-library"];
+  foldables.forEach((id) => {
+    const el = $(id);
+    if (el) el.toggleAttribute("hidden", !overview);
+  });
+  $("trust-grid")?.toggleAttribute("hidden", !overview);
+  $("trust-foot")?.toggleAttribute("hidden", !overview);
+  $("trust-sources-panel")?.toggleAttribute("hidden", !overview);
+  if (!overview) {
+    $("trust-grid").innerHTML = "";
+  }
+}
+
+async function loadReleaseCase(caseId) {
+  state.releaseLoading = true;
+  state.releaseCaseId = caseId;
+  renderReleaseCase();
+  try {
+    const res = await fetch(apiUrl(`/eval/cases/${encodeURIComponent(caseId)}`));
+    if (!res.ok) throw new Error(`case ${res.status}`);
+    state.releaseCase = await res.json();
+  } catch (err) {
+    state.releaseCase = { error: err.message, id: caseId };
+  } finally {
+    state.releaseLoading = false;
+    renderReleaseCase();
+  }
+}
+
+function buildEvalCaseHeadHtml(caseId, cand, loading) {
+  const contract = cand?.contract || {};
+  const label = contract.label || "";
+  const passed = cand?.passed;
+  const total = cand?.total;
+  const ok = cand?.ok;
+  const statusTone = ok === false ? "bad" : ok === true ? "ok" : "warn";
+  const statusLabel =
+    passed != null && total != null ? `${passed}/${total} passed` : loading ? "Loading…" : "—";
+
+  return `<header class="eval-case-head">
+    <button type="button" class="eval-case-back" data-trust-back>← Eval scorecard</button>
+    <div class="eval-case-head-main">
+      <div class="eval-case-title">
+        <p class="trust-card-kicker">Harness case</p>
+        <h2>
+          <code class="eval-case-id">${escapeHtml(caseId)}</code>
+          ${label ? `<span class="eval-case-label">${escapeHtml(label)}</span>` : ""}
+        </h2>
+      </div>
+      <span class="trust-status ${statusTone}">${escapeHtml(statusLabel)}</span>
+    </div>
+    <p class="eval-case-lede">Scenario contract, evidence snapshot, and per-check results from the latest candidate run.</p>
+  </header>`;
+}
+
+function renderReleaseCase() {
+  const slot = $("trust-release-case-slot");
+  if (!slot) return;
+  _syncTrustPanels();
+
+  const caseId = state.releaseCaseId || "—";
+
+  if (state.releaseLoading) {
+    slot.innerHTML = `${buildEvalCaseHeadHtml(caseId, null, true)}<p class="trust-empty">Loading case detail…</p>`;
+    return;
+  }
+
+  const data = state.releaseCase;
+  if (!data || data.error) {
+    slot.innerHTML = `${buildEvalCaseHeadHtml(caseId, null, false)}<p class="trust-empty">${escapeHtml(data?.error || "Case detail unavailable. Run python -m eval.")}</p>`;
+    return;
+  }
+
+  const cand = data.candidate || {};
+  const contract = cand.contract || {};
+  const observed = cand.observed || {};
+  const checks = cand.checks || [];
+  const withhold = cand.withhold_explanation
+    ? `<div class="trust-release-warnings"><h3>Why withholding is correct</h3><p class="trust-release-lede" style="white-space:pre-wrap">${escapeHtml(cand.withhold_explanation)}</p></div>`
+    : "";
+
+  const checkRows = checks
+    .map((c) => {
+      const cls = c.passed ? "is-pass" : "is-fail";
+      return `<div class="trust-check-row ${cls}"><span class="trust-check-id">${escapeHtml(c.id)}</span> — ${escapeHtml(c.detail || "")}</div>`;
+    })
+    .join("");
+
+  slot.innerHTML = `
+    ${buildEvalCaseHeadHtml(caseId, cand, false)}
+    <div class="eval-case-body">
+      <article class="trust-card">
+        <div class="trust-card-head"><div><p class="trust-card-kicker">Scenario contract</p><h3>${escapeHtml(contract.label || caseId)}</h3></div></div>
+        <div class="trust-metrics">
+          <div class="trust-metric"><span class="k">Alarm</span><span class="v">${escapeHtml(contract.alarm || "—")}</span></div>
+          <div class="trust-metric"><span class="k">Expected</span><span class="v">${escapeHtml(contract.root_cause || "—")}</span></div>
+          <div class="trust-metric"><span class="k">Action</span><span class="v">${escapeHtml(contract.action || "—")}</span></div>
+          <div class="trust-metric"><span class="k">Procedure</span><span class="v">${escapeHtml(contract.procedure || "—")}</span></div>
+        </div>
+        <p class="trust-note">Confounder: ${escapeHtml(contract.confounder || "none")} · Similar prior: ${escapeHtml(contract.similar || "—")}</p>
+      </article>
+      <article class="trust-card">
+        <div class="trust-card-head"><div><p class="trust-card-kicker">Evidence snapshot</p><h3>At warn crossing</h3></div></div>
+        <div class="trust-metrics">
+          <div class="trust-metric"><span class="k">Warn clock</span><span class="v">${escapeHtml(observed.warn_clock || "—")}</span></div>
+          <div class="trust-metric"><span class="k">Heater A</span><span class="v">${observed.heater_a != null ? fmt(observed.heater_a, 2) : "—"}</span></div>
+          <div class="trust-metric"><span class="k">Payload A</span><span class="v">${observed.payload_a != null ? fmt(observed.payload_a, 2) : "—"}</span></div>
+          <div class="trust-metric"><span class="k">SCIENCE_MODE</span><span class="v">${observed.has_science ? "yes" : "no"}</span></div>
+        </div>
+      </article>
+      <article class="trust-card">
+        <div class="trust-card-head"><div><p class="trust-card-kicker">Checks</p><h3>${cand.passed ?? "—"}/${cand.total ?? "—"} passed</h3></div></div>
+        ${checkRows}
+        ${withhold}
+        <p class="trust-note">Human decision boundary: ORBIT stops at a recommended action — it does not command the spacecraft.</p>
+      </article>
+      <article class="trust-card">
+        <div class="trust-card-head"><div><p class="trust-card-kicker">Generated report</p><h3>Candidate markdown</h3></div></div>
+        <div class="trust-report-block">${escapeHtml(cand.report || "—")}</div>
+      </article>
+    </div>`;
+}
+
+function enterTrustOverview() {
+  state.trustSub = "overview";
+  state.releaseCaseId = null;
+  setView("trust");
+  if (!state.trust) loadTrust();
+  else renderTrust();
+  $("stage").scrollTop = 0;
+  syncUrl("trust");
+}
+
+function enterTrustReleaseCase(caseId) {
+  state.trustSub = "releaseCase";
+  state.releaseCaseId = caseId;
+  setView("trust");
+  _syncTrustPanels();
+  loadReleaseCase(caseId);
+  $("stage").scrollTop = 0;
+  syncUrl("trust");
+}
+
+async function promoteBaseline() {
+  if (!window.confirm("Promote the current candidate to the approved baseline?")) return;
+  try {
+    const res = await fetch(apiUrl("/eval/baseline/promote"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: "promoted from Trust release view" }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `promote ${res.status}`);
+    }
+    await loadTrust();
+    window.alert("Candidate promoted to approved baseline.");
+  } catch (err) {
+    window.alert(err.message);
+  }
 }
 
 function defaultInspectForRun(runId) {
@@ -1991,7 +2387,12 @@ let syncingFromHistory = false;
 
 function pathForView(view, incidentId = state.incidentId) {
   if (view === "incidents") return appPath("/incidents");
-  if (view === "trust") return appPath("/trust");
+  if (view === "trust") {
+    if (state.trustSub === "releaseCase" && state.releaseCaseId) {
+      return appPath(`/trust/cases/${encodeURIComponent(state.releaseCaseId)}`);
+    }
+    return appPath("/trust");
+  }
   if (view === "case" && incidentId) return appPath(`/incidents/${encodeURIComponent(incidentId)}`);
   return appPath();
 }
@@ -2002,7 +2403,11 @@ function syncUrl(view, { replace = false } = {}) {
   const path = pathForView(view, incidentId);
   const same = location.pathname === path || location.pathname === `${path}/`;
   const method = replace || same ? "replaceState" : "pushState";
-  history[method]({ view, incidentId }, "", path);
+  history[method](
+    { view, incidentId, trustSub: state.trustSub, releaseCaseId: state.releaseCaseId },
+    "",
+    path
+  );
 }
 
 function parsePath(pathname) {
@@ -2017,13 +2422,25 @@ function parsePath(pathname) {
   if (caseMatch) {
     return { view: "case", incidentId: decodeURIComponent(caseMatch[1]) };
   }
-  if (path === "/incidents") return { view: "incidents", incidentId: null };
-  if (path === "/trust") return { view: "trust", incidentId: null };
-  return { view: "home", incidentId: null };
+  if (path === "/incidents") return { view: "incidents", incidentId: null, trustSub: "overview", releaseCaseId: null };
+  const releaseCaseMatch = path.match(/^\/trust\/(?:release\/)?cases\/([^/]+)$/);
+  if (releaseCaseMatch) {
+    return {
+      view: "trust",
+      incidentId: null,
+      trustSub: "releaseCase",
+      releaseCaseId: decodeURIComponent(releaseCaseMatch[1]),
+    };
+  }
+  if (path === "/trust/release" || path === "/trust/release/") {
+    return { view: "trust", incidentId: null, trustSub: "overview", releaseCaseId: null };
+  }
+  if (path === "/trust") return { view: "trust", incidentId: null, trustSub: "overview", releaseCaseId: null };
+  return { view: "home", incidentId: null, trustSub: "overview", releaseCaseId: null };
 }
 
 async function routeFromPath(pathname, { replace = false } = {}) {
-  const { view, incidentId } = parsePath(pathname);
+  const { view, incidentId, trustSub, releaseCaseId } = parsePath(pathname);
   syncingFromHistory = true;
   try {
     if (view === "case" && incidentId) {
@@ -2035,14 +2452,22 @@ async function routeFromPath(pathname, { replace = false } = {}) {
     } else if (view === "incidents") {
       enterIncidents();
     } else if (view === "trust") {
-      enterTrust();
+      if (trustSub === "releaseCase" && releaseCaseId) {
+        enterTrustReleaseCase(releaseCaseId);
+      } else {
+        enterTrustOverview();
+      }
     } else {
       enterHome();
     }
-    // Normalize address bar (e.g. trailing slash) without stacking history.
     const path = pathForView(state.view, state.incidentId);
     history.replaceState(
-      { view: state.view, incidentId: state.view === "case" ? state.incidentId : null },
+      {
+        view: state.view,
+        incidentId: state.view === "case" ? state.incidentId : null,
+        trustSub: state.trustSub,
+        releaseCaseId: state.releaseCaseId,
+      },
       "",
       path
     );
@@ -2075,10 +2500,7 @@ function enterCase() {
 }
 
 function enterTrust() {
-  setView("trust");
-  loadTrust();
-  $("stage").scrollTop = 0;
-  syncUrl("trust");
+  enterTrustOverview();
 }
 
 async function goTrust() {
@@ -3563,6 +3985,19 @@ function bind() {
     }
     if (ev.target.closest("[data-trust-incidents]")) {
       goIncidents();
+      return;
+    }
+    if (ev.target.closest("[data-trust-back]")) {
+      enterTrustOverview();
+      return;
+    }
+    const releaseCase = ev.target.closest("[data-release-case]");
+    if (releaseCase) {
+      enterTrustReleaseCase(releaseCase.dataset.releaseCase);
+      return;
+    }
+    if (ev.target.closest("[data-promote-baseline]")) {
+      promoteBaseline();
       return;
     }
     const tape = ev.target.closest("[data-trust-tape]");

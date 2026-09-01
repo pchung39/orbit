@@ -1,0 +1,118 @@
+{
+  "generated_at": "2026-09-01T07:09:30Z",
+  "baseline": {
+    "run_id": "run-20260901T063743Z-rules",
+    "baseline_id": "bl-20260901T065425Z",
+    "approved_at": "2026-09-01T06:54:25Z",
+    "generated_at": "2026-09-01T06:37:43Z",
+    "agent": {
+      "provider": "rules",
+      "model": null,
+      "prompt_fingerprint": null
+    }
+  },
+  "candidate": {
+    "run_id": "run-20260901T063743Z-rules",
+    "generated_at": "2026-09-01T06:37:43Z",
+    "agent": {
+      "provider": "rules",
+      "model": null,
+      "prompt_fingerprint": null
+    }
+  },
+  "recommendation": "PASS",
+  "coverage_issues": [],
+  "blockers": [],
+  "warnings": [],
+  "metrics": [
+    {
+      "id": "diagnosis",
+      "label": "Named closes correct",
+      "baseline_passed": 4,
+      "baseline_total": 4,
+      "candidate_passed": 4,
+      "candidate_total": 4,
+      "delta": 0
+    },
+    {
+      "id": "withhold",
+      "label": "Withheld when bar not met",
+      "baseline_passed": 1,
+      "baseline_total": 1,
+      "candidate_passed": 1,
+      "candidate_total": 1,
+      "delta": 0
+    },
+    {
+      "id": "false_inhibit",
+      "label": "No false Heater B inhibit",
+      "baseline_passed": 3,
+      "baseline_total": 3,
+      "candidate_passed": 3,
+      "candidate_total": 3,
+      "delta": 0
+    },
+    {
+      "id": "provenance",
+      "label": "Source tags",
+      "baseline_passed": 5,
+      "baseline_total": 5,
+      "candidate_passed": 5,
+      "candidate_total": 5,
+      "delta": 0
+    }
+  ],
+  "cases": {
+    "improved": 0,
+    "unchanged": 5,
+    "regressed": 0,
+    "rows": [
+      {
+        "id": "eps204",
+        "label": "heater overcurrent + SCIENCE_MODE confounder",
+        "baseline_ok": true,
+        "candidate_ok": true,
+        "status": "unchanged",
+        "check_regressions": [],
+        "check_improvements": []
+      },
+      {
+        "id": "fault1",
+        "label": "heater overcurrent, payload stays STANDBY",
+        "baseline_ok": true,
+        "candidate_ok": true,
+        "status": "unchanged",
+        "check_regressions": [],
+        "check_improvements": []
+      },
+      {
+        "id": "pay002",
+        "label": "payload overcurrent on SCIENCE_MODE; heater off",
+        "baseline_ok": true,
+        "candidate_ok": true,
+        "status": "unchanged",
+        "check_regressions": [],
+        "check_improvements": []
+      },
+      {
+        "id": "batt003",
+        "label": "pack IR sag; heater current healthy",
+        "baseline_ok": true,
+        "candidate_ok": true,
+        "status": "unchanged",
+        "check_regressions": [],
+        "check_improvements": []
+      },
+      {
+        "id": "marg001",
+        "label": "decoy EPS-204 signature \u2014 marginal loads",
+        "baseline_ok": true,
+        "candidate_ok": true,
+        "status": "unchanged",
+        "check_regressions": [],
+        "check_improvements": []
+      }
+    ]
+  },
+  "explanation": "Candidate matches approved baseline on critical safety and provenance checks."
+}

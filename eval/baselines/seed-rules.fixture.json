@@ -1,0 +1,453 @@
+{
+  "schema_version": 1,
+  "fixture": true,
+  "kind": "approved_baseline",
+  "run_id": "run-fixture-rules",
+  "generated_at": "2026-08-26T20:08:31Z",
+  "suite_fingerprint": "529ade154695a0e6a2144223ac37a12e0733ae6afbc24935da4e6b44be892c0b",
+  "suite_case_ids": [
+    "eps204",
+    "fault1",
+    "pay002",
+    "batt003",
+    "marg001"
+  ],
+  "agent": {
+    "provider": "rules",
+    "model": null,
+    "prompt_fingerprint": null
+  },
+  "scorecard": {
+    "provider": "rules",
+    "generated_at": "2026-08-26T20:08:31Z",
+    "ok": true,
+    "cases_ok": 5,
+    "cases_total": 5,
+    "checks_ok": 55,
+    "checks_total": 55,
+    "diagnosis": {
+      "id": "diagnosis",
+      "label": "Named closes correct",
+      "passed": 4,
+      "total": 4
+    },
+    "withhold": {
+      "id": "withhold",
+      "label": "Withheld when bar not met",
+      "passed": 1,
+      "total": 1
+    },
+    "false_inhibit": {
+      "id": "false_inhibit",
+      "label": "No false Heater B inhibit",
+      "passed": 3,
+      "total": 3
+    },
+    "provenance": {
+      "id": "provenance",
+      "label": "Source tags",
+      "passed": 5,
+      "total": 5
+    },
+    "cases": [],
+    "headline": "4/4 named closes \u00b7 3/3 no false inhibit \u00b7 5/5 source tags clean"
+  },
+  "cases": {
+    "eps204": {
+      "contract": {
+        "id": "eps204",
+        "alarm": "EPS.bus_voltage",
+        "label": "heater overcurrent + SCIENCE_MODE confounder",
+        "root_cause": "heater",
+        "confounder": "SCIENCE_MODE",
+        "procedure": "EPS-17",
+        "similar": "INC-0187",
+        "action": "inhibit_heater_b"
+      },
+      "observed": {
+        "heater_a": 1.75,
+        "payload_a": 0.5,
+        "warn_clock": "14:29:44",
+        "has_science": true
+      },
+      "report": "# Investigation",
+      "ok": true,
+      "passed": 10,
+      "total": 10,
+      "checks": [
+        {
+          "id": "tagged_claims",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "provenance_roles",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_heater_current",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "heater_is_suspect",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "recommends_inhibit_heater",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "does_not_close_on_payload",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "stops_without_commanding",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_procedure",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_similar_incident",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_warn_clock",
+          "passed": true,
+          "detail": "ok"
+        }
+      ]
+    },
+    "fault1": {
+      "contract": {
+        "id": "fault1",
+        "alarm": "EPS.bus_voltage",
+        "label": "heater overcurrent, payload stays STANDBY",
+        "root_cause": "heater",
+        "confounder": null,
+        "procedure": "EPS-17",
+        "similar": "INC-0187",
+        "action": "inhibit_heater_b"
+      },
+      "observed": {
+        "heater_a": 1.75,
+        "payload_a": 0.5,
+        "warn_clock": "14:29:44",
+        "has_science": false
+      },
+      "report": "# Investigation",
+      "ok": true,
+      "passed": 10,
+      "total": 10,
+      "checks": [
+        {
+          "id": "tagged_claims",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "provenance_roles",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_heater_current",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "heater_is_suspect",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "recommends_inhibit_heater",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "does_not_close_on_payload",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "stops_without_commanding",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_procedure",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_similar_incident",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_warn_clock",
+          "passed": true,
+          "detail": "ok"
+        }
+      ]
+    },
+    "pay002": {
+      "contract": {
+        "id": "pay002",
+        "alarm": "PAY.payload_current",
+        "label": "payload overcurrent on SCIENCE_MODE; heater off",
+        "root_cause": "payload",
+        "confounder": null,
+        "procedure": "PAY-04",
+        "similar": "INC-0191",
+        "action": "safe_payload_standby"
+      },
+      "observed": {
+        "heater_a": 1.75,
+        "payload_a": 0.5,
+        "warn_clock": "14:29:44",
+        "has_science": false
+      },
+      "report": "# Investigation",
+      "ok": true,
+      "passed": 10,
+      "total": 10,
+      "checks": [
+        {
+          "id": "tagged_claims",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "provenance_roles",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_payload_current",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "payload_is_suspect",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "recommends_safe_payload",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "does_not_inhibit_heater",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "stops_without_commanding",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_procedure",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_similar_incident",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_warn_clock",
+          "passed": true,
+          "detail": "ok"
+        }
+      ]
+    },
+    "batt003": {
+      "contract": {
+        "id": "batt003",
+        "alarm": "EPS.battery_voltage",
+        "label": "pack IR sag; heater current healthy",
+        "root_cause": "battery",
+        "confounder": null,
+        "procedure": "EPS-09",
+        "similar": "INC-0162",
+        "action": "battery_checkout"
+      },
+      "observed": {
+        "heater_a": 1.75,
+        "payload_a": 0.5,
+        "warn_clock": "14:29:44",
+        "has_science": false
+      },
+      "report": "# Investigation",
+      "ok": true,
+      "passed": 9,
+      "total": 9,
+      "checks": [
+        {
+          "id": "tagged_claims",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "provenance_roles",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_battery_voltage",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "does_not_inhibit_heater",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "does_not_safe_payload",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "stops_without_commanding",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_procedure",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_similar_incident",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_warn_clock",
+          "passed": true,
+          "detail": "ok"
+        }
+      ]
+    },
+    "marg001": {
+      "contract": {
+        "id": "marg001",
+        "alarm": "EPS.bus_voltage",
+        "label": "decoy EPS-204 signature \u2014 marginal loads",
+        "root_cause": "withheld",
+        "confounder": "SCIENCE_MODE",
+        "procedure": "EPS-17",
+        "similar": "INC-0187",
+        "action": "hold"
+      },
+      "observed": {
+        "heater_a": 1.75,
+        "payload_a": 0.5,
+        "warn_clock": "14:29:44",
+        "has_science": true
+      },
+      "report": "# Investigation",
+      "ok": true,
+      "passed": 16,
+      "total": 16,
+      "checks": [
+        {
+          "id": "tagged_claims",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "provenance_roles",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "no_hypothesis_section",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "no_root_cause_asserted",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "no_prime_suspect",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_marginal_ratio",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "states_threshold",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "does_not_inhibit_heater",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "does_not_safe_payload",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "names_confounder",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "rules_out_similar",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "lists_next_checks",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "recommends_hold",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "stops_without_commanding",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_procedure",
+          "passed": true,
+          "detail": "ok"
+        },
+        {
+          "id": "cites_warn_clock",
+          "passed": true,
+          "detail": "ok"
+        }
+      ]
+    }
+  },
+  "note": "fixture-backed synthetic bundle \u2014 not historical telemetry"
+}

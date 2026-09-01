@@ -1,0 +1,510 @@
+{
+  "schema_version": 1,
+  "kind": "candidate",
+  "run_id": "run-20260901T063743Z-rules",
+  "generated_at": "2026-09-01T06:37:43Z",
+  "suite_fingerprint": "529ade154695a0e6a2144223ac37a12e0733ae6afbc24935da4e6b44be892c0b",
+  "suite_case_ids": [
+    "eps204",
+    "fault1",
+    "pay002",
+    "batt003",
+    "marg001"
+  ],
+  "agent": {
+    "provider": "rules",
+    "model": null,
+    "prompt_fingerprint": null
+  },
+  "scorecard": {
+    "provider": "rules",
+    "generated_at": "2026-09-01T06:37:43Z",
+    "ok": true,
+    "cases_ok": 5,
+    "cases_total": 5,
+    "checks_ok": 55,
+    "checks_total": 55,
+    "diagnosis": {
+      "id": "diagnosis",
+      "label": "Named closes correct",
+      "passed": 4,
+      "total": 4,
+      "definition": "Seeded heater / payload / battery faults where the report picks the matching root cause and recommended action.",
+      "pct": 100.0,
+      "display": "4/4"
+    },
+    "withhold": {
+      "id": "withhold",
+      "label": "Withheld when bar not met",
+      "passed": 1,
+      "total": 1,
+      "definition": "Decoy / marginal cases where ORBIT must omit a root-cause hypothesis and recommend hold \u2014 not invent a FAULT id.",
+      "pct": 100.0,
+      "display": "1/1"
+    },
+    "false_inhibit": {
+      "id": "false_inhibit",
+      "label": "No false Heater B inhibit",
+      "passed": 3,
+      "total": 3,
+      "definition": "Contrast cases (payload, battery, withhold) where inhibit Heater B would be wrong. Score is cases that correctly leave the heater alone.",
+      "pct": 100.0,
+      "display": "3/3"
+    },
+    "provenance": {
+      "id": "provenance",
+      "label": "Source tags",
+      "passed": 5,
+      "total": 5,
+      "definition": "Reports that stamp OBSERVED / DERIVED / DOCUMENTED / HYPOTHESIS and keep timeline facts separate from causal hypothesis language.",
+      "pct": 100.0,
+      "display": "5/5"
+    },
+    "cases": [
+      {
+        "id": "eps204",
+        "label": "heater overcurrent + SCIENCE_MODE confounder",
+        "root_cause": "heater",
+        "action": "inhibit_heater_b",
+        "ok": true,
+        "passed": 10,
+        "total": 10
+      },
+      {
+        "id": "fault1",
+        "label": "heater overcurrent, payload stays STANDBY",
+        "root_cause": "heater",
+        "action": "inhibit_heater_b",
+        "ok": true,
+        "passed": 10,
+        "total": 10
+      },
+      {
+        "id": "pay002",
+        "label": "payload overcurrent on SCIENCE_MODE; heater off",
+        "root_cause": "payload",
+        "action": "safe_payload_standby",
+        "ok": true,
+        "passed": 10,
+        "total": 10
+      },
+      {
+        "id": "batt003",
+        "label": "pack IR sag; heater current healthy",
+        "root_cause": "battery",
+        "action": "battery_checkout",
+        "ok": true,
+        "passed": 9,
+        "total": 9
+      },
+      {
+        "id": "marg001",
+        "label": "decoy EPS-204 signature \u2014 marginal loads",
+        "root_cause": "withheld",
+        "action": "hold",
+        "ok": true,
+        "passed": 16,
+        "total": 16
+      }
+    ],
+    "headline": "4/4 named closes \u00b7 3/3 no false inhibit \u00b7 5/5 source tags clean"
+  },
+  "cases": {
+    "eps204": {
+      "contract": {
+        "id": "eps204",
+        "alarm": "EPS.bus_voltage",
+        "label": "heater overcurrent + SCIENCE_MODE confounder",
+        "root_cause": "heater",
+        "confounder": "SCIENCE_MODE",
+        "procedure": "EPS-17",
+        "similar": "INC-0187",
+        "action": "inhibit_heater_b"
+      },
+      "observed": {
+        "heater_a": 3.729191921074888,
+        "payload_a": 0.8966082725500543,
+        "warn_clock": "14:31:55",
+        "has_science": true
+      },
+      "report": "# Investigation eps204\n\n- **Entry:** `EPS.bus_voltage` warn (limit 26.5 V)\n- **Procedure:** EPS-17\n- **Scope:** assemble evidence and recommend a human decision. Does not command the spacecraft.\n\n## Timeline\n\n1. `EPS.bus_voltage` first crossed warn at **14:31:55** (26.188 V). **[OBSERVED]**\n2. Commands / mode changes in the 10 minutes before that. **[OBSERVED]**\n   - 14:29:44 `HEATER_B_ENABLE` on `THM.heater_b_current`\n   - 14:31:52 `SCIENCE_MODE` on `PAY.mode`\n3. At `HEATER_B_ENABLE` (14:29:44), `THM.heater_b_current` = **3.74 A**. Healthy ON range is 0.8\u20131.2 A. **[OBSERVED / DOCUMENTED]**\n4. That is **3.1\u00d7** the healthy-max draw. EPS-17 treats \u22652\u00d7 as the prime suspect. **[DERIVED]**\n5. `SCIENCE_MODE` at 14:31:52: `PAY.mode` = SCIENCE_MODE, `PAY.payload_current` = 0.90 A. **[OBSERVED]**\n6. EPS-17: a SCIENCE_MODE entry raises bus current, but payload current on Aurora-1 is < 1 A and cannot explain a several-amp heater step. Do not close on the payload without checking the heater. **[DOCUMENTED]**\n7. At the warn, `EPS.bus_current` = **6.30 A** (at/over bus-current warn). **[OBSERVED]**\n8. `EPS.battery_voltage` = **28.56 V** (warn 25.5 V). **[OBSERVED]**\n9. `THM.heater_b_temperature` = **34.9 \u00b0C** at the warn (nominal 10\u201320 \u00b0C, warn 40 \u00b0C). **[OBSERVED]**\n10. Prior incident **INC-0187**. Prior heater current after enable was **3.72 A** \u2014 same signature, payload stayed STANDBY. **[DOCUMENTED / OBSERVED]**\n\n## Hypothesis\n\n**HEATER_B_OVERCURRENT** (FAULT-001): Heater B draws ~3\u00d7 when commanded ON. The SCIENCE_MODE step is a confounder, not the root cause. **[HYPOTHESIS]**\n\n## Recommended human decision\n\nInhibit Heater B and watch `EPS.bus_voltage` recover (EPS-17 step 6). Do **not** safe the payload first. **[HYPOTHESIS \u2014 not executed]**\n\nORBIT stops here. An operator has to send the command.\n\n## Tool log\n\n- first_warn eps204 EPS.bus_voltage limit=26.5 below \u2192 14:31:55 26.188\n- events eps204 in 14:21:55\u201314:31:55 \u2192 2\n- sample eps204 THM.heater_b_current @ 14:31:55 \u2192 14:31:55 3.729\n- sample eps204 PAY.payload_current @ 14:31:55 \u2192 14:31:55 0.897\n- sample eps204 PAY.mode @ 14:31:55 \u2192 14:31:55 SCIENCE_MODE\n- sample eps204 EPS.bus_current @ 14:31:55 \u2192 14:31:55 6.305\n- sample eps204 THM.heater_b_temperature @ 14:31:55 \u2192 14:31:55 34.938\n- sample eps204 EPS.battery_voltage @ 14:31:55 \u2192 14:31:55 28.560\n- sample eps204 THM.heater_b_current @ 14:29:44 \u2192 14:29:45 3.739\n- get_doc EPS-17 \u2192 hit\n- search_docs 'heater overcurrent' \u2192 ['INC-0187:0.73', 'INC-0191:0.67', 'EPS-17:0.62', 'INC-0162:0.61', 'PAY-04:0.61', 'EPS-09:0.59']\n- get_doc INC-0187 \u2192 hit\n- get_doc INC-0191 \u2192 hit\n- get_doc INC-0162 \u2192 hit\n- sample inc0187 THM.heater_b_current @ 01:52:00 \u2192 01:52:00 3.718\n",
+      "ok": true,
+      "passed": 10,
+      "total": 10,
+      "checks": [
+        {
+          "id": "tagged_claims",
+          "passed": true,
+          "detail": "all four tags present"
+        },
+        {
+          "id": "provenance_roles",
+          "passed": true,
+          "detail": "timeline OBSERVED; cause/tests HYPOTHESIS"
+        },
+        {
+          "id": "cites_heater_current",
+          "passed": true,
+          "detail": "near 3.73 A"
+        },
+        {
+          "id": "heater_is_suspect",
+          "passed": true,
+          "detail": "ratio or FAULT-001 named"
+        },
+        {
+          "id": "recommends_inhibit_heater",
+          "passed": true,
+          "detail": "inhibit Heater B"
+        },
+        {
+          "id": "does_not_close_on_payload",
+          "passed": true,
+          "detail": "confounder named; action is the heater"
+        },
+        {
+          "id": "stops_without_commanding",
+          "passed": true,
+          "detail": "stops at a human decision"
+        },
+        {
+          "id": "cites_procedure",
+          "passed": true,
+          "detail": "EPS-17"
+        },
+        {
+          "id": "cites_similar_incident",
+          "passed": true,
+          "detail": "INC-0187"
+        },
+        {
+          "id": "cites_warn_clock",
+          "passed": true,
+          "detail": "14:31:55"
+        }
+      ]
+    },
+    "fault1": {
+      "contract": {
+        "id": "fault1",
+        "alarm": "EPS.bus_voltage",
+        "label": "heater overcurrent, payload stays STANDBY",
+        "root_cause": "heater",
+        "confounder": null,
+        "procedure": "EPS-17",
+        "similar": "INC-0187",
+        "action": "inhibit_heater_b"
+      },
+      "observed": {
+        "heater_a": 3.725718206499568,
+        "payload_a": 0.0955045837370142,
+        "warn_clock": "14:33:05",
+        "has_science": false
+      },
+      "report": "# Investigation fault1\n\n- **Entry:** `EPS.bus_voltage` warn (limit 26.5 V)\n- **Procedure:** EPS-17\n- **Scope:** assemble evidence and recommend a human decision. Does not command the spacecraft.\n\n## Timeline\n\n1. `EPS.bus_voltage` first crossed warn at **14:33:05** (26.494 V). **[OBSERVED]**\n2. Commands / mode changes in the 10 minutes before that. **[OBSERVED]**\n   - 14:29:44 `HEATER_B_ENABLE` on `THM.heater_b_current`\n3. At `HEATER_B_ENABLE` (14:29:44), `THM.heater_b_current` = **3.74 A**. Healthy ON range is 0.8\u20131.2 A. **[OBSERVED / DOCUMENTED]**\n4. That is **3.1\u00d7** the healthy-max draw. EPS-17 treats \u22652\u00d7 as the prime suspect. **[DERIVED]**\n5. `PAY.mode` = STANDBY, `PAY.payload_current` = **0.10 A**. **[OBSERVED]**\n6. At the warn, `EPS.bus_current` = **5.33 A**. **[OBSERVED]**\n7. `EPS.battery_voltage` = **28.60 V** (warn 25.5 V). **[OBSERVED]**\n8. `THM.heater_b_temperature` = **42.7 \u00b0C** at the warn (nominal 10\u201320 \u00b0C, warn 40 \u00b0C). **[OBSERVED]**\n9. Prior incident **INC-0187**. Prior heater current after enable was **3.72 A** \u2014 same signature, payload stayed STANDBY. **[DOCUMENTED / OBSERVED]**\n\n## Hypothesis\n\n**HEATER_B_OVERCURRENT** (FAULT-001): Heater B draws ~3\u00d7 when commanded ON. Payload stayed STANDBY. **[HYPOTHESIS]**\n\n## Recommended human decision\n\nInhibit Heater B and watch `EPS.bus_voltage` recover (EPS-17 step 6). Do **not** safe the payload first. **[HYPOTHESIS \u2014 not executed]**\n\nORBIT stops here. An operator has to send the command.\n\n## Tool log\n\n- first_warn fault1 EPS.bus_voltage limit=26.5 below \u2192 14:33:05 26.494\n- events fault1 in 14:23:05\u201314:33:05 \u2192 1\n- sample fault1 THM.heater_b_current @ 14:33:05 \u2192 14:33:05 3.726\n- sample fault1 PAY.payload_current @ 14:33:05 \u2192 14:33:05 0.096\n- sample fault1 PAY.mode @ 14:33:05 \u2192 14:33:05 STANDBY\n- sample fault1 EPS.bus_current @ 14:33:05 \u2192 14:33:05 5.331\n- sample fault1 THM.heater_b_temperature @ 14:33:05 \u2192 14:33:05 42.666\n- sample fault1 EPS.battery_voltage @ 14:33:05 \u2192 14:33:05 28.601\n- sample fault1 THM.heater_b_current @ 14:29:44 \u2192 14:29:45 3.739\n- get_doc EPS-17 \u2192 hit\n- search_docs 'heater overcurrent' \u2192 ['INC-0187:0.73', 'INC-0191:0.67', 'EPS-17:0.62', 'INC-0162:0.61', 'PAY-04:0.61', 'EPS-09:0.59']\n- get_doc INC-0187 \u2192 hit\n- get_doc INC-0191 \u2192 hit\n- get_doc INC-0162 \u2192 hit\n- sample inc0187 THM.heater_b_current @ 01:52:00 \u2192 01:52:00 3.718\n",
+      "ok": true,
+      "passed": 10,
+      "total": 10,
+      "checks": [
+        {
+          "id": "tagged_claims",
+          "passed": true,
+          "detail": "all four tags present"
+        },
+        {
+          "id": "provenance_roles",
+          "passed": true,
+          "detail": "timeline OBSERVED; cause/tests HYPOTHESIS"
+        },
+        {
+          "id": "cites_heater_current",
+          "passed": true,
+          "detail": "near 3.73 A"
+        },
+        {
+          "id": "heater_is_suspect",
+          "passed": true,
+          "detail": "ratio or FAULT-001 named"
+        },
+        {
+          "id": "recommends_inhibit_heater",
+          "passed": true,
+          "detail": "inhibit Heater B"
+        },
+        {
+          "id": "does_not_close_on_payload",
+          "passed": true,
+          "detail": "payload not the action"
+        },
+        {
+          "id": "stops_without_commanding",
+          "passed": true,
+          "detail": "stops at a human decision"
+        },
+        {
+          "id": "cites_procedure",
+          "passed": true,
+          "detail": "EPS-17"
+        },
+        {
+          "id": "cites_similar_incident",
+          "passed": true,
+          "detail": "INC-0187"
+        },
+        {
+          "id": "cites_warn_clock",
+          "passed": true,
+          "detail": "14:33:05"
+        }
+      ]
+    },
+    "pay002": {
+      "contract": {
+        "id": "pay002",
+        "alarm": "PAY.payload_current",
+        "label": "payload overcurrent on SCIENCE_MODE; heater off",
+        "root_cause": "payload",
+        "confounder": null,
+        "procedure": "PAY-04",
+        "similar": "INC-0191",
+        "action": "safe_payload_standby"
+      },
+      "observed": {
+        "heater_a": 0.0454932030176821,
+        "payload_a": 2.688135596302593,
+        "warn_clock": "10:12:00",
+        "has_science": true
+      },
+      "report": "# Investigation pay002\n\n- **Entry:** `PAY.payload_current` warn (limit 1.1 A)\n- **Procedure:** PAY-04\n- **Scope:** assemble evidence and recommend a human decision. Does not command the spacecraft.\n\n## Timeline\n\n1. `PAY.payload_current` first crossed warn at **10:12:00** (2.688 A). **[OBSERVED]**\n2. Commands / mode changes in the 10 minutes before that. **[OBSERVED]**\n   - 10:12:00 `SCIENCE_MODE` on `PAY.mode`\n3. `THM.heater_b_current` = **0.05 A** at the warn (healthy ON 0.8\u20131.2 A). **[OBSERVED]**\n4. `SCIENCE_MODE` at 10:12:00: `PAY.mode` = SCIENCE_MODE, `PAY.payload_current` = 2.69 A. **[OBSERVED]**\n5. That is **3.0\u00d7** the 0.9 A healthy science draw. PAY-04 treats \u22652\u00d7 as the prime suspect. Heater current is not \u22652\u00d7 \u2014 do not inhibit Heater B. **[DERIVED / DOCUMENTED]**\n6. At the warn, `EPS.bus_current` = **4.23 A**. **[OBSERVED]**\n7. `EPS.battery_voltage` = **29.12 V** (warn 25.5 V). **[OBSERVED]**\n8. `THM.heater_b_temperature` = **16.0 \u00b0C** at the warn (nominal 10\u201320 \u00b0C, warn 40 \u00b0C). **[OBSERVED]**\n9. Prior incident **INC-0191**. Prior payload current after SCIENCE_MODE was **2.72 A** \u2014 heater stayed off. **[DOCUMENTED / OBSERVED]**\n\n## Hypothesis\n\n**PAYLOAD_POWER_SPIKE** (FAULT-002): payload current is ~3\u00d7 the healthy science baseline. Heater B is not the load. **[HYPOTHESIS]**\n\n## Recommended human decision\n\nSafe the payload to STANDBY and watch `PAY.payload_current` fall (PAY-04 step 6). Do **not** inhibit Heater B. **[HYPOTHESIS \u2014 not executed]**\n\nORBIT stops here. An operator has to send the command.\n\n## Tool log\n\n- first_warn pay002 PAY.payload_current limit=1.1 above \u2192 10:12:00 2.688\n- events pay002 in 10:02:00\u201310:12:00 \u2192 1\n- sample pay002 THM.heater_b_current @ 10:12:00 \u2192 10:12:00 0.045\n- sample pay002 PAY.payload_current @ 10:12:00 \u2192 10:12:00 2.688\n- sample pay002 PAY.mode @ 10:12:00 \u2192 10:12:00 SCIENCE_MODE\n- sample pay002 EPS.bus_current @ 10:12:00 \u2192 10:12:00 4.229\n- sample pay002 THM.heater_b_temperature @ 10:12:00 \u2192 10:12:00 15.975\n- sample pay002 EPS.battery_voltage @ 10:12:00 \u2192 10:12:00 29.118\n- get_doc PAY-04 \u2192 hit\n- search_docs 'payload power spike SCIENCE_MODE' \u2192 ['PAY-04:0.80', 'INC-0191:0.76', 'EPS-17:0.71', 'EPS-09:0.68', 'INC-0187:0.67', 'INC-0162:0.66']\n- get_doc INC-0191 \u2192 hit\n- get_doc INC-0187 \u2192 hit\n- get_doc INC-0162 \u2192 hit\n- sample inc0191 PAY.payload_current @ 08:14:00 \u2192 08:14:00 2.717\n",
+      "ok": true,
+      "passed": 10,
+      "total": 10,
+      "checks": [
+        {
+          "id": "tagged_claims",
+          "passed": true,
+          "detail": "all four tags present"
+        },
+        {
+          "id": "provenance_roles",
+          "passed": true,
+          "detail": "timeline OBSERVED; cause/tests HYPOTHESIS"
+        },
+        {
+          "id": "cites_payload_current",
+          "passed": true,
+          "detail": "near 2.69 A"
+        },
+        {
+          "id": "payload_is_suspect",
+          "passed": true,
+          "detail": "FAULT-002 or payload ratio"
+        },
+        {
+          "id": "recommends_safe_payload",
+          "passed": true,
+          "detail": "safe payload to STANDBY"
+        },
+        {
+          "id": "does_not_inhibit_heater",
+          "passed": true,
+          "detail": "heater left alone"
+        },
+        {
+          "id": "stops_without_commanding",
+          "passed": true,
+          "detail": "stops at a human decision"
+        },
+        {
+          "id": "cites_procedure",
+          "passed": true,
+          "detail": "PAY-04"
+        },
+        {
+          "id": "cites_similar_incident",
+          "passed": true,
+          "detail": "INC-0191"
+        },
+        {
+          "id": "cites_warn_clock",
+          "passed": true,
+          "detail": "10:12:00"
+        }
+      ]
+    },
+    "batt003": {
+      "contract": {
+        "id": "batt003",
+        "alarm": "EPS.battery_voltage",
+        "label": "pack IR sag; heater current healthy",
+        "root_cause": "battery",
+        "confounder": null,
+        "procedure": "EPS-09",
+        "similar": "INC-0162",
+        "action": "battery_checkout"
+      },
+      "observed": {
+        "heater_a": 1.1402813778068983,
+        "payload_a": 0.0859502214237111,
+        "warn_clock": "00:10:00",
+        "has_science": false
+      },
+      "report": "# Investigation batt003\n\n- **Entry:** `EPS.battery_voltage` warn (limit 25.5 V)\n- **Procedure:** EPS-09\n- **Scope:** assemble evidence and recommend a human decision. Does not command the spacecraft.\n\n## Timeline\n\n1. `EPS.battery_voltage` first crossed warn at **00:10:00** (25.276 V). **[OBSERVED]**\n2. Commands / mode changes in the 10 minutes before that. **[OBSERVED]**\n   - 00:10:00 `HEATER_B_ENABLE` on `THM.heater_b_current`\n3. At `HEATER_B_ENABLE` (00:10:00), `THM.heater_b_current` = **1.14 A**. Healthy ON range is 0.8\u20131.2 A. **[OBSERVED / DOCUMENTED]**\n4. That is **1.0\u00d7** the healthy-max draw. EPS-17 treats \u22652\u00d7 as the prime suspect. **[DERIVED]**\n5. `PAY.mode` = STANDBY, `PAY.payload_current` = **0.09 A**. **[OBSERVED]**\n6. At the warn, `EPS.bus_current` = **2.71 A**. **[OBSERVED]**\n7. `EPS.battery_voltage` = **25.28 V** (warn 25.5 V). **[OBSERVED]**\n8. `THM.heater_b_temperature` = **12.2 \u00b0C** at the warn (nominal 10\u201320 \u00b0C, warn 40 \u00b0C). **[OBSERVED]**\n9. Prior incident **INC-0162**. Prior battery voltage after a healthy heater enable was **25.19 V**. **[DOCUMENTED / OBSERVED]**\n\n## Hypothesis\n\n**BATTERY_RESISTANCE_DEGRADATION** (FAULT-003): pack voltage sagged under a healthy load. Do not inhibit Heater B. **[HYPOTHESIS]**\n\n## Recommended human decision\n\nContinue EPS-09 battery checkout. Do **not** inhibit Heater B and do **not** safe the payload \u2014 both currents are healthy. **[HYPOTHESIS \u2014 not executed]**\n\nORBIT stops here. An operator has to send the command.\n\n## Tool log\n\n- first_warn batt003 EPS.battery_voltage limit=25.5 below \u2192 00:10:00 25.276\n- events batt003 in 00:00:00\u201300:10:00 \u2192 1\n- sample batt003 THM.heater_b_current @ 00:10:00 \u2192 00:10:00 1.140\n- sample batt003 PAY.payload_current @ 00:10:00 \u2192 00:10:00 0.086\n- sample batt003 PAY.mode @ 00:10:00 \u2192 00:10:00 STANDBY\n- sample batt003 EPS.bus_current @ 00:10:00 \u2192 00:10:00 2.708\n- sample batt003 THM.heater_b_temperature @ 00:10:00 \u2192 00:10:00 12.221\n- sample batt003 EPS.battery_voltage @ 00:10:00 \u2192 00:10:00 25.276\n- sample batt003 THM.heater_b_current @ 00:10:00 \u2192 00:10:00 1.140\n- get_doc EPS-09 \u2192 hit\n- search_docs 'battery internal resistance eclipse' \u2192 ['INC-0162:0.72', 'INC-0187:0.67', 'EPS-09:0.65', 'EPS-17:0.64', 'INC-0191:0.63', 'PAY-04:0.61']\n- get_doc INC-0162 \u2192 hit\n- get_doc INC-0187 \u2192 hit\n- get_doc INC-0191 \u2192 hit\n- sample inc0162 EPS.battery_voltage @ 00:18:00 \u2192 00:18:00 25.195\n",
+      "ok": true,
+      "passed": 9,
+      "total": 9,
+      "checks": [
+        {
+          "id": "tagged_claims",
+          "passed": true,
+          "detail": "all four tags present"
+        },
+        {
+          "id": "provenance_roles",
+          "passed": true,
+          "detail": "timeline OBSERVED; cause/tests HYPOTHESIS"
+        },
+        {
+          "id": "cites_battery_voltage",
+          "passed": true,
+          "detail": "battery voltage cited"
+        },
+        {
+          "id": "does_not_inhibit_heater",
+          "passed": true,
+          "detail": "heater left alone"
+        },
+        {
+          "id": "does_not_safe_payload",
+          "passed": true,
+          "detail": "payload left alone"
+        },
+        {
+          "id": "stops_without_commanding",
+          "passed": true,
+          "detail": "stops at a human decision"
+        },
+        {
+          "id": "cites_procedure",
+          "passed": true,
+          "detail": "EPS-09"
+        },
+        {
+          "id": "cites_similar_incident",
+          "passed": true,
+          "detail": "INC-0162"
+        },
+        {
+          "id": "cites_warn_clock",
+          "passed": true,
+          "detail": "00:10:00"
+        }
+      ]
+    },
+    "marg001": {
+      "contract": {
+        "id": "marg001",
+        "alarm": "EPS.bus_voltage",
+        "label": "decoy EPS-204 signature \u2014 marginal loads",
+        "root_cause": "withheld",
+        "confounder": "SCIENCE_MODE",
+        "procedure": "EPS-17",
+        "similar": "INC-0187",
+        "action": "hold"
+      },
+      "observed": {
+        "heater_a": 1.9740113999124456,
+        "payload_a": 0.9103820599591363,
+        "warn_clock": "14:36:10",
+        "has_science": true
+      },
+      "report": "# Investigation marg001\n\n- **Entry:** `EPS.bus_voltage` warn (limit 26.5 V)\n- **Procedure:** EPS-17\n- **Scope:** assemble evidence and recommend a human decision. Does not command the spacecraft.\n\n## Timeline\n\n1. `EPS.bus_voltage` first crossed warn at **14:36:10** (26.466 V). **[OBSERVED]**\n2. Commands / mode changes in the 10 minutes before that. **[OBSERVED]**\n   - 14:29:44 `HEATER_B_ENABLE` on `THM.heater_b_current`\n   - 14:31:52 `SCIENCE_MODE` on `PAY.mode`\n3. At `HEATER_B_ENABLE` (14:29:44), `THM.heater_b_current` = **2.05 A**. Healthy ON range is 0.8\u20131.2 A. **[OBSERVED / DOCUMENTED]**\n4. That is **1.7\u00d7** the healthy-max draw \u2014 elevated, but **below** EPS-17's \u22652\u00d7 prime-suspect bar. **[DERIVED]**\n5. `SCIENCE_MODE` at 14:31:52: `PAY.mode` = SCIENCE_MODE, `PAY.payload_current` = 0.91 A. **[OBSERVED]**\n6. SCIENCE_MODE is a confounder in this window. Payload current (0.91 A) is not \u22652\u00d7 science and cannot close the case alone. **[DOCUMENTED]**\n7. At the warn, `EPS.bus_current` = **4.53 A**. **[OBSERVED]**\n8. `EPS.battery_voltage` = **28.25 V** (warn 25.5 V). **[OBSERVED]**\n9. `THM.heater_b_temperature` = **25.4 \u00b0C** at the warn (nominal 10\u201320 \u00b0C, warn 40 \u00b0C). **[OBSERVED]**\n10. Prior incident **INC-0187** closed on ~3.1\u00d7 heater draw (3.72 A). This tape is **1.7\u00d7** \u2014 pattern does **not** match; do not treat INC-0187 as confirmation. **[DOCUMENTED / DERIVED]**\n\n## What is ruled out\n\n- Heater B at **2.05 A** (1.7\u00d7 healthy) is **below** EPS-17 step 4's \u22652\u00d7 bar \u2014 not the prime suspect. **[DERIVED / DOCUMENTED]**\n- Payload at **0.91 A** cannot explain a several-amp bus step (EPS-17 step 5). SCIENCE_MODE is a confounder, not a close. **[DOCUMENTED]**\n- **INC-0187** is a ~3\u00d7 heater signature. This tape does not match \u2014 do not use it as confirmation. **[DOCUMENTED]**\n- No FAULT-001 / FAULT-002 / FAULT-003 is established on this evidence. **[DERIVED]**\n\n## What would change this\n\n- Watch `THM.heater_b_current`: if it reaches **\u22652\u00d7** healthy (~2.4 A), EPS-17 step 4 clears and Heater B can be named. **[HYPOTHESIS]**\n- Compare this enable to the last **healthy** `HEATER_B_ENABLE` (~1.0\u00d7). A stable ~1.7\u00d7 is a clue, not a close. **[HYPOTHESIS]**\n- If ops authorizes an isolation test and the bus recovers after one load OFF, that load can be named. **[HYPOTHESIS]**\n\n## Recommended human decision\n\n**Hold.** Do **not** inhibit Heater B. Do **not** safe the payload. EPS-17 step 4 is not met \u2014 no load crossed the \u22652\u00d7 prime-suspect bar. Continue monitoring until a load meets the threshold or ops authorizes a diagnostic command. **[DOCUMENTED \u2014 not executed]**\n\nORBIT stops here. No root-cause hypothesis was asserted.\n\n## Tool log\n\n- first_warn marg001 EPS.bus_voltage limit=26.5 below \u2192 14:36:10 26.466\n- events marg001 in 14:26:10\u201314:36:10 \u2192 2\n- sample marg001 THM.heater_b_current @ 14:36:10 \u2192 14:36:10 1.974\n- sample marg001 PAY.payload_current @ 14:36:10 \u2192 14:36:10 0.910\n- sample marg001 PAY.mode @ 14:36:10 \u2192 14:36:10 SCIENCE_MODE\n- sample marg001 EPS.bus_current @ 14:36:10 \u2192 14:36:10 4.531\n- sample marg001 THM.heater_b_temperature @ 14:36:10 \u2192 14:36:10 25.350\n- sample marg001 EPS.battery_voltage @ 14:36:10 \u2192 14:36:10 28.253\n- sample marg001 THM.heater_b_current @ 14:29:44 \u2192 14:29:45 2.047\n- get_doc EPS-17 \u2192 hit\n- search_docs 'heater overcurrent' \u2192 ['INC-0187:0.73', 'INC-0191:0.67', 'EPS-17:0.62', 'INC-0162:0.61', 'PAY-04:0.61', 'EPS-09:0.59']\n- get_doc INC-0187 \u2192 hit\n- get_doc INC-0191 \u2192 hit\n- get_doc INC-0162 \u2192 hit\n- sample inc0187 THM.heater_b_current @ 01:52:00 \u2192 01:52:00 3.718\n",
+      "ok": true,
+      "passed": 16,
+      "total": 16,
+      "checks": [
+        {
+          "id": "tagged_claims",
+          "passed": true,
+          "detail": "all four tags present"
+        },
+        {
+          "id": "provenance_roles",
+          "passed": true,
+          "detail": "timeline OBSERVED; cause/tests HYPOTHESIS"
+        },
+        {
+          "id": "no_hypothesis_section",
+          "passed": true,
+          "detail": "hypothesis section omitted"
+        },
+        {
+          "id": "no_root_cause_asserted",
+          "passed": true,
+          "detail": "no FAULT named as cause"
+        },
+        {
+          "id": "no_prime_suspect",
+          "passed": true,
+          "detail": "no load named prime suspect"
+        },
+        {
+          "id": "cites_marginal_ratio",
+          "passed": true,
+          "detail": "near 1.97 A"
+        },
+        {
+          "id": "states_threshold",
+          "passed": true,
+          "detail": "\u22652\u00d7 / step 4 bar named"
+        },
+        {
+          "id": "does_not_inhibit_heater",
+          "passed": true,
+          "detail": "heater left alone"
+        },
+        {
+          "id": "does_not_safe_payload",
+          "passed": true,
+          "detail": "payload left alone"
+        },
+        {
+          "id": "names_confounder",
+          "passed": true,
+          "detail": "SCIENCE_MODE as confounder"
+        },
+        {
+          "id": "rules_out_similar",
+          "passed": true,
+          "detail": "INC-0187 as non-match"
+        },
+        {
+          "id": "lists_next_checks",
+          "passed": true,
+          "detail": "next checks present"
+        },
+        {
+          "id": "recommends_hold",
+          "passed": true,
+          "detail": "hold / do not command"
+        },
+        {
+          "id": "stops_without_commanding",
+          "passed": true,
+          "detail": "stops without commanding"
+        },
+        {
+          "id": "cites_procedure",
+          "passed": true,
+          "detail": "EPS-17"
+        },
+        {
+          "id": "cites_warn_clock",
+          "passed": true,
+          "detail": "14:36:10"
+        }
+      ],
+      "withhold_explanation": "Why withholding is correct for marg001:\n- Heater B current (~1.97 A) is below the EPS-17 step-4 \u22652\u00d7 bar \u2014 not prime-suspect territory.\n- SCIENCE_MODE is a confounder in the same window, not proof of payload guilt.\n- Prior INC-0187 must be ruled out as a non-match, not used as confirmation.\n- Correct action is hold / do not command \u2014 no inhibit Heater B, no payload safe, no FAULT id."
+    }
+  }
+}

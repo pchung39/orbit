@@ -31,6 +31,8 @@ from storage.sources import (
     seal_run_window,
     sync_connector,
 )
+from eval.bundle import PromoteError, promote_candidate_to_baseline
+from eval.compare import run_compare
 from storage.store import (
     connect,
     create_incident,
@@ -49,6 +51,9 @@ from storage.store import (
     search_documents,
     store_trust_snapshot,
     upsert_hypothesis_feedback,
+    _load_eval_baseline,
+    _load_eval_candidate,
+    _load_eval_comparison,
 )
 
 UI_DIR = Path(__file__).resolve().parent.parent / "ui"
@@ -253,6 +258,89 @@ def trust() -> dict[str, Any]:
         "Investigation in this console uses rules only — no paid LLM.",
     ]
     return snapshot
+
+
+class PromoteBaselineBody(BaseModel):
+    note: str | None = None
+    force: bool = False
+
+
+@api.get("/eval/compare")
+def eval_compare() -> dict[str, Any]:
+    """Baseline vs candidate release comparison."""
+    return run_compare(write=True)
+
+
+@api.get("/eval/baseline")
+def eval_baseline() -> dict[str, Any]:
+    data = _load_eval_baseline()
+    if not data:
+        raise HTTPException(404, "no approved baseline — promote a passing candidate first")
+    return {
+        "baseline_id": data.get("baseline_id"),
+        "approved_at": data.get("approved_at"),
+        "generated_at": data.get("generated_at"),
+        "agent": data.get("agent"),
+        "scorecard": data.get("scorecard"),
+        "suite_case_ids": data.get("suite_case_ids"),
+        "note": data.get("note"),
+    }
+
+
+@api.get("/eval/candidate")
+def eval_candidate() -> dict[str, Any]:
+    data = _load_eval_candidate()
+    if not data:
+        raise HTTPException(404, "no candidate run — run python -m eval")
+    return {
+        "run_id": data.get("run_id"),
+        "generated_at": data.get("generated_at"),
+        "agent": data.get("agent"),
+        "scorecard": data.get("scorecard"),
+        "suite_case_ids": data.get("suite_case_ids"),
+        "cases": [
+            {
+                "id": case_id,
+                "ok": entry.get("ok"),
+                "passed": entry.get("passed"),
+                "total": entry.get("total"),
+                "label": (entry.get("contract") or {}).get("label"),
+            }
+            for case_id, entry in sorted((data.get("cases") or {}).items())
+        ],
+    }
+
+
+@api.get("/eval/cases/{case_id}")
+def eval_case_detail(case_id: str) -> dict[str, Any]:
+    data = _load_eval_candidate()
+    if not data:
+        raise HTTPException(404, "no candidate run — run python -m eval")
+    cases = data.get("cases") or {}
+    if case_id not in cases:
+        raise HTTPException(404, f"unknown eval case {case_id}")
+    entry = cases[case_id]
+    baseline = _load_eval_baseline()
+    baseline_entry = (baseline.get("cases") or {}).get(case_id) if baseline else None
+    return {
+        "id": case_id,
+        "candidate": entry,
+        "baseline": baseline_entry,
+        "boundaries": [
+            "ORBIT assembles tagged reports; it does not command the spacecraft.",
+            "Recommended actions stop at a human decision — not executed on the craft.",
+        ],
+    }
+
+
+@api.post("/eval/baseline/promote")
+def eval_promote_baseline(body: PromoteBaselineBody) -> dict[str, Any]:
+    try:
+        path = promote_candidate_to_baseline(note=body.note, force=body.force)
+        run_compare(write=True)
+        return {"ok": True, "path": str(path), "baseline": _load_eval_baseline()}
+    except PromoteError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @api.get("/desk")
