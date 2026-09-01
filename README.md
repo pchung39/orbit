@@ -202,15 +202,29 @@ Default is `--provider rules` (no paid LLM). Green on this harness is the bar: *
 
 **Current rules scorecard:** 4/4 named closes · 1/1 withheld · 3/3 no false Heater B inhibit · 5/5 fact vs inference clean.
 
-### Braintrust (optional)
+### LangSmith tracing (optional)
 
-If `BRAINTRUST_API_KEY` is set (via `.env.braintrust` from the Braintrust wizard, or env), ORBIT sends investigation traces to project **ORBIT**:
+If `LANGSMITH_API_KEY` is set (via `.env.langsmith` or env), ORBIT sends investigation traces to LangSmith (`LANGSMITH_PROJECT` overrides the project name). Install deps in the same environment you use to run ORBIT:
 
-- Console / API **Run investigation** (rules + tool spans)
-- `python -m agent investigate … --provider rules` (and LLM CLI when wrapped)
+```bash
+pip install -r requirements.txt   # includes langsmith
+```
+
+```bash
+export LANGSMITH_API_KEY=lsv2_pt_...
+export LANGSMITH_TRACING=true
+export LANGSMITH_PROJECT=ORBIT   # optional
+```
+
+Traced paths:
+
+- Console / API **Run investigation** (rules path + tool spans)
+- `python -m agent investigate …` (rules and LLM when wrapped)
 - `python -m eval` case runs
 
-No key → tracing is a no-op. Do not commit `.env.braintrust` or `.braintrust.json`.
+LLM calls use `langsmith.wrappers.wrap_openai` / `wrap_anthropic` when tracing is on. No key → tracing is a no-op. Do not commit `.env.langsmith`.
+
+**Braintrust fallback:** if only `BRAINTRUST_API_KEY` is set (`.env.braintrust`), the same spans go to Braintrust instead. LangSmith takes precedence when both keys exist.
 
 ### Operator hypothesis feedback
 

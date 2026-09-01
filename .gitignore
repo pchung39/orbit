@@ -12,6 +12,7 @@ orbit.db
 .env
 
 
-# Added by Braintrust Wizard
+# Tracing secrets (optional)
+.env.langsmith
 .env.braintrust
 .braintrust.json

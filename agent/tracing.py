@@ -1,27 +1,37 @@
-"""Braintrust tracing for ORBIT investigations.
+"""LangSmith tracing for ORBIT investigations (Braintrust fallback).
 
-Optional: if BRAINTRUST_API_KEY is unset or the SDK is missing, tracing is a no-op.
-Loads `.env` and `.env.braintrust` (gitignored) the same way the LLM CLI does.
+Optional: if neither LANGSMITH_API_KEY nor BRAINTRUST_API_KEY is set, tracing is a no-op.
+Loads `.env`, `.env.langsmith`, and `.env.braintrust` (gitignored) without overriding existing env.
 """
 
 from __future__ import annotations
 
 import functools
 import os
+import sys
+import warnings
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, Iterator, TypeVar
+from typing import Any, Callable, Iterator, Literal, TypeVar
 
 ROOT = Path(__file__).resolve().parent.parent
 _F = TypeVar("_F", bound=Callable[..., Any])
 
 _inited = False
 _enabled = False
+_backend: Literal["langsmith", "braintrust", ""] = ""
+
+_RUN_TYPE_MAP = {
+    "task": "chain",
+    "chain": "chain",
+    "tool": "tool",
+    "llm": "llm",
+}
 
 
 def load_env_files() -> None:
-    """Load KEY=VALUE pairs from .env then .env.braintrust (do not override existing)."""
-    for name in (".env", ".env.braintrust"):
+    """Load KEY=VALUE pairs from .env then provider-specific files (do not override existing)."""
+    for name in (".env", ".env.langsmith", ".env.braintrust"):
         path = ROOT / name
         if not path.exists():
             continue
@@ -36,14 +46,43 @@ def load_env_files() -> None:
             os.environ.setdefault(key, value.strip().strip("'").strip('"'))
 
 
+def _project_name(project: str | None = None) -> str:
+    return project or os.environ.get("LANGSMITH_PROJECT", "ORBIT")
+
+
+def _langsmith_available() -> bool:
+    try:
+        import langsmith  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
 def init_tracing(project: str | None = None) -> bool:
-    """Initialize Braintrust logger once. Returns True when tracing is active."""
-    global _inited, _enabled
+    """Initialize tracing once. Returns True when tracing is active."""
+    global _inited, _enabled, _backend
     if _inited:
         return _enabled
 
     load_env_files()
-    # Also pick up wizard JSON if the shell didn't export the key.
+    _inited = True
+
+    api_key = os.environ.get("LANGSMITH_API_KEY")
+    if api_key:
+        if not _langsmith_available():
+            warnings.warn(
+                "LANGSMITH_API_KEY is set but the langsmith package is not installed "
+                "in this Python environment. Run: pip install -r requirements.txt",
+                stacklevel=2,
+            )
+        else:
+            os.environ.setdefault("LANGSMITH_TRACING", "true")
+            os.environ.setdefault("LANGSMITH_PROJECT", _project_name(project))
+            _backend = "langsmith"
+            _enabled = True
+            return True
+
     json_path = ROOT / ".braintrust.json"
     if json_path.exists() and not os.environ.get("BRAINTRUST_API_KEY"):
         try:
@@ -56,41 +95,89 @@ def init_tracing(project: str | None = None) -> bool:
         except (OSError, json.JSONDecodeError, TypeError):
             pass
 
-    _inited = True
-    api_key = os.environ.get("BRAINTRUST_API_KEY")
-    if not api_key:
-        _enabled = False
-        return False
+    bt_key = os.environ.get("BRAINTRUST_API_KEY")
+    if bt_key:
+        try:
+            import braintrust
 
-    try:
-        import braintrust
-
-        braintrust.auto_instrument()
-        braintrust.init_logger(
-            api_key=api_key,
-            project=project or os.environ.get("BRAINTRUST_PROJECT", "ORBIT_AI"),
-        )
-        _enabled = True
-    except Exception:
-        _enabled = False
+            braintrust.auto_instrument()
+            braintrust.init_logger(
+                api_key=bt_key,
+                project=project or os.environ.get("BRAINTRUST_PROJECT", "ORBIT_AI"),
+            )
+            _backend = "braintrust"
+            _enabled = True
+        except Exception:
+            _enabled = False
+            _backend = ""
     return _enabled
 
 
 def flush_tracing() -> None:
     if not _enabled:
         return
-    try:
-        import braintrust
+    if _backend == "langsmith":
+        try:
+            from langsmith import Client
 
-        flush = getattr(braintrust, "flush", None)
-        if callable(flush):
-            flush()
-    except Exception:
-        pass
+            Client().flush()
+        except Exception:
+            pass
+        return
+    if _backend == "braintrust":
+        try:
+            import braintrust
+
+            flush = getattr(braintrust, "flush", None)
+            if callable(flush):
+                flush()
+        except Exception:
+            pass
 
 
 def tracing_enabled() -> bool:
     return _enabled
+
+
+def tracing_backend() -> str:
+    init_tracing()
+    return _backend
+
+
+def wrap_openai_client(client: Any) -> Any:
+    if init_tracing() and _backend == "langsmith":
+        try:
+            from langsmith.wrappers import wrap_openai
+
+            return wrap_openai(client)
+        except Exception:
+            return client
+    if _backend == "braintrust":
+        try:
+            from braintrust import wrap_openai
+
+            return wrap_openai(client)
+        except Exception:
+            return client
+    return client
+
+
+def wrap_anthropic_client(client: Any) -> Any:
+    if init_tracing() and _backend == "langsmith":
+        try:
+            from langsmith.wrappers import wrap_anthropic
+
+            return wrap_anthropic(client)
+        except Exception:
+            return client
+    if _backend == "braintrust":
+        try:
+            from braintrust import wrap_anthropic
+
+            return wrap_anthropic(client)
+        except Exception:
+            return client
+    return client
 
 
 @contextmanager
@@ -101,10 +188,62 @@ def span(
     input: Any = None,
     metadata: dict[str, Any] | None = None,
 ) -> Iterator[Any]:
-    """Open a Braintrust span, or yield None when tracing is off."""
+    """Open a trace span, or yield None when tracing is off."""
     if not init_tracing():
         yield None
         return
+    if _backend == "langsmith":
+        with _langsmith_span(name, span_type=span_type, input=input, metadata=metadata) as sp:
+            yield sp
+        return
+    with _braintrust_span(name, span_type=span_type, input=input, metadata=metadata) as sp:
+        yield sp
+
+
+@contextmanager
+def _langsmith_span(
+    name: str,
+    *,
+    span_type: str,
+    input: Any,
+    metadata: dict[str, Any] | None,
+) -> Iterator[Any]:
+    try:
+        from langsmith.run_helpers import get_current_run_tree, tracing_context
+        from langsmith.run_trees import RunTree
+
+        inputs: dict[str, Any] = {}
+        if input is not None:
+            inputs["input"] = _safe_output(input)
+        run = RunTree(
+            name=name,
+            run_type=_RUN_TYPE_MAP.get(span_type, span_type),
+            inputs=inputs,
+            parent_run=get_current_run_tree(),
+            project_name=_project_name(),
+        )
+        if metadata:
+            run.add_metadata(metadata)
+        run.post()
+        with tracing_context(parent=run):
+            try:
+                yield run
+            finally:
+                run.end()
+                run.patch()
+    except Exception as exc:
+        print(f"LangSmith span {name!r} failed: {exc}", file=sys.stderr)
+        yield None
+
+
+@contextmanager
+def _braintrust_span(
+    name: str,
+    *,
+    span_type: str,
+    input: Any,
+    metadata: dict[str, Any] | None,
+) -> Iterator[Any]:
     try:
         from braintrust import start_span
 
@@ -125,13 +264,26 @@ def log_to_span(sp: Any, **kwargs: Any) -> None:
     if sp is None:
         return
     try:
+        from langsmith.run_trees import RunTree
+
+        if isinstance(sp, RunTree):
+            if "input" in kwargs and kwargs["input"] is not None:
+                sp.add_inputs({"input": _safe_output(kwargs["input"])})
+            if "output" in kwargs and kwargs["output"] is not None:
+                sp.add_outputs({"output": _safe_output(kwargs["output"])})
+            if "metadata" in kwargs and kwargs["metadata"]:
+                sp.add_metadata(kwargs["metadata"])
+            return
+    except Exception:
+        pass
+    try:
         sp.log(**kwargs)
     except Exception:
         pass
 
 
 def traced(name: str | None = None, *, span_type: str = "task") -> Callable[[_F], _F]:
-    """Decorator: wrap a function in a Braintrust span when tracing is enabled."""
+    """Decorator: wrap a function in a trace span when tracing is enabled."""
 
     def decorate(fn: _F) -> _F:
         span_name = name or fn.__name__
@@ -152,7 +304,6 @@ def _safe_output(value: Any) -> Any:
     if value is None or isinstance(value, (bool, int, float)):
         return value
     if isinstance(value, str):
-        # Cap huge investigation reports in the span payload.
         if len(value) > 80_000:
             return value[:80_000] + "\n…[truncated]"
         return value

@@ -130,7 +130,7 @@ init_tracing()
 
 
 @app.on_event("shutdown")
-def _flush_braintrust() -> None:
+def _flush_tracing() -> None:
     flush_tracing()
 
 

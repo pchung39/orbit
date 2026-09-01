@@ -217,12 +217,9 @@ def investigate_llm(
 def _openai_loop(tools: Tools, user: str, model: str) -> str:
     from openai import OpenAI
 
-    try:
-        from braintrust import wrap_openai
+    from agent.tracing import wrap_openai_client
 
-        client = wrap_openai(OpenAI())
-    except Exception:
-        client = OpenAI()
+    client = wrap_openai_client(OpenAI())
     messages: list[dict[str, Any]] = [
         {"role": "system", "content": SYSTEM},
         {"role": "user", "content": user},
@@ -254,12 +251,9 @@ def _openai_loop(tools: Tools, user: str, model: str) -> str:
 def _anthropic_loop(tools: Tools, user: str, model: str) -> str:
     import anthropic
 
-    try:
-        from braintrust import wrap_anthropic
+    from agent.tracing import wrap_anthropic_client
 
-        client = wrap_anthropic(anthropic.Anthropic())
-    except Exception:
-        client = anthropic.Anthropic()
+    client = wrap_anthropic_client(anthropic.Anthropic())
     messages: list[dict[str, Any]] = [{"role": "user", "content": user}]
     for _ in range(MAX_TURNS):
         resp = client.messages.create(
