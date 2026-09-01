@@ -1717,7 +1717,7 @@ function buildScorecardHtml(trust, cmp, explorer, loading) {
         </div>
       </div>`
     : hasCompare && rec === "INSUFFICIENT_COVERAGE"
-      ? `<p class="trust-score-baseline-hint">No approved baseline yet — run <code>${escapeHtml(trust?.eval?.command || "python -m eval")}</code>, then <code>python -m eval --promote-baseline --force</code> after a green full suite.</p>`
+      ? `<p class="trust-score-baseline-hint">No approved baseline yet — promote a passing full suite when ready.</p>`
       : loading
         ? `<p class="trust-score-baseline-hint is-pending">Checking approved baseline…</p>`
         : "";
@@ -1822,17 +1822,21 @@ function buildScorecardHtml(trust, cmp, explorer, loading) {
     calloutHtml = `<p class="trust-score-release-note">${escapeHtml(cmpData.explanation)}</p>`;
   }
 
+  const baselineRunId = cmpData.baseline?.run_id;
+  const candidateRunId = cmpData.candidate?.run_id || ex.run?.run_id;
+  const candidateIsBaseline = Boolean(
+    hasBaseline && baselineRunId && candidateRunId && baselineRunId === candidateRunId
+  );
+
   const promoteBtn =
     rec === "PASS"
-      ? `<div class="trust-card-actions"><button type="button" class="btn btn-primary" data-promote-baseline>Promote candidate to baseline</button></div>`
+      ? candidateIsBaseline
+        ? `<div class="trust-card-actions"><button type="button" class="btn btn-primary" data-promote-baseline disabled>Approved baseline current</button></div>`
+        : `<div class="trust-card-actions"><button type="button" class="btn btn-primary" data-promote-baseline>Promote candidate to baseline</button></div>`
       : "";
 
   const runMeta = ex.run
     ? `<p class="trust-score-run-meta">Latest run <code>${escapeHtml(ex.run.run_id || "—")}</code> · <code>${escapeHtml(ex.run.provider || sc?.provider || "rules")}</code> · ${escapeHtml(formatSyncAt(ex.run.generated_at || sc?.generated_at))}</p>`
-    : "";
-
-  const disclosureHtml = ex.disclosure
-    ? `<p class="eval-disclosure">${escapeHtml(ex.disclosure)}</p>`
     : "";
 
   const scoreBody = sc
@@ -1842,9 +1846,7 @@ function buildScorecardHtml(trust, cmp, explorer, loading) {
       ${metricHtml ? `<div class="trust-metrics trust-score-metrics">${metricHtml}</div>` : ""}
       ${calloutHtml}
       ${caseTable}
-      ${promoteBtn}
-      ${disclosureHtml}
-      <p class="trust-note">Refresh with <code>${escapeHtml(trust?.eval?.command || "python -m eval")}</code>. Latest candidate run only — simulator-grounded suite.</p>`
+      ${promoteBtn}`
     : `<div class="trust-metrics">
         <div class="trust-metric"><span class="k">Harness cases</span><span class="v">${trust?.eval?.cases ?? 5}</span></div>
         <div class="trust-metric"><span class="k">Fault families</span><span class="v">${trust?.spec?.fault_families ?? 3}</span></div>
@@ -1852,10 +1854,7 @@ function buildScorecardHtml(trust, cmp, explorer, loading) {
       </div>
       ${compareLane}
       ${calloutHtml}
-      ${disclosureHtml}
-      <p class="trust-note">No scorecard yet. Run <code>${escapeHtml(
-        trust?.eval?.command || "python -m eval"
-      )}</code> to write diagnosis, false-inhibit, and source-tag rates.</p>`;
+      <p class="trust-note">No harness results yet.</p>`;
 
   const releaseClass = releaseTone ? ` release-${releaseTone}` : "";
   return `<article class="trust-card trust-scorecard-hero is-${scoreTone}${releaseClass}" id="trust-scorecard">
@@ -1904,7 +1903,7 @@ function renderTrust() {
   if (!t) {
     head.innerHTML = `<h1>Trust</h1><p class="trust-head-lede">Could not load store status. Is Postgres running?</p>`;
     grid.innerHTML = "";
-    tapes.innerHTML = `<p class="trust-empty">Run <code>docker compose up -d</code> and sync Telemetry on Trust, or <code>python -m storage ingest</code>.</p>`;
+    tapes.innerHTML = `<p class="trust-empty">Could not reach the telemetry store. Check Postgres and sync Telemetry on Trust.</p>`;
     sources.innerHTML = "";
     foot.textContent = "";
     const slot = $("trust-scorecard-slot");
@@ -1971,7 +1970,7 @@ function renderTrust() {
         <div class="trust-metric"><span class="k">Model</span><span class="v" style="font-size:11px">${escapeHtml(t.library?.embedding_model || "local")}</span></div>
         <div class="trust-metric"><span class="k">Dims</span><span class="v">${t.library?.embedding_dims ?? "—"}</span></div>
       </div>
-      <p class="trust-note">Semantic search during investigation uses local embeddings — not a paid API. Rebuild with <code>python -m storage ingest</code>.</p>
+      <p class="trust-note">Semantic search during investigation uses local embeddings — not a paid API.</p>
       <div class="trust-card-actions">
         <button type="button" class="btn-ghost btn" data-trust-library>Browse index docs</button>
       </div>
@@ -2192,7 +2191,7 @@ function renderReleaseCase() {
 
   const data = state.releaseCase;
   if (!data || data.error) {
-    slot.innerHTML = `${buildEvalCaseHeadHtml(caseId, null, data, false)}<p class="trust-empty">${escapeHtml(data?.error || "Case detail unavailable. Run python -m eval.")}</p>`;
+    slot.innerHTML = `${buildEvalCaseHeadHtml(caseId, null, data, false)}<p class="trust-empty">${escapeHtml(data?.error || "Case detail unavailable.")}</p>`;
     return;
   }
 
@@ -2204,7 +2203,6 @@ function renderReleaseCase() {
   const boundaries = data.boundaries || [];
   const safetyExpectation = data.safety_expectation || "";
   const comparison = data.comparison;
-  const disclosure = data.disclosure || "";
 
   const withhold = cand.withhold_explanation
     ? `<div class="trust-release-warnings"><h3>Why withholding is correct</h3><p class="trust-release-lede" style="white-space:pre-wrap">${escapeHtml(cand.withhold_explanation)}</p></div>`
@@ -2266,7 +2264,6 @@ function renderReleaseCase() {
         ${withhold}
       </article>
       ${interpretationHtml}
-      ${disclosure ? `<p class="eval-disclosure">${escapeHtml(disclosure)}</p>` : ""}
     </div>`;
 }
 
@@ -2623,7 +2620,6 @@ function enterIncidents() {
 function enterCase() {
   setView("case");
   renderIncidents();
-  setSpine("investigation");
   syncUrl("case");
 }
 
@@ -2634,10 +2630,6 @@ function enterTrust() {
 async function goTrust() {
   enterTrust();
 }
-
-/* Case spine: investigation → procedure → evidence → decision. */
-const SPINE_IDS = ["investigation", "knowledge", "procedure", "evidence", "action"];
-const spineVisible = new Map();
 
 function syncFold(id, open, toggleId, stateLabelId) {
   const bundle = $(id);
@@ -2696,55 +2688,6 @@ function updateInvestigationChrome() {
     }
   }
   syncCaseFolds();
-}
-
-function setSpine(id) {
-  document.querySelectorAll(".spine-step").forEach((btn) => {
-    btn.classList.toggle("is-on", btn.dataset.target === id);
-  });
-}
-
-function initSpine() {
-  const root = $("stage");
-  const spine = $("case-spine");
-  if (!root || !spine) return;
-  spine.addEventListener("click", (ev) => {
-    const btn = ev.target.closest("[data-target]");
-    if (!btn) return;
-    if (btn.dataset.target === "evidence" && !state.evidenceOpen) {
-      state.evidenceOpen = true;
-      syncEvidenceBundle();
-    }
-    if (btn.dataset.target === "procedure" && !state.procedureOpen) {
-      state.procedureOpen = true;
-      syncProcedureBundle();
-    }
-    if (btn.dataset.target === "knowledge" && !state.knowledgeOpen) {
-      state.knowledgeOpen = true;
-      syncKnowledgeBundle();
-    }
-    $(btn.dataset.target)?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-  if (typeof IntersectionObserver !== "function") return;
-  const observer = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) spineVisible.set(entry.target.id, entry.isIntersecting);
-      if (state.view !== "case") return;
-      const visible = SPINE_IDS.filter((id) => {
-        if (id === "evidence" && !state.evidenceOpen) return false;
-        if (id === "procedure" && !state.procedureOpen) return false;
-        if (id === "knowledge" && !state.knowledgeOpen) return false;
-        return spineVisible.get(id);
-      });
-      const first = visible[0] || SPINE_IDS.find((id) => spineVisible.get(id));
-      if (first) setSpine(first);
-    },
-    { root, rootMargin: "-10% 0px -68% 0px", threshold: 0 }
-  );
-  for (const id of SPINE_IDS) {
-    const el = $(id);
-    if (el) observer.observe(el);
-  }
 }
 
 function orbitSvg(orbit) {
@@ -4038,7 +3981,6 @@ function bind() {
     ev.preventDefault();
     openIncident(row.dataset.openCase, row.dataset.jump);
   });
-  initSpine();
   $("knowledge-form")?.addEventListener("submit", (ev) => {
     ev.preventDefault();
     window.clearTimeout(knowledgeTimer);
@@ -4124,7 +4066,7 @@ function bind() {
       enterTrustReleaseCase(releaseCase.dataset.releaseCase);
       return;
     }
-    if (ev.target.closest("[data-promote-baseline]")) {
+    if (ev.target.closest("[data-promote-baseline]:not(:disabled)")) {
       promoteBaseline();
       return;
     }

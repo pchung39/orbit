@@ -278,7 +278,7 @@ def eval_explorer() -> dict[str, Any]:
     """Eval Explorer index — cases, metrics, and run metadata."""
     candidate = _load_eval_candidate()
     if not candidate:
-        raise HTTPException(404, "no candidate run — run python -m eval")
+        raise HTTPException(404, "no candidate run — run the eval suite first")
     comparison = _load_eval_comparison()
     if comparison is None and _load_eval_baseline():
         comparison = run_compare(write=False)
@@ -306,7 +306,7 @@ def eval_baseline() -> dict[str, Any]:
 def eval_candidate() -> dict[str, Any]:
     data = _load_eval_candidate()
     if not data:
-        raise HTTPException(404, "no candidate run — run python -m eval")
+        raise HTTPException(404, "no candidate run — run the eval suite first")
     return {
         "run_id": data.get("run_id"),
         "generated_at": data.get("generated_at"),
@@ -330,7 +330,7 @@ def eval_candidate() -> dict[str, Any]:
 def eval_case_detail(case_id: str) -> dict[str, Any]:
     data = _load_eval_candidate()
     if not data:
-        raise HTTPException(404, "no candidate run — run python -m eval")
+        raise HTTPException(404, "no candidate run — run the eval suite first")
     cases = data.get("cases") or {}
     if case_id not in cases:
         raise HTTPException(404, f"unknown eval case {case_id}")

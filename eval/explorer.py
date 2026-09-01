@@ -19,12 +19,6 @@ from eval.release_gate import (
 )
 from eval.scorecard import INHIBIT_CONTRAST_ACTIONS, NAMED_CLOSES
 
-EXPLORER_DISCLOSURE = (
-    "ORBIT's evaluation suite currently covers a small set of curated simulated mission "
-    "scenarios designed to test specific reasoning, provenance, and safety behaviors. "
-    "Passing these evaluations does not establish production reliability."
-)
-
 CASE_BOUNDARIES = [
     "ORBIT assembles tagged reports; it does not command the spacecraft.",
     "Recommended actions stop at a human decision — not executed on the craft.",
@@ -380,7 +374,6 @@ def build_explorer_index(
 ) -> dict[str, Any]:
     if candidate is None:
         return {
-            "disclosure": EXPLORER_DISCLOSURE,
             "run": None,
             "recommendation": comparison.get("recommendation") if comparison else "INSUFFICIENT_COVERAGE",
             "metrics": [],
@@ -433,7 +426,6 @@ def build_explorer_index(
 
     agent = candidate.get("agent") or {}
     return {
-        "disclosure": EXPLORER_DISCLOSURE,
         "run": {
             "run_id": candidate.get("run_id"),
             "generated_at": candidate.get("generated_at") or sc.get("generated_at"),
@@ -483,7 +475,6 @@ def build_explorer_case_detail(
         }
 
     return {
-        "disclosure": EXPLORER_DISCLOSURE,
         "checks_enriched": checks_enriched,
         "interpretation": interpret_case(case_id, candidate_entry, cmp_row, blockers),
         "comparison": comparison_slice,

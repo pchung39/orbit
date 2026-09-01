@@ -5,7 +5,6 @@ from __future__ import annotations
 import unittest
 
 from eval.explorer import (
-    EXPLORER_DISCLOSURE,
     build_explorer_case_detail,
     build_explorer_index,
     case_critical_failures,
@@ -59,7 +58,6 @@ class ExplorerTests(unittest.TestCase):
         verdict = release_verdict(self.baseline, self.candidate)
         index = build_explorer_index(self.candidate, verdict, self.candidate["scorecard"])
         self.assertEqual(len(index["cases"]), 5)
-        self.assertEqual(index["disclosure"], EXPLORER_DISCLOSURE)
         self.assertIsNotNone(index["run"]["run_id"])
         self.assertEqual(index["recommendation"], "PASS")
         eps = next(c for c in index["cases"] if c["id"] == "eps204")
