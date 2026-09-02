@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/landing.css?v=23" />
+    <link rel="stylesheet" href="/static/landing.css?v=25" />
   </head>
 
   <body>
@@ -32,7 +32,7 @@
               <circle class="em-core" cx="32" cy="32" r="5" />
               <circle class="em-node" cx="50" cy="22" r="3.5" />
             </svg>
-            <span class="brand-text"><b>Orbit</b><em>v0.6</em></span>
+            <span class="brand-text"><b>Orbit</b></span>
           </a>
           <a class="link-desk" href="/app">Desk →</a>
         </header>
@@ -60,19 +60,6 @@
           </div>
         </section>
 
-        <div class="ribbon" aria-hidden="true">
-          <div class="ribbon-track">
-            <span class="cool tag-observed">Observed</span><span class="tag-derived">Derived</span
-            ><span class="tag-documented">Documented</span><span class="hot tag-hypothesis">Hypothesis</span
-            ><span>Sealed tape</span><span>EPS&#8209;17</span><span class="hot">Inhibit</span
-            ><span>Hold</span><span class="cool">Not sent</span
-            ><span class="cool tag-observed">Observed</span><span class="tag-derived">Derived</span
-            ><span class="tag-documented">Documented</span><span class="hot tag-hypothesis">Hypothesis</span
-            ><span>Sealed tape</span><span>EPS&#8209;17</span><span class="hot">Inhibit</span
-            ><span>Hold</span><span class="cool">Not sent</span>
-          </div>
-        </div>
-
         <section class="sec sec-flow" id="flow" aria-labelledby="flow-t">
           <div class="wrap">
             <div class="sec-head">
@@ -85,28 +72,35 @@
             </div>
 
             <div class="flow" aria-hidden="true">
+              <p class="flow-col-label flow-label-src">Sources</p>
+              <p class="flow-col-label flow-label-out">Outcome</p>
+
               <div class="flow-col flow-sources">
-                <article class="flow-src" data-src="0">
-                  <span class="flow-src-k">Telemetry</span>
-                  <b>Sealed window</b>
-                  <span class="flow-src-d">EPS.bus_voltage · THM.heater_b</span>
-                </article>
-                <article class="flow-src" data-src="1">
-                  <span class="flow-src-k">Procedure</span>
-                  <b>EPS‑17</b>
-                  <span class="flow-src-d">Inhibit bar ≥ 2× healthy</span>
-                </article>
-                <article class="flow-src" data-src="2">
-                  <span class="flow-src-k">Prior close</span>
-                  <b>INC‑0187</b>
-                  <span class="flow-src-d">Heater fault pattern</span>
-                </article>
+                <div class="flow-src-stack">
+                  <article class="flow-src" data-src="0">
+                    <span class="flow-src-k">Telemetry</span>
+                    <b>Sealed window</b>
+                    <span class="flow-src-d">EPS.bus_voltage · THM.heater_b</span>
+                  </article>
+                  <article class="flow-src" data-src="1">
+                    <span class="flow-src-k">Procedure</span>
+                    <b>EPS‑17</b>
+                    <span class="flow-src-d">Inhibit bar ≥ 2× healthy</span>
+                  </article>
+                  <article class="flow-src" data-src="2">
+                    <span class="flow-src-k">Prior close</span>
+                    <b>INC‑0187</b>
+                    <span class="flow-src-d">Heater fault pattern</span>
+                  </article>
+                </div>
               </div>
 
               <div class="flow-mid">
-                <span class="flow-line flow-line-a"></span>
-                <span class="flow-line flow-line-b"></span>
-                <span class="flow-line flow-line-c"></span>
+                <svg class="flow-join" viewBox="0 0 200 260" preserveAspectRatio="none" aria-hidden="true">
+                  <path class="flow-wire is-in" d="M0 36 C90 36, 100 130, 200 130" />
+                  <path class="flow-wire is-in" d="M0 130 H200" />
+                  <path class="flow-wire is-in" d="M0 224 C90 224, 100 130, 200 130" />
+                </svg>
                 <div class="flow-hub">
                   <svg class="emblem emblem-hub" viewBox="0 0 64 64">
                     <circle class="em-ring" cx="32" cy="32" r="27" />
@@ -116,6 +110,10 @@
                   </svg>
                   <span class="flow-hub-label">ORBIT</span>
                 </div>
+                <svg class="flow-exit" viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true">
+                  <path class="flow-wire is-out" d="M0 20 H100" />
+                  <path class="flow-wire-arrow" d="M96 12 L112 20 L96 28" />
+                </svg>
               </div>
 
               <div class="flow-col flow-out">
@@ -311,7 +309,10 @@
 
       <footer class="foot">
         <div class="wrap foot-inner">
-          <span>ORBIT · investigation workbench for Aurora‑1 · demo build</span>
+          <span>
+            ORBIT · investigation workbench for Aurora‑1 · built by
+            <a href="https://www.linkedin.com/in/paulchung39/" rel="noopener noreferrer" target="_blank">Paul Chung</a>
+          </span>
           <nav>
             <a href="/app">Desk</a>
             <a href="/app/incidents">Incidents</a>
@@ -321,6 +322,6 @@
       </footer>
     </div>
 
-    <script src="/static/landing.js?v=12"></script>
+    <script src="/static/landing.js?v=13"></script>
   </body>
 </html>
