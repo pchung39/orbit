@@ -369,6 +369,29 @@ def ensure_demo_incident(conn: psycopg.Connection) -> None:
     conn.commit()
 
 
+def reset_demo_incidents(conn: psycopg.Connection) -> None:
+    """Restore seeded demo cases to baseline. Called on each app load in demo mode."""
+    seed_ids = [row[0] for row in SEED_INCIDENTS]
+    for incident_id in seed_ids:
+        conn.execute("DELETE FROM hypothesis_feedback WHERE incident_id = %s", (incident_id,))
+        conn.execute(
+            "DELETE FROM documents WHERE id = %s AND path LIKE 'filed:%%'",
+            (incident_id,),
+        )
+    for incident_id, title, run_id, alarm, status, opened, notes in SEED_INCIDENTS:
+        row = get_incident(conn, incident_id)
+        if row is None:
+            continue
+        conn.execute(
+            "UPDATE incidents SET title = %s, run_id = %s, alarm = %s, status = %s, "
+            "opened_at = %s, notes = %s, filed_at = NULL, closeout = NULL, "
+            "investigation_report = NULL, investigated_at = NULL WHERE id = %s",
+            (title, run_id, alarm, status, opened, notes, incident_id),
+        )
+    conn.commit()
+    ensure_demo_incident(conn)
+
+
 def mark_incident_recommended(conn: psycopg.Connection, incident_id: str) -> dict[str, Any] | None:
     row = get_incident(conn, incident_id)
     if row is None:
@@ -391,15 +414,19 @@ def save_investigation(
     row = get_incident(conn, incident_id)
     if row is None:
         return None
-    if row["status"] == "filed":
-        raise ValueError(f"{incident_id} is already filed")
     investigated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    status = "recommended" if row["status"] in ("open", "recommended") else row["status"]
-    conn.execute(
-        "UPDATE incidents SET status = %s, investigation_report = %s, investigated_at = %s "
-        "WHERE id = %s",
-        (status, report, investigated_at, incident_id),
-    )
+    if row["status"] == "filed":
+        conn.execute(
+            "UPDATE incidents SET investigation_report = %s, investigated_at = %s WHERE id = %s",
+            (report, investigated_at, incident_id),
+        )
+    else:
+        status = "recommended" if row["status"] in ("open", "recommended") else row["status"]
+        conn.execute(
+            "UPDATE incidents SET status = %s, investigation_report = %s, investigated_at = %s "
+            "WHERE id = %s",
+            (status, report, investigated_at, incident_id),
+        )
     conn.commit()
     row = get_incident(conn, incident_id)
     return dict(row) if row else None

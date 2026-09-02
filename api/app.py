@@ -46,6 +46,7 @@ from storage.store import (
     list_documents,
     list_incidents,
     list_runs,
+    reset_demo_incidents,
     save_investigation,
     query_channel,
     query_events,
@@ -425,9 +426,12 @@ def entry_alarms() -> list[dict[str, Any]]:
 
 
 @api.get("/incidents")
-def incidents() -> list[dict[str, Any]]:
+def incidents(fresh: bool = Query(default=False)) -> list[dict[str, Any]]:
     with _conn() as conn:
-        ensure_demo_incident(conn)
+        if fresh:
+            reset_demo_incidents(conn)
+        else:
+            ensure_demo_incident(conn)
         return [dict(row) for row in list_incidents(conn)]
 
 
@@ -556,8 +560,6 @@ def investigate_incident(incident_id: str) -> dict[str, Any]:
         row = get_incident(conn, incident_id)
         if row is None:
             raise HTTPException(404, f"unknown incident {incident_id}")
-        if row["status"] == "filed":
-            raise HTTPException(409, f"{incident_id} is already filed")
     with span(
         "api.investigate_incident",
         span_type="task",

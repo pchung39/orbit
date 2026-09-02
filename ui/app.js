@@ -1,6 +1,22 @@
 const ALARM = "EPS.bus_voltage";
 const API = "/api";
 const APP_BASE = "/app";
+/** Demo: every ticket can re-run investigation with a synthesis animation. */
+const DEMO_MODE = true;
+
+const INVESTIGATION_STEPS = [
+  "Sealing telemetry",
+  "Reading command log",
+  "Matching procedure",
+  "Deriving load ratios",
+  "Tagging sources",
+  "Assembling hypothesis",
+  "Writing report",
+];
+const INVESTIGATION_STEP_MS = 420;
+
+let investigationStepTimer = null;
+let investigationStepIndex = 0;
 
 function apiUrl(path) {
   if (!path.startsWith("/")) path = `/${path}`;
@@ -91,6 +107,17 @@ function statusLabel(status) {
   return "Open";
 }
 
+function incStatusChip(status) {
+  const st = status || "open";
+  const cls = st === "recommended" ? "ready" : st;
+  return `<span class="chip chip-${cls} inc-status">${escapeHtml(statusLabel(st))}</span>`;
+}
+
+function incTapeLine(runId) {
+  const copy = tapeCopy({ id: runId });
+  return `Tape · ${copy.title}`;
+}
+
 function statusRank(status) {
   if (status === "recommended") return 0;
   if (status === "filed") return 2;
@@ -144,9 +171,73 @@ function familyLine(item, all) {
 }
 
 function rowCta(item) {
+  if (DEMO_MODE) return { jump: "investigation", label: "Investigate" };
   if (item.status === "filed") return { jump: "closeout", label: "Read close-out" };
-  if (item.status === "recommended") return { jump: "walk", label: "File decision" };
-  return { jump: "walk", label: "Walk" };
+  if (item.status === "recommended") return { jump: "action", label: "File decision" };
+  return { jump: "investigation", label: "Investigate" };
+}
+
+function applyIncidentPatch(incidentId, patch) {
+  state.incidents = state.incidents.map((item) =>
+    item.id === incidentId ? { ...item, ...patch } : item
+  );
+  if (state.incidentId === incidentId && state.incident) {
+    state.incident = { ...state.incident, ...patch };
+  }
+}
+
+function rowInvestigateBtn(incidentId) {
+  const disabled = state.investigating ? " disabled" : "";
+  return `<button type="button" class="inc-investigate"${disabled} data-investigate="${escapeHtml(incidentId)}">Investigate</button>`;
+}
+
+function startInvestigationAnimation() {
+  return new Promise((resolve) => {
+    stopInvestigationAnimation();
+    investigationStepIndex = 0;
+    renderInvestigationProgress();
+    if (INVESTIGATION_STEPS.length <= 1) {
+      resolve();
+      return;
+    }
+    investigationStepTimer = window.setInterval(() => {
+      if (investigationStepIndex >= INVESTIGATION_STEPS.length - 1) {
+        stopInvestigationAnimation();
+        window.setTimeout(resolve, Math.round(INVESTIGATION_STEP_MS * 0.65));
+        return;
+      }
+      investigationStepIndex += 1;
+      renderInvestigationProgress();
+    }, INVESTIGATION_STEP_MS);
+  });
+}
+
+function stopInvestigationAnimation() {
+  if (investigationStepTimer) {
+    window.clearInterval(investigationStepTimer);
+    investigationStepTimer = null;
+  }
+}
+
+function renderInvestigationProgress() {
+  const body = $("findings-body");
+  if (!body || !state.investigating) return;
+  const step = INVESTIGATION_STEPS[investigationStepIndex];
+  const trail = INVESTIGATION_STEPS.map(
+    (label, i) =>
+      `<li class="investigation-synth-item${i === investigationStepIndex ? " is-active" : i < investigationStepIndex ? " is-done" : ""}">${escapeHtml(label)}</li>`
+  ).join("");
+  body.innerHTML = `<div class="investigation-synth" aria-live="polite" aria-busy="true">
+    <div class="investigation-synth-visual" aria-hidden="true">
+      <span class="investigation-synth-orbit"></span>
+      <span class="investigation-synth-core"></span>
+      <span class="investigation-synth-scan"></span>
+    </div>
+    <p class="investigation-synth-kicker">Synthesizing case</p>
+    <p class="investigation-synth-step">${escapeHtml(step)}…</p>
+    <ol class="investigation-synth-trail">${trail}</ol>
+  </div>`;
+  document.body.classList.add("is-investigating");
 }
 
 function workingGuess(a) {
@@ -1212,7 +1303,7 @@ function renderIncidentList(rows, all) {
   }
 
   const cols = `<div class="inc-cols" aria-hidden="true">
-    <span>Case</span><span>Signature</span><span>Next</span>
+    <span>Case</span><span>Signature</span><span>Status</span>
   </div>`;
   list.innerHTML = groupIncidentsByCategory(rows)
     .map(
@@ -1230,17 +1321,18 @@ function renderIncidentList(rows, all) {
 
 function incRow(item, all) {
   const st = item.status || "open";
-  const copy = tapeCopy({ id: item.run_id });
   const cta = rowCta(item);
   const on = state.view === "case" && item.id === state.incidentId ? "is-on" : "";
-  return `<div class="inc-row tone-${incidentTone(item)} ${on} ${st === "recommended" ? "is-ready" : ""}" data-open-case="${item.id}" data-jump="${cta.jump}" role="button" tabindex="0">
+  const ready = st === "recommended" ? "is-ready" : "";
+  const filed = st === "filed" ? "is-filed" : "";
+  return `<div class="inc-row tone-${incidentTone(item)} ${on} ${ready} ${filed}" data-open-case="${item.id}" data-jump="${cta.jump}" role="button" tabindex="0">
     <span class="id">${item.id}</span>
     <span class="inc-alarm">
       <strong>${escapeHtml(alarmTitle(item.alarm))}</strong>
       <span class="inc-fam">${escapeHtml(familyLine(item, all))}</span>
-      <span class="inc-tape">${escapeHtml(copy.kind)} · ${escapeHtml(copy.title)}</span>
+      <span class="inc-tape">${escapeHtml(incTapeLine(item.run_id))}</span>
     </span>
-    <span class="inc-cta">${escapeHtml(cta.label)}</span>
+    <span class="inc-status-col">${incStatusChip(st)}</span>
   </div>`;
 }
 
@@ -2662,19 +2754,20 @@ function syncCaseFolds() {
 function updateInvestigationChrome() {
   const hasReport = Boolean(state.report);
   const filed = state.incident?.status === "filed";
-  document.body.classList.toggle("has-investigation", hasReport);
+  document.body.classList.toggle("has-investigation", hasReport && !state.investigating);
+  document.body.classList.toggle("is-investigating", state.investigating);
   const hero = $("investigation");
-  if (hero) hero.classList.toggle("has-report", hasReport);
+  if (hero) hero.classList.toggle("has-report", hasReport && !state.investigating);
   const rerun = $("rerun-investigation");
   if (rerun) {
-    rerun.hidden = filed || !hasReport;
+    rerun.hidden = DEMO_MODE || filed || !hasReport;
     rerun.disabled = state.investigating;
   }
   const assemble = $("assemble");
   if (assemble) {
-    assemble.hidden = filed || hasReport;
+    assemble.hidden = !DEMO_MODE && (filed || hasReport);
     assemble.disabled = state.investigating || !state.incidentId;
-    assemble.textContent = state.investigating ? "Investigating…" : "Run investigation";
+    assemble.textContent = state.investigating ? "Investigating…" : hasReport ? "Re-run investigation" : "Run investigation";
   }
   const teaser = $("investigation-teaser");
   if (teaser) {
@@ -2819,14 +2912,13 @@ function renderHomeDesk() {
     ? rows
         .map((item) => {
           const cta = rowCta(item);
-          const copy = tapeCopy({ id: item.run_id });
           const ready = item.status === "recommended" ? " is-ready" : "";
-          return `<button type="button" class="home-desk-row${ready}" data-open-case="${escapeHtml(item.id)}" data-jump="${escapeHtml(cta.jump)}">
+          return `<div class="home-desk-row${ready}" role="button" tabindex="0" data-open-case="${escapeHtml(item.id)}" data-jump="${escapeHtml(cta.jump)}">
             <span class="id">${escapeHtml(item.id)}</span>
             <span class="alarm">${escapeHtml(alarmTitle(item.alarm))}</span>
-            <span class="meta">${escapeHtml(statusLabel(item.status))} · ${escapeHtml(copy.title)}</span>
-            <span class="act">${escapeHtml(cta.label)}</span>
-          </button>`;
+            <span class="meta">${escapeHtml(statusLabel(item.status))} · ${escapeHtml(incTapeLine(item.run_id))}</span>
+            <span class="act">${rowInvestigateBtn(item.id)}</span>
+          </div>`;
         })
         .join("")
     : `<p class="home-desk-empty">No cases yet. Open a case from an alarm you already have.</p>`;
@@ -3316,6 +3408,10 @@ function renderDecision(a) {
 function renderFindings() {
   const body = $("findings-body");
   updateInvestigationChrome();
+  if (state.investigating) {
+    renderInvestigationProgress();
+    return;
+  }
   if (state.report) {
     const sections = state.report.split(/\n(?=## )/);
     body.innerHTML = sections
@@ -3404,10 +3500,10 @@ async function loadIncident(incidentId) {
     state.incident = state.workspace.incident;
     state.feedback = state.incident.feedback || state.feedback;
     const inc = state.incident;
-    if (inc.status === "filed" && inc.closeout) {
-      state.report = inc.closeout;
-    } else if (inc.investigation_report) {
+    if (inc.investigation_report) {
       state.report = inc.investigation_report;
+    } else if (inc.status === "filed" && inc.closeout) {
+      state.report = inc.closeout;
     }
   }
   state.evidenceOpen = false;
@@ -3423,20 +3519,49 @@ async function loadIncident(incidentId) {
   await searchLibrary(likeThisQuery(), { grounded: true });
 }
 
+async function runInvestigation(incidentId) {
+  const id = incidentId || state.incidentId;
+  if (!id || state.investigating) return;
+  try {
+    if (state.incidentId !== id) {
+      await loadIncident(id);
+    }
+    $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    await assemble();
+  } catch (err) {
+    window.alert(`Could not open ${id}: ${err.message}`);
+  }
+}
+
 async function assemble() {
   if (!state.incidentId || state.investigating) return;
   state.investigating = true;
+  state.report = null;
   renderFindings();
-  try {
-    const res = await fetch(apiUrl(`/incidents/${encodeURIComponent(state.incidentId)}/investigate`), {
-      method: "POST",
+  let data = null;
+  let error = null;
+  const apiPromise = fetch(apiUrl(`/incidents/${encodeURIComponent(state.incidentId)}/investigate`), {
+    method: "POST",
+  })
+    .then(async (res) => {
+      if (!res.ok) throw new Error(`investigate ${res.status}`);
+      return res.json();
+    })
+    .then((payload) => {
+      data = payload;
+    })
+    .catch((err) => {
+      error = err;
     });
-    if (!res.ok) throw new Error(`investigate ${res.status}`);
-    const data = await res.json();
+  await Promise.all([apiPromise, startInvestigationAnimation()]);
+  try {
+    if (error) throw error;
     state.report = data.report;
-    if (data.status && state.incident) state.incident.status = data.status;
-    const listed = state.incidents.find((item) => item.id === state.incidentId);
-    if (listed && data.status) listed.status = data.status;
+    applyIncidentPatch(state.incidentId, {
+      status: data.status || "recommended",
+      investigation_report: data.report,
+      investigated_at: data.investigated_at || null,
+    });
     state.evidenceOpen = false;
     state.procedureOpen = false;
     state.knowledgeOpen = false;
@@ -3446,6 +3571,7 @@ async function assemble() {
   } catch (err) {
     state.report = `# Could not investigate\n\n${err.message}`;
   } finally {
+    stopInvestigationAnimation();
     state.investigating = false;
     renderFindings();
     syncCaseFolds();
@@ -3508,8 +3634,7 @@ async function fileIncident(ev) {
     }
     const data = await res.json();
     const filed = data.incident;
-    state.incident = filed;
-    state.incidents = state.incidents.map((item) => (item.id === filed.id ? { ...item, ...filed } : item));
+    applyIncidentPatch(filed.id, filed);
     closeFileSlip();
     renderIncidents();
     renderAlarm(analysis());
@@ -3950,12 +4075,26 @@ function bind() {
       openSlip();
       return;
     }
+    const inv = ev.target.closest("[data-investigate]");
+    if (inv) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      runInvestigation(inv.dataset.investigate);
+      return;
+    }
     const btn = ev.target.closest("[data-open-case]");
     if (btn) openIncident(btn.dataset.openCase, btn.dataset.jump);
   });
   $("incidents-desk").addEventListener("click", (ev) => {
     if (ev.target.closest("[data-open-slip]")) {
       openSlip();
+      return;
+    }
+    const inv = ev.target.closest("[data-investigate]");
+    if (inv) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      runInvestigation(inv.dataset.investigate);
       return;
     }
     const btn = ev.target.closest("[data-open-case]");
@@ -4301,10 +4440,11 @@ function initTheme() {
 
 async function boot() {
   initTheme();
+  if (DEMO_MODE) document.body.classList.add("demo-mode");
   bind();
   const [runsRes, incidentRes, alarmRes, docsRes] = await Promise.all([
     fetch(apiUrl("/runs")),
-    fetch(apiUrl("/incidents")),
+    fetch(apiUrl(DEMO_MODE ? "/incidents?fresh=1" : "/incidents")),
     fetch(apiUrl("/entry-alarms")),
     fetch(apiUrl("/documents")),
   ]);
