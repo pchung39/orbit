@@ -113,10 +113,60 @@ function incStatusChip(status) {
   return `<span class="chip chip-${cls} inc-status">${escapeHtml(statusLabel(st))}</span>`;
 }
 
-function incTapeLine(runId) {
-  const copy = tapeCopy({ id: runId });
+function sourceRunId(runId, notes) {
+  const id = String(runId || "");
+  if (!id.startsWith("sealed_")) return id || "other";
+  const rest = id.slice("sealed_".length);
+  const known = Object.keys(RUN_COPY).sort((a, b) => b.length - a.length);
+  for (const key of known) {
+    if (rest.startsWith(`${key}_`)) return key;
+  }
+  const fromNotes = String(notes || "").match(/sealed from ([^\s·]+)/);
+  if (fromNotes) return fromNotes[1];
+  const parts = rest.split("_");
+  if (parts.length >= 3) return parts.slice(0, -2).join("_") || "other";
+  return parts[0] || "other";
+}
+
+function incTapeLine(runId, notes) {
+  const copy = tapeCopy({ id: runId, notes });
   return `Tape · ${copy.title}`;
 }
+
+function isGenericCaseTitle(item) {
+  const title = (item.title || "").trim();
+  if (!title) return true;
+  if (title === `${item.alarm} · ${item.run_id}`) return true;
+  if (item.alarm && title.startsWith(`${item.alarm} · sealed_`)) return true;
+  return false;
+}
+
+function suggestCaseTitle(alarm, runId, alarmTime, notes) {
+  const alarmLabel = alarmTitle(alarm);
+  const resolved = sourceRunId(runId, notes);
+  const clock = (alarmTime || "").trim();
+  const copy = tapeCopy({ id: resolved });
+  const base = copy.title && copy.title !== resolved ? `${copy.title} · ${alarmLabel}` : alarmLabel;
+  return clock ? `${base} · ${clock}` : base;
+}
+
+function caseHeadline(item) {
+  if (!isGenericCaseTitle(item)) return (item.title || "").trim();
+  const notesClock = String(item.notes || "").match(/@\s*(\d{2}:\d{2}:\d{2})/);
+  return suggestCaseTitle(item.alarm, item.run_id, notesClock?.[1] || openedClock(item.opened_at), item.notes);
+}
+
+function tapeGroupKey(item) {
+  return sourceRunId(item.run_id, item.notes) || "other";
+}
+
+function tapeGroupLabel(key) {
+  if (key === "other") return "Other tapes";
+  const copy = tapeCopy({ id: key });
+  return `${copy.kind} · ${copy.title}`;
+}
+
+const TAPE_GROUP_ORDER = ["fault1", "eps204", "marg001", "pay002", "batt003", "nominal", "other"];
 
 function statusRank(status) {
   if (status === "recommended") return 0;
@@ -130,7 +180,8 @@ function openedClock(iso) {
 }
 
 function caseAction(item) {
-  if (item.run_id === "marg001") return "Hold · do not command";
+  const runId = sourceRunId(item.run_id, item.notes);
+  if (runId === "marg001") return "Hold · do not command";
   if (item.alarm === "PAY.payload_current") return "Safe payload to STANDBY";
   if (item.alarm === "EPS.battery_voltage") return "No inhibit";
   if (item.alarm === "EPS.bus_voltage") return "Inhibit Heater B";
@@ -335,7 +386,9 @@ function feedbackFormHtml({ editable, compact, noteId = "feedback-note", mode = 
       <textarea class="feedback-note" id="${noteId}" rows="2" placeholder="${isHold ? "Why hold was or was not the right call…" : "Why you agree or disagree…"}">${escapeHtml(note)}</textarea>
     </label>
     ${compact ? "" : `<p class="hint fb-hint">${escapeHtml(hint)}</p>`}
-    <button type="button" class="btn btn-ghost btn-sm" data-save-feedback ${state.feedbackSaving ? "disabled" : ""}>${state.feedbackSaving ? "Saving…" : fb ? "Update feedback" : "Save feedback"}</button>
+    <div class="guess-feedback-actions">
+      <button type="button" class="btn btn-ghost btn-sm fb-save" data-save-feedback ${state.feedbackSaving ? "disabled" : ""}>${state.feedbackSaving ? "Saving…" : fb ? "Update feedback" : "Save feedback"}</button>
+    </div>
   </div>`;
 }
 
@@ -461,14 +514,9 @@ function caseFactHtml(k, v, tone, sub) {
 }
 
 function tapeCopy(run) {
-  if (run?.id && String(run.id).startsWith("sealed_")) {
-    return {
-      kind: "Sealed",
-      title: "Sealed evidence",
-      note: run.notes || "Case evidence package",
-    };
-  }
-  return RUN_COPY[run.id] || { kind: "Tape", title: run.id, note: run.notes || "Telemetry tape" };
+  const id = run?.id ? String(run.id) : "";
+  const resolved = id.startsWith("sealed_") ? sourceRunId(id, run.notes) : id;
+  return RUN_COPY[resolved] || { kind: "Tape", title: resolved || id, note: run?.notes || "Telemetry tape" };
 }
 
 const PROC_BOOK = {
@@ -560,6 +608,8 @@ const state = {
   deskRunId: "fault1",
   incidentFilter: "all",
   incidentFamily: "all",
+  incidentTape: "all",
+  incidentSort: "opened_desc",
   incidentQuery: "",
   pathExpanded: false,
   window: "focus",
@@ -1162,21 +1212,26 @@ function incidentCategoryOf(item) {
 }
 
 function incidentSearchText(item, all) {
-  const copy = tapeCopy({ id: item.run_id });
+  const copy = tapeCopy({ id: item.run_id, notes: item.notes });
   const cta = rowCta(item);
+  const headline = caseHeadline(item);
   return [
     item.id,
     item.title,
+    headline,
     item.alarm,
     alarmTitle(item.alarm),
     alarmShort(item.alarm),
     copy.title,
     copy.kind,
+    copy.note,
+    incTapeLine(item.run_id, item.notes),
     familyLine(item, all),
     statusLabel(item.status),
     caseAction(item),
     cta.label,
     item.notes,
+    openedClock(item.opened_at),
   ]
     .filter(Boolean)
     .join(" ")
@@ -1215,14 +1270,55 @@ function renderIncFilters(all, counts) {
     })
     .join("");
 
+  const tapeKeys = new Set(all.map(tapeGroupKey));
+  const tapeOpts = [
+    { id: "all", label: "All tapes" },
+    ...TAPE_GROUP_ORDER.filter((key) => tapeKeys.has(key)).map((key) => ({
+      id: key,
+      label: tapeGroupLabel(key),
+    })),
+    ...[...tapeKeys]
+      .filter((key) => !TAPE_GROUP_ORDER.includes(key))
+      .sort()
+      .map((key) => ({ id: key, label: tapeGroupLabel(key) })),
+  ];
+  const tape = state.incidentTape || "all";
+  const tapeHtml = tapeOpts
+    .map((f) => {
+      const selected = tape === f.id ? " selected" : "";
+      return `<option value="${escapeHtml(f.id)}"${selected}>${escapeHtml(f.label)}</option>`;
+    })
+    .join("");
+
+  const sort = state.incidentSort || "opened_desc";
+  const sortHtml = [
+    { id: "opened_desc", label: "Newest first" },
+    { id: "opened_asc", label: "Oldest first" },
+    { id: "status", label: "Status" },
+    { id: "title", label: "Headline" },
+  ]
+    .map((f) => {
+      const selected = sort === f.id ? " selected" : "";
+      return `<option value="${escapeHtml(f.id)}"${selected}>${escapeHtml(f.label)}</option>`;
+    })
+    .join("");
+
   root.innerHTML = `
     <label class="inc-select">
       <span class="inc-select-label">Status</span>
       <select id="inc-status" data-inc-status>${statusOpts}</select>
     </label>
     <label class="inc-select">
-      <span class="inc-select-label">Signature</span>
+      <span class="inc-select-label">Alarm</span>
       <select id="inc-family" data-inc-family>${familyHtml}</select>
+    </label>
+    <label class="inc-select">
+      <span class="inc-select-label">Tape</span>
+      <select id="inc-tape" data-inc-tape>${tapeHtml}</select>
+    </label>
+    <label class="inc-select">
+      <span class="inc-select-label">Sort</span>
+      <select id="inc-sort" data-inc-sort>${sortHtml}</select>
     </label>`;
 }
 
@@ -1230,37 +1326,64 @@ function filterIncidents(all) {
   const status = INC_FILTERS.find((f) => f.id === state.incidentFilter) || INC_FILTERS[0];
   const q = (state.incidentQuery || "").trim().toLowerCase();
   const family = state.incidentFamily || "all";
+  const tape = state.incidentTape || "all";
   return all.filter((item) => {
     if (!status.match(item)) return false;
     if (family !== "all" && incidentCategoryOf(item) !== family) return false;
+    if (tape !== "all" && tapeGroupKey(item) !== tape) return false;
     if (q && !incidentSearchText(item, all).includes(q)) return false;
     return true;
   });
 }
 
-function groupIncidentsByCategory(rows) {
+function sortIncidents(rows) {
+  const sort = state.incidentSort || "opened_desc";
+  const copy = [...rows];
+  if (sort === "title") {
+    copy.sort((a, b) => caseHeadline(a).localeCompare(caseHeadline(b)) || String(a.id).localeCompare(String(b.id)));
+    return copy;
+  }
+  if (sort === "status") {
+    copy.sort(
+      (a, b) =>
+        statusRank(a.status) - statusRank(b.status) ||
+        String(b.opened_at || "").localeCompare(String(a.opened_at || "")) ||
+        String(a.id).localeCompare(String(b.id))
+    );
+    return copy;
+  }
+  copy.sort((a, b) => {
+    const cmp = String(b.opened_at || "").localeCompare(String(a.opened_at || "")) || String(a.id).localeCompare(String(b.id));
+    return sort === "opened_asc" ? -cmp : cmp;
+  });
+  return copy;
+}
+
+function groupIncidentsByTape(rows) {
   const groups = new Map();
   for (const item of rows) {
-    const key = incidentCategoryOf(item);
+    const key = tapeGroupKey(item);
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(item);
   }
-  return INC_CATEGORY_ORDER.filter((key) => groups.has(key)).map((key) => ({
+  const ordered = [
+    ...TAPE_GROUP_ORDER.filter((key) => groups.has(key)),
+    ...[...groups.keys()].filter((key) => !TAPE_GROUP_ORDER.includes(key)).sort(),
+  ];
+  return ordered.map((key) => ({
     key,
-    label: INC_CATEGORY_LABELS[key],
+    label: tapeGroupLabel(key),
     items: groups.get(key),
   }));
 }
 
 function renderIncidents() {
-  const byTime = (a, b) =>
-    statusRank(a.status) - statusRank(b.status) || String(b.opened_at || "").localeCompare(String(a.opened_at || ""));
-  const all = [...state.incidents].sort(byTime);
+  const all = [...state.incidents];
   const count = (id) => all.filter(INC_FILTERS.find((f) => f.id === id).match).length;
   const nOpen = count("open");
   const nReady = count("ready");
   const nFiled = count("filed");
-  const rows = filterIncidents(all);
+  const rows = sortIncidents(filterIncidents(all));
 
   const tabN = $("tab-incidents-n");
   if (tabN) tabN.textContent = nOpen + nReady ? String(nOpen + nReady) : "";
@@ -1287,6 +1410,9 @@ function renderIncidents() {
     if (state.incidentFamily && state.incidentFamily !== "all") {
       notes.push(INC_CATEGORY_LABELS[state.incidentFamily] || state.incidentFamily);
     }
+    if (state.incidentTape && state.incidentTape !== "all") {
+      notes.push(tapeGroupLabel(state.incidentTape));
+    }
     const note = notes.filter(Boolean).join(" · ");
     meta.textContent = `${rows.length} case${rows.length === 1 ? "" : "s"}${q ? ` matching “${q}”` : ""}${note ? ` · ${note}` : ""}`;
   }
@@ -1303,20 +1429,41 @@ function renderIncidentList(rows, all) {
   }
 
   const cols = `<div class="inc-cols" aria-hidden="true">
-    <span>Case</span><span>Signature</span><span>Status</span>
+    <span>Case</span><span>Details</span><span>Status</span>
   </div>`;
-  list.innerHTML = groupIncidentsByCategory(rows)
-    .map(
-      (group) => `<section class="inc-group tone-${group.key}">
+  const grouped = groupIncidentsByTape(rows);
+  const useFlat = grouped.length === 1;
+  list.innerHTML = useFlat
+    ? `${cols}${rows.map((item) => incRow(item, all)).join("")}`
+    : grouped
+        .map(
+          (group) => `<section class="inc-group tone-${incidentTone(group.items[0] || {})}">
         <header class="inc-group-head">
           <h2 class="inc-group-title">${escapeHtml(group.label)}</h2>
           <span class="inc-group-n">${group.items.length} case${group.items.length === 1 ? "" : "s"}</span>
         </header>
         <div class="inc-group-body">${cols}${group.items.map((item) => incRow(item, all)).join("")}</div>
       </section>`
-    )
-    .join("");
+        )
+        .join("");
   if (state.view === "home") renderHomeDesk();
+}
+
+function incRowMeta(item) {
+  const when = openedClock(item.opened_at);
+  const copy = tapeCopy({ id: item.run_id, notes: item.notes });
+  const bits = [
+    `<span class="chip chip-xs inc-alarm-chip">${escapeHtml(alarmShort(item.alarm))}</span>`,
+    `<span class="inc-tape-kind">${escapeHtml(copy.kind)}</span>`,
+  ];
+  if (when) bits.push(`<span class="inc-opened">${when} UTC</span>`);
+  return bits.join("");
+}
+
+function incRowFamilyLine(item, all) {
+  const fam = familyOf(item, all || state.incidents);
+  if (fam.n <= 1) return "";
+  return `<span class="inc-fam">${escapeHtml(familyLine(item, all))}</span>`;
 }
 
 function incRow(item, all) {
@@ -1325,12 +1472,13 @@ function incRow(item, all) {
   const on = state.view === "case" && item.id === state.incidentId ? "is-on" : "";
   const ready = st === "recommended" ? "is-ready" : "";
   const filed = st === "filed" ? "is-filed" : "";
+  const headline = caseHeadline(item);
   return `<div class="inc-row tone-${incidentTone(item)} ${on} ${ready} ${filed}" data-open-case="${item.id}" data-jump="${cta.jump}" role="button" tabindex="0">
     <span class="id">${item.id}</span>
-    <span class="inc-alarm">
-      <strong>${escapeHtml(alarmTitle(item.alarm))}</strong>
-      <span class="inc-fam">${escapeHtml(familyLine(item, all))}</span>
-      <span class="inc-tape">${escapeHtml(incTapeLine(item.run_id))}</span>
+    <span class="inc-detail">
+      <strong class="inc-headline">${escapeHtml(headline)}</strong>
+      <span class="inc-meta-line">${incRowMeta(item)}</span>
+      ${incRowFamilyLine(item, all)}
     </span>
     <span class="inc-status-col">${incStatusChip(st)}</span>
   </div>`;
@@ -1390,23 +1538,39 @@ function suggestTapeForAlarm(alarm) {
   if (runId) setPick("run", runId);
 }
 
+function syncSuggestedTitle() {
+  const input = $("new-incident")?.querySelector('[name="title"]');
+  if (!input || input.dataset.userEdited === "true") return;
+  const alarm = $("incident-alarm-value")?.value;
+  const runId = $("incident-run-value")?.value;
+  const clock = ($("incident-alarm-time")?.value || "").trim();
+  input.value = alarm && runId ? suggestCaseTitle(alarm, runId, clock) : "";
+}
+
 function updateBindPreview() {
   const el = $("incident-bind-preview");
   if (!el) return;
   const alarm = $("incident-alarm-value")?.value;
   const runId = $("incident-run-value")?.value;
+  const clock = ($("incident-alarm-time")?.value || "").trim();
   const ch = state.alarms.find((item) => item.id === alarm);
   const suggested = ch?.bind?.run_id;
+  syncSuggestedTitle();
   if (!alarm) {
     el.textContent = "Pick an alarm, then an upstream archive tape. ORBIT will fetch and seal a time window.";
     return;
   }
+  const headline = runId ? suggestCaseTitle(alarm, runId, clock) : "";
   if (runId && suggested && runId === suggested) {
-    el.textContent = `Will fetch+seal a window from archive ${runId}${ch?.bind?.label ? ` · ${ch.bind.label}` : ""}. Not a live downlink.`;
+    el.textContent = headline
+      ? `Headline: ${headline}. Will fetch+seal from archive ${runId}${ch?.bind?.label ? ` · ${ch.bind.label}` : ""}.`
+      : `Will fetch+seal a window from archive ${runId}${ch?.bind?.label ? ` · ${ch.bind.label}` : ""}. Not a live downlink.`;
     return;
   }
   if (runId) {
-    el.textContent = `Will fetch+seal a window from archive ${runId}. Suggested archive for this alarm was ${suggested || "any available"}.`;
+    el.textContent = headline
+      ? `Headline: ${headline}. Will fetch+seal from archive ${runId}.`
+      : `Will fetch+seal a window from archive ${runId}. Suggested archive for this alarm was ${suggested || "any available"}.`;
     return;
   }
   el.textContent = "Select an upstream archive tape to fetch+seal from.";
@@ -1471,11 +1635,14 @@ function fillCreateForm() {
   if (state.alarms.some((ch) => ch.id === alarm)) setPick("alarm", alarm);
   else if (state.alarms[0]) setPick("alarm", state.alarms[0].id);
   else updateBindPreview();
+  syncSuggestedTitle();
 }
 
 function openSlip() {
   const timeInput = $("incident-alarm-time");
   if (timeInput) timeInput.value = defaultAlarmTime();
+  const titleInput = $("new-incident")?.querySelector('[name="title"]');
+  if (titleInput) delete titleInput.dataset.userEdited;
   fillCreateForm();
   $("slip").hidden = false;
 }
@@ -2915,8 +3082,8 @@ function renderHomeDesk() {
           const ready = item.status === "recommended" ? " is-ready" : "";
           return `<div class="home-desk-row${ready}" role="button" tabindex="0" data-open-case="${escapeHtml(item.id)}" data-jump="${escapeHtml(cta.jump)}">
             <span class="id">${escapeHtml(item.id)}</span>
-            <span class="alarm">${escapeHtml(alarmTitle(item.alarm))}</span>
-            <span class="meta">${escapeHtml(statusLabel(item.status))} · ${escapeHtml(incTapeLine(item.run_id))}</span>
+            <span class="alarm">${escapeHtml(caseHeadline(item))}</span>
+            <span class="meta">${incStatusChip(item.status)} · ${escapeHtml(alarmShort(item.alarm))} · ${escapeHtml(openedClock(item.opened_at) || "—")}</span>
             <span class="act">${rowInvestigateBtn(item.id)}</span>
           </div>`;
         })
@@ -3036,7 +3203,7 @@ function renderAlarm(a) {
   document.body.classList.toggle("is-filed", st === "filed");
   const filedLine = $("case-filed");
   if (filedLine) filedLine.hidden = st !== "filed";
-  $("alarm-title").textContent = inc ? alarmTitle(inc.alarm) : "Select a case";
+  $("alarm-title").textContent = inc ? caseHeadline(inc) : "Select a case";
   const when = a?.warn ? clock(a.warn.time_s) : openedClock(inc?.opened_at);
   const parts = [];
   if (!a) {
@@ -3582,11 +3749,15 @@ async function assemble() {
 async function createIncident(ev) {
   ev.preventDefault();
   const form = $("new-incident");
+  const alarm = form.alarm.value;
+  const runId = form.run_id?.value || $("incident-run-value")?.value || null;
+  const alarmTime = ($("incident-alarm-time")?.value || "").trim() || null;
+  const titleInput = form.title.value.trim();
   const body = {
-    alarm: form.alarm.value,
-    run_id: form.run_id?.value || $("incident-run-value")?.value || null,
-    alarm_time: ($("incident-alarm-time")?.value || "").trim() || null,
-    title: form.title.value.trim() || null,
+    alarm,
+    run_id: runId,
+    alarm_time: alarmTime,
+    title: titleInput || suggestCaseTitle(alarm, runId, alarmTime) || null,
   };
   if (!body.alarm) {
     window.alert("Pick an alarm first.");
@@ -4111,6 +4282,18 @@ function bind() {
     if (family) {
       state.incidentFamily = family.value;
       renderIncidents();
+      return;
+    }
+    const tape = ev.target.closest("[data-inc-tape]");
+    if (tape) {
+      state.incidentTape = tape.value;
+      renderIncidents();
+      return;
+    }
+    const sort = ev.target.closest("[data-inc-sort]");
+    if (sort) {
+      state.incidentSort = sort.value;
+      renderIncidents();
     }
   });
   $("incidents-desk").addEventListener("keydown", (ev) => {
@@ -4271,6 +4454,12 @@ function bind() {
     if (btn) setPick("run", btn.dataset.value);
   });
   $("new-incident").addEventListener("submit", createIncident);
+  $("incident-alarm-time")?.addEventListener("input", updateBindPreview);
+  $("new-incident")?.querySelector('[name="title"]')?.addEventListener("input", (ev) => {
+    const input = ev.target;
+    if ((input.value || "").trim()) input.dataset.userEdited = "true";
+    else delete input.dataset.userEdited;
+  });
   $("timeline").addEventListener("click", (ev) => {
     const node = ev.target.closest("[data-t]");
     if (!node) return;

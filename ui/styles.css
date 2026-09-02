@@ -442,6 +442,11 @@ body.view-trust #case-desk { display: none; }
 .chip-ready,
 .chip-recommended { color: var(--info); background: var(--info-soft); border-color: rgba(95, 157, 255, 0.3); }
 .chip-filed { color: var(--signal); background: var(--signal-soft); border-color: rgba(42, 211, 168, 0.3); }
+.chip-xs {
+  font-size: 9px;
+  padding: 1px 6px;
+  letter-spacing: 0.08em;
+}
 .chip-crit { color: var(--crit); background: var(--crit-soft); border-color: rgba(255, 98, 87, 0.3); }
 
 .tag {
@@ -2539,21 +2544,40 @@ section { margin-top: 0; padding-top: 0; border-top: 0; }
   letter-spacing: 0.02em;
   color: var(--text);
 }
-.inc-alarm strong { display: block; font-weight: 500; font-size: 14px; }
+.inc-detail { min-width: 0; }
+.inc-headline {
+  display: block;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--text);
+}
+.inc-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  margin-top: 5px;
+}
+.inc-alarm-chip {
+  font-family: var(--mono);
+  text-transform: uppercase;
+}
+.inc-tape-kind,
+.inc-opened {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
 .inc-fam {
   display: block;
-  margin-top: 3px;
-  font-size: 13px;
-  color: var(--text-2);
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-3);
   font-weight: 400;
   line-height: 1.35;
-}
-.inc-tape {
-  display: block;
-  margin-top: 3px;
-  font-size: 11.5px;
-  color: var(--text-3);
-  font-family: var(--mono);
 }
 .inc-cta {
   justify-self: start;
@@ -2889,7 +2913,27 @@ section { margin-top: 0; padding-top: 0; border-top: 0; }
   resize: vertical;
 }
 .fb-note-label textarea:focus { outline: 0; border-color: var(--signal); }
-.fb-hint { margin: 0; font-size: 11.5px; line-height: 1.45; }
+.fb-hint { margin: 0; font-size: 11.5px; line-height: 1.45; max-width: 52ch; }
+.guess-feedback-actions {
+  display: flex;
+  justify-content: flex-start;
+  margin-top: 2px;
+}
+.guess-feedback-actions .fb-save {
+  width: auto;
+  min-width: 0;
+  padding: 7px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  border-color: var(--line-2);
+  color: var(--text-2);
+}
+.guess-feedback-actions .fb-save:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--signal);
+  background: var(--signal-soft);
+}
 .btn-sm { font-size: 12px; padding: 6px 12px; }
 .fb-badge {
   margin: 10px 0 0;
@@ -4341,7 +4385,7 @@ body.is-filed .panel-decide .panel-kicker { color: var(--signal); }
   .inc-meta { margin-left: 0; }
   .inc-cols { display: none; }
   .inc-row { display: block; padding: 14px 16px; }
-  .inc-row .id, .inc-alarm, .inc-cta { display: block; margin-top: 4px; }
+  .inc-row .id, .inc-detail, .inc-cta { display: block; margin-top: 4px; }
   .case-head-title-row { display: block; }
   .case-facts { gap: 12px 20px; }
   .case-facts .fact-readout { max-width: none; flex-basis: 100%; }

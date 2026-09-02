@@ -120,6 +120,48 @@ def _entry_alarms(spec: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
+TAPE_TITLES = {
+    "eps204": "Heater + confounder",
+    "marg001": "Marginal loads",
+    "fault1": "Heater only",
+    "pay002": "Payload spike",
+    "batt003": "Pack IR sag",
+    "nominal": "Science pass",
+}
+
+ALARM_TITLES = {
+    "EPS.bus_voltage": "Bus voltage",
+    "PAY.payload_current": "Payload current",
+    "EPS.battery_voltage": "Battery voltage",
+}
+
+
+def _source_run_id(run_id: str) -> str:
+    if not run_id.startswith("sealed_"):
+        return run_id
+    rest = run_id[len("sealed_") :]
+    for key in sorted(TAPE_TITLES, key=len, reverse=True):
+        if rest.startswith(f"{key}_"):
+            return key
+    parts = rest.split("_")
+    if len(parts) >= 3:
+        return "_".join(parts[:-2]) or run_id
+    return parts[0] if parts else run_id
+
+
+def default_incident_title(alarm: str, run_id: str, alarm_time: str | None = None) -> str:
+    alarm_label = ALARM_TITLES.get(alarm, alarm.split(".")[-1] if alarm else "Case")
+    source = _source_run_id(run_id)
+    tape = TAPE_TITLES.get(source)
+    base = f"{tape} · {alarm_label}" if tape else alarm_label
+    clock = (alarm_time or "").strip()
+    if clock:
+        return f"{base} · {clock}"
+    if tape:
+        return base
+    return f"{alarm_label} · {run_id}"
+
+
 app = FastAPI(
     title="ORBIT",
     description="Assemble telemetry, commands, procedures, and incidents. Does not command the spacecraft.",
@@ -446,7 +488,8 @@ def open_incident(body: IncidentIn) -> dict[str, Any]:
         with _conn() as conn:
             source_run_id, _label = resolve_archive_run(conn, body.alarm, body.run_id)
             sealed_run_id, notes = seal_run_window(conn, source_run_id, body.alarm, clock)
-            return create_incident(conn, sealed_run_id, body.alarm, body.title, notes=notes)
+            title = (body.title or "").strip() or default_incident_title(body.alarm, sealed_run_id, clock)
+            return create_incident(conn, sealed_run_id, body.alarm, title, notes=notes)
     except ValueError as exc:
         raise HTTPException(400, str(exc)) from exc
 

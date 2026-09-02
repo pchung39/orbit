@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=demoinv5" />
+    <link rel="stylesheet" href="/static/styles.css?v=caseid3" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -98,7 +98,7 @@
                   <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.5" />
                   <path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
                 </svg>
-                <input id="inc-q" name="q" type="search" placeholder="Search by case ID, signature, tape…" autocomplete="off" />
+                <input id="inc-q" name="q" type="search" placeholder="Search by ID, headline, tape, alarm…" autocomplete="off" />
                 <button type="button" class="inc-clear" id="inc-clear" aria-label="Clear search" hidden>×</button>
               </form>
               <div class="inc-filters" id="inc-filters" aria-label="Case filters"></div>
@@ -397,8 +397,8 @@
           <p class="pick-hint" id="incident-bind-preview" aria-live="polite"></p>
           <div class="picks picks-tapes" id="incident-run"></div>
           <div class="slip-foot">
-            <label class="slip-title-field">Headline <span class="opt">optional</span>
-              <input name="title" placeholder="Leave blank to use the alarm" autocomplete="off" />
+            <label class="slip-title-field">Headline <span class="opt">auto-filled — edit to override</span>
+              <input name="title" placeholder="Heater only · Bus voltage" autocomplete="off" />
             </label>
             <div class="form-actions">
               <button type="button" class="text-btn" id="cancel-incident">Cancel</button>
@@ -459,7 +459,7 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=demoinv5" type="module"></script>
+    <script src="/static/app.js?v=caseid3" type="module"></script>
 
     <div class="slip-wrap" id="doc-slip" hidden>
       <div class="slip doc-slip" role="dialog" aria-modal="true" aria-labelledby="doc-slip-title">
