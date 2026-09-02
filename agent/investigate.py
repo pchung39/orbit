@@ -150,10 +150,6 @@ def _investigate_rules_body(run_id: str, alarm_channel: str = "EPS.bus_voltage")
     lines = [
         f"# Investigation {run_id}",
         "",
-        f"- **Entry:** `{alarm_channel}` warn (limit {warn_limit} {warn_meta['unit']})",
-        f"- **Procedure:** {procedure_id}",
-        "- **Scope:** assemble evidence and recommend a human decision. Does not command the spacecraft.",
-        "",
         "## Timeline",
         "",
         f"1. `{alarm_channel}` first crossed warn at **{format_clock(t_warn)}** "

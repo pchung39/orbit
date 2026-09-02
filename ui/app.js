@@ -614,6 +614,7 @@ const state = {
   pathExpanded: false,
   window: "focus",
   pinT: null,
+  pinSource: null,
   hoverT: null,
   report: null,
   investigating: false,
@@ -779,10 +780,17 @@ function domain() {
   const a = analysis();
   const rows = series(alarmChannel());
   if (!rows.length) return [0, 1];
-  const t0 = rows[0].time_s;
-  const t1 = rows.at(-1).time_s;
-  if (state.window === "full" || !a?.t) return [t0, t1];
-  return [Math.max(t0, a.t - 8 * 60), Math.min(t1, a.t + 8 * 60)];
+  const t0full = rows[0].time_s;
+  const t1full = rows.at(-1).time_s;
+  if (state.window === "full" || !a?.t) return [t0full, t1full];
+  let t0 = Math.max(t0full, a.t - 8 * 60);
+  let t1 = Math.min(t1full, a.t + 8 * 60);
+  const pin = state.pinT;
+  if (pin != null) {
+    if (pin < t0) t0 = Math.max(t0full, pin - 45);
+    if (pin > t1) t1 = Math.min(t1full, pin + 45);
+  }
+  return [t0, t1];
 }
 
 function inDomain(rows, [t0, t1]) {
@@ -934,6 +942,64 @@ function clockToS(hhmmss) {
   return parts[0] * 3600 + parts[1] * 60 + parts[2];
 }
 
+function pinTimePool() {
+  const pool = [];
+  for (const e of state.workspace?.events || []) {
+    if (e.time_s != null) pool.push(Number(e.time_s));
+  }
+  const a = analysis();
+  if (a?.warn?.time_s != null) pool.push(Number(a.warn.time_s));
+  if (a?.t != null) pool.push(Number(a.t));
+  for (const spec of tracesToDraw()) {
+    for (const row of series(spec.id)) {
+      if (row.time_s != null) pool.push(Number(row.time_s));
+    }
+  }
+  return pool;
+}
+
+function nearestPinTime(target, pool) {
+  if (!pool.length) return target;
+  const want = clock(target);
+  const sameClock = pool.filter((t) => clock(t) === want);
+  const list = sameClock.length ? sameClock : pool;
+  return list.reduce((best, t) => (Math.abs(t - target) < Math.abs(best - target) ? t : best), list[0]);
+}
+
+/** Map a clock string or approximate time_s to the nearest sample/event in this workspace. */
+function resolvePinTime(raw) {
+  if (raw == null || raw === "") return null;
+  const text = String(raw).trim();
+  let target = text.includes(":") ? clockToS(text) : Number(text);
+  if (Number.isNaN(target)) return null;
+  return nearestPinTime(target, pinTimePool());
+}
+
+function isPinnedAt(t) {
+  const pin = state.pinT;
+  return pin != null && t != null && Math.abs(Number(pin) - Number(t)) < 2.6;
+}
+
+function timelinePinTime(text, kids = []) {
+  const clockTime = firstClock(text) || firstClock(kids[0] || "");
+  if (clockTime) return resolvePinTime(clockTime);
+  if (/\bat the warn\b/i.test(text)) {
+    const a = analysis();
+    return a?.t != null ? resolvePinTime(a.t) : null;
+  }
+  return null;
+}
+
+function isLeadUpPinned(t) {
+  const id = `tl:${t}`;
+  if (state.pinSource) return state.pinSource === id;
+  return isPinnedAt(t);
+}
+
+function isEvPinned(id) {
+  return state.pinSource === id;
+}
+
 function tagClass(tag) {
   const key = tag.toLowerCase();
   if (key.includes("hypothesis")) return "hypothesis";
@@ -998,23 +1064,29 @@ function renderTimelineFinding(block) {
   const rows = items
     .map((item) => {
       const { text, tags } = pullTags(item.raw);
-      const clock = firstClock(text) || firstClock(item.kids[0] || "");
       const kind = itemKind(text, tags);
-      const pin = clock ? ` data-t="${clockToS(clock)}"` : "";
+      const rowId = `ev:${item.n}`;
+      const pinTs = timelinePinTime(text, item.kids);
+      const pin = pinTs != null ? ` data-t="${pinTs}" data-pin-id="${rowId}"` : "";
+      const on = isEvPinned(rowId) ? " is-on" : "";
       const kids = item.kids
-        .map((kid) => {
+        .map((kid, kidIdx) => {
           const parsed = parseKid(kid);
-          const kidPin = parsed.clock ? ` data-t="${clockToS(parsed.clock)}"` : "";
-          return `<button type="button" class="ev-kid"${kidPin}>
+          const kidId = `${rowId}:kid:${kidIdx}`;
+          const kidTs = parsed.clock ? resolvePinTime(parsed.clock) : null;
+          const kidPin = kidTs != null ? ` data-t="${kidTs}" data-pin-id="${kidId}"` : "";
+          const kidOn = isEvPinned(kidId) ? " is-on" : "";
+          return `<button type="button" class="ev-kid${kidOn}"${kidPin}>
             <span class="ev-clock">${parsed.clock || ""}</span>
             <span>${parsed.html}</span>
           </button>`;
         })
         .join("");
-      return `<li class="ev-item ev-${kind}">
-        <button type="button" class="ev-main"${pin}>
+      const clockTime = firstClock(text) || firstClock(item.kids[0] || "") || (pinTs != null ? clock(pinTs) : "");
+      return `<li class="ev-item ev-${kind}${on}">
+        <button type="button" class="ev-main${on}"${pin}>
           <span class="ev-n">${String(item.n).padStart(2, "0")}</span>
-          <span class="ev-clock">${clock || "—"}</span>
+          <span class="ev-clock">${clockTime || "—"}</span>
           <span class="ev-copy">${inlineMd(text)}</span>
           <span class="ev-tags">${tagsHtml(tags)}</span>
         </button>
@@ -1024,7 +1096,7 @@ function renderTimelineFinding(block) {
     .join("");
   return `<article class="finding evidence">
     <h3>Timeline</h3>
-    <p class="hint">Same claims as the report. Click a row to pin that time on the traces.</p>
+    <p class="hint">Click a row to pin that time on the traces.</p>
     <ol class="ev">${rows}</ol>
   </article>`;
 }
@@ -1137,13 +1209,21 @@ function traceCard(id) {
   return $("trace-stack")?.querySelector(`[data-ch="${id}"]`);
 }
 
-function pinTape(t, { scroll = false } = {}) {
-  const n = Number(t);
-  if (t == null || Number.isNaN(n)) return;
+function pinTape(t, { scroll = false, source = null } = {}) {
+  const n = resolvePinTime(t);
+  if (n == null || Number.isNaN(n)) return;
   state.pinT = n;
+  state.pinSource = source;
   state.hoverT = null;
+  renderMode(analysis());
+  renderTraces();
   renderTimeline(analysis());
   updateReadouts();
+  if (state.view === "case") {
+    state.evidenceOpen = true;
+    syncEvidenceBundle();
+  }
+  if (state.report) renderFindings();
   if (scroll) $("traces")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -3078,13 +3158,16 @@ function renderHomeDesk() {
   const list = rows.length
     ? rows
         .map((item) => {
+          const st = item.status || "open";
           const cta = rowCta(item);
-          const ready = item.status === "recommended" ? " is-ready" : "";
-          return `<div class="home-desk-row${ready}" role="button" tabindex="0" data-open-case="${escapeHtml(item.id)}" data-jump="${escapeHtml(cta.jump)}">
+          const filed = st === "filed" ? " is-filed" : "";
+          return `<div class="home-desk-row tone-${incidentTone(item)}${filed}" role="button" tabindex="0" data-open-case="${escapeHtml(item.id)}" data-jump="${escapeHtml(cta.jump)}">
             <span class="id">${escapeHtml(item.id)}</span>
-            <span class="alarm">${escapeHtml(caseHeadline(item))}</span>
-            <span class="meta">${incStatusChip(item.status)} · ${escapeHtml(alarmShort(item.alarm))} · ${escapeHtml(openedClock(item.opened_at) || "—")}</span>
-            <span class="act">${rowInvestigateBtn(item.id)}</span>
+            <span class="inc-detail">
+              <strong class="inc-headline">${escapeHtml(caseHeadline(item))}</strong>
+              <span class="inc-meta-line">${incRowMeta(item)}</span>
+            </span>
+            <span class="inc-status-col">${incStatusChip(st)}</span>
           </div>`;
         })
         .join("")
@@ -3372,14 +3455,15 @@ function renderTimeline(a) {
   const pin = state.pinT;
   root.innerHTML = items
     .map((item) => {
-      const on = pin != null && Math.abs(pin - item.t) < 3;
+      const pinId = `tl:${item.t}`;
+      const on = isLeadUpPinned(item.t);
       const tags = [
         item.suspect ? `<span class="crumb-tag is-suspect">Suspect</span>` : "",
         item.marginal && !item.suspect ? `<span class="crumb-tag is-marginal">Elevated</span>` : "",
         item.last && !item.suspect ? `<span class="crumb-tag is-last">Last</span>` : "",
         item.warn ? `<span class="crumb-tag is-warn">Warn</span>` : "",
       ].join("");
-      return `<li class="tl-item kind-${item.kind} ${item.warn ? "is-warn" : ""} ${item.suspect ? "is-suspect" : ""} ${item.marginal && !item.suspect ? "is-marginal" : ""} ${item.last && !item.suspect ? "is-last" : ""} ${on ? "is-on" : ""}" data-t="${item.t}">
+      return `<li class="tl-item kind-${item.kind} ${item.warn ? "is-warn" : ""} ${item.suspect ? "is-suspect" : ""} ${item.marginal && !item.suspect ? "is-marginal" : ""} ${item.last && !item.suspect ? "is-last" : ""} ${on ? "is-on" : ""}" data-t="${item.t}" data-pin-id="${pinId}">
         <button type="button" class="tl-row ${on ? "is-on" : ""}">
           <span class="tl-time">${clock(item.t)}</span>
           <span class="tl-track" aria-hidden="true"><i class="tl-dot"></i></span>
@@ -3583,13 +3667,14 @@ function renderFindings() {
     const sections = state.report.split(/\n(?=## )/);
     body.innerHTML = sections
       .filter((block) => {
-        const title = sectionTitle(block.trim());
+        const trimmed = block.trim();
+        const title = sectionTitle(trimmed);
+        if (/^#\s+Investigation\b/i.test(trimmed)) return false;
         return !/^tool log$/i.test(title) && !/^hypothesis$/i.test(title) && !/recommended human decision/i.test(title);
       })
       .map((raw) => {
         const block = raw.trim();
         const title = sectionTitle(block);
-        if (/^# [^#]/.test(block)) return renderLeadFinding(block);
         if (/^timeline$/i.test(title)) return renderTimelineFinding(block);
         return `<article class="finding md">${renderMd(block)}</article>`;
       })
@@ -3656,6 +3741,7 @@ async function loadIncident(incidentId) {
   state.runId = state.incident?.run_id || null;
   state.report = null;
   state.pinT = null;
+  state.pinSource = null;
   state.hoverT = null;
   enterCase();
   $("stage").scrollTop = 0;
@@ -3678,7 +3764,9 @@ async function loadIncident(incidentId) {
   state.knowledgeOpen = false;
   state.runId = state.workspace.run_id;
   const a = analysis();
-  state.pinT = a?.warn?.time_s ?? a?.heaterCmd?.time_s ?? null;
+  const seed = a?.warn?.time_s ?? a?.heaterCmd?.time_s ?? null;
+  state.pinT = seed != null ? resolvePinTime(seed) : null;
+  state.pinSource = null;
   renderCase();
   syncCaseFolds();
   const input = $("knowledge-q");
@@ -4463,7 +4551,8 @@ function bind() {
   $("timeline").addEventListener("click", (ev) => {
     const node = ev.target.closest("[data-t]");
     if (!node) return;
-    pinTape(node.dataset.t);
+    ev.preventDefault();
+    pinTape(node.dataset.t, { scroll: true, source: node.dataset.pinId || null });
   });
   $("case-desk").addEventListener("click", (ev) => {
     if (ev.target.closest("[data-go-trust]")) {
@@ -4525,7 +4614,7 @@ function bind() {
   $("findings-body").addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-t]");
     if (!btn) return;
-    pinTape(btn.dataset.t, { scroll: true });
+    pinTape(btn.dataset.t, { scroll: true, source: btn.dataset.pinId || null });
   });
   document.querySelector(".seg").addEventListener("click", (ev) => {
     const btn = ev.target.closest("[data-window]");

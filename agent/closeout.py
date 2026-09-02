@@ -47,6 +47,18 @@ def _feedback_section(feedback: dict[str, Any]) -> list[str]:
     return ["## Operator hypothesis review", "", line, ""]
 
 
+def _procedure_for_closeout(incident: dict[str, Any], report: str) -> str:
+    for line in report.splitlines():
+        if "**Procedure:**" in line:
+            return line.split("**Procedure:**", 1)[-1].strip()
+    alarm = incident.get("alarm") or ""
+    if alarm == "PAY.payload_current":
+        return "PAY-04"
+    if alarm == "EPS.battery_voltage":
+        return "EPS-09"
+    return "EPS-17"
+
+
 def build_closeout(
     incident: dict[str, Any],
     report: str,
@@ -56,11 +68,7 @@ def build_closeout(
     body = report.split("\n## Tool log")[0].rstrip()
     title = incident.get("title") or incident["id"]
     remark = (note or "").strip()
-    proc = "EPS-17"
-    for line in report.splitlines():
-        if "**Procedure:**" in line:
-            proc = line.split("**Procedure:**", 1)[-1].strip()
-            break
+    proc = _procedure_for_closeout(incident, report)
     lines = [
         f"# {incident['id']} — {title}",
         "",
