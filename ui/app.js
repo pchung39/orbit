@@ -618,8 +618,8 @@ const state = {
   hoverT: null,
   report: null,
   investigating: false,
-  evidenceOpen: false,
-  procedureOpen: false,
+  evidenceOpen: true,
+  procedureOpen: true,
   knowledgeOpen: false,
   filing: false,
   feedback: null,
@@ -2975,17 +2975,23 @@ function syncFold(id, open, toggleId, stateLabelId) {
   const toggle = $(toggleId);
   const stateLabel = $(stateLabelId);
   if (!bundle) return;
+  if (bundle.classList.contains("is-pinned")) {
+    bundle.classList.remove("is-collapsed");
+    return;
+  }
   bundle.classList.toggle("is-collapsed", !open);
   if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
   if (stateLabel) stateLabel.textContent = open ? "Hide" : "Show";
 }
 
 function syncEvidenceBundle() {
-  syncFold("evidence", state.evidenceOpen, "evidence-toggle", "evidence-toggle-state");
+  state.evidenceOpen = true;
+  syncFold("evidence", true, "evidence-toggle", "evidence-toggle-state");
 }
 
 function syncProcedureBundle() {
-  syncFold("procedure", state.procedureOpen, "procedure-toggle", "procedure-toggle-state");
+  state.procedureOpen = true;
+  syncFold("procedure", true, "procedure-toggle", "procedure-toggle-state");
 }
 
 function syncKnowledgeBundle() {
@@ -3759,8 +3765,6 @@ async function loadIncident(incidentId) {
       state.report = inc.closeout;
     }
   }
-  state.evidenceOpen = false;
-  state.procedureOpen = false;
   state.knowledgeOpen = false;
   state.runId = state.workspace.run_id;
   const a = analysis();
@@ -3817,8 +3821,6 @@ async function assemble() {
       investigation_report: data.report,
       investigated_at: data.investigated_at || null,
     });
-    state.evidenceOpen = false;
-    state.procedureOpen = false;
     state.knowledgeOpen = false;
     renderIncidents();
     renderAlarm(analysis());
@@ -4625,14 +4627,6 @@ function bind() {
   });
   $("assemble").addEventListener("click", assemble);
   $("rerun-investigation")?.addEventListener("click", assemble);
-  $("evidence-toggle")?.addEventListener("click", () => {
-    state.evidenceOpen = !state.evidenceOpen;
-    syncEvidenceBundle();
-  });
-  $("procedure-toggle")?.addEventListener("click", () => {
-    state.procedureOpen = !state.procedureOpen;
-    syncProcedureBundle();
-  });
   $("file-incident").addEventListener("click", openFileSlip);
   $("file-form").addEventListener("submit", fileIncident);
   $("file-slip").addEventListener("click", (ev) => {

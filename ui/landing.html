@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>ORBIT — the close, not the chase</title>
     <meta name="color-scheme" content="light" />
     <meta
@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/landing.css?v=28" />
+    <link rel="stylesheet" href="/static/landing.css?v=30" />
   </head>
 
   <body>
@@ -143,6 +143,16 @@
                 </div>
               </div>
 
+              <div class="flow-rail flow-rail-in" aria-hidden="true">
+                <svg class="flow-rail-svg" viewBox="0 0 120 78" preserveAspectRatio="xMidYMid meet">
+                  <path class="flow-wire is-in" d="M24 2 V28 C24 52 60 52 60 52" />
+                  <path class="flow-wire is-in" d="M60 2 V52" />
+                  <path class="flow-wire is-in" d="M96 2 V28 C96 52 60 52 60 52" />
+                  <path class="flow-wire is-in" d="M60 52 V64" />
+                  <path class="flow-wire-arrow is-in-tip" d="M50 58 L60 72 L70 58" />
+                </svg>
+              </div>
+
               <div class="flow-mid">
                 <svg class="flow-join" viewBox="0 0 200 260" preserveAspectRatio="none" aria-hidden="true">
                   <path class="flow-wire is-in" d="M0 36 C90 36, 100 130, 200 130" />
@@ -161,6 +171,13 @@
                 <svg class="flow-exit" viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true">
                   <path class="flow-wire is-out" d="M0 20 H100" />
                   <path class="flow-wire-arrow" d="M96 12 L112 20 L96 28" />
+                </svg>
+              </div>
+
+              <div class="flow-rail flow-rail-out" aria-hidden="true">
+                <svg class="flow-rail-svg" viewBox="0 0 40 64" preserveAspectRatio="xMidYMid meet">
+                  <path class="flow-wire is-out" d="M20 2 V46" />
+                  <path class="flow-wire-arrow is-out-tip" d="M10 38 L20 54 L30 38" />
                 </svg>
               </div>
 

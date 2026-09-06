@@ -3711,6 +3711,21 @@ body.demo-mode.is-filed .investigation-actions .btn-report { display: inline-fle
   cursor: pointer;
   box-sizing: border-box;
 }
+.evidence-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  margin: 0;
+  padding: 16px 20px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+  box-sizing: border-box;
+}
+.evidence-bundle.is-pinned .evidence-panels {
+  display: flex;
+}
 .evidence-toggle:hover { background: var(--surface-3); }
 .evidence-toggle:focus-visible {
   outline: 2px solid var(--signal);
@@ -4356,9 +4371,25 @@ body.is-filed .panel-decide .panel-kicker { color: var(--signal); }
   .lib-work { grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); }
 }
 @media (max-width: 900px) {
-  body { overflow: auto; }
-  .appbar { height: auto; flex-wrap: wrap; padding: 10px 14px; gap: 10px; }
+  body {
+    overflow: auto;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .appbar {
+    height: auto;
+    flex-wrap: wrap;
+    padding:
+      max(10px, env(safe-area-inset-top, 0px))
+      max(14px, env(safe-area-inset-right, 0px))
+      10px
+      max(14px, env(safe-area-inset-left, 0px));
+    gap: 10px;
+  }
   .app-nav { border-left: 0; padding-left: 0; margin-left: 0; flex: 1 0 100%; order: 3; }
+  .app-tab {
+    min-height: 40px;
+    padding-inline: 10px;
+  }
   .app-tab.is-on::after { bottom: -4px; }
   .app { display: block; height: auto; }
   .stage { height: auto; padding: 18px 16px 60px; }
@@ -4388,9 +4419,25 @@ body.is-filed .panel-decide .panel-kicker { color: var(--signal); }
   .inc-cols { display: none; }
   .inc-row { display: block; padding: 14px 16px; }
   .inc-row .id, .inc-detail, .inc-cta { display: block; margin-top: 4px; }
+  .inc-cta .btn,
+  .inc-cta .btn-bar {
+    min-height: 44px;
+  }
   .case-head-title-row { display: block; }
   .case-facts { gap: 12px 20px; }
   .case-facts .fact-readout { max-width: none; flex-basis: 100%; }
+  .investigation-actions {
+    align-items: stretch;
+    width: 100%;
+    margin-top: 12px;
+  }
+  .investigation-actions .btn,
+  .investigation-actions .btn-bar,
+  .investigation-actions .btn-report {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+  }
   .compare, .lead-grid { grid-template-columns: minmax(0, 1fr); }
   .trust-grid { grid-template-columns: minmax(0, 1fr); }
   .trust-connectors { grid-template-columns: minmax(0, 1fr); }
@@ -4416,6 +4463,12 @@ body.is-filed .panel-decide .panel-kicker { color: var(--signal); }
   .report-head { display: block; }
   .btn-report { margin-top: 14px; }
   .prov-ref { max-width: none; }
+}
+@media (max-width: 640px) {
+  .stage { padding: 14px 12px 72px; }
+  .wordmark { letter-spacing: 0.2em; font-size: 12px; }
+  .home-craft { padding: 14px; }
+  .case-head { padding: 14px 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .stage { transition: none; }

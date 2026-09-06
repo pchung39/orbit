@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>ORBIT — Aurora-1</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=pinfix1" />
+    <link rel="stylesheet" href="/static/styles.css?v=pin13" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -217,6 +217,29 @@
                 </div>
               </section>
 
+              <section class="panel panel-decide" id="action">
+                <div id="decide-open">
+                  <p class="panel-kicker">Decision</p>
+                  <p class="eyebrow">Suggested action</p>
+                  <h2 id="decide-title">None yet</h2>
+                  <p class="lede" id="decide-sub">Select a case to see a next step.</p>
+                  <p class="action-status" id="decide-meta"></p>
+                  <div class="decide-hypothesis" id="decide-hypothesis" hidden></div>
+                  <div class="decide-feedback" id="decide-feedback-root" hidden></div>
+                  <div class="form-actions action-row">
+                    <button type="button" class="btn" id="file-incident" hidden>File decision</button>
+                  </div>
+                </div>
+                <div id="decide-filed" hidden>
+                  <p class="panel-kicker">Filed</p>
+                  <p class="stamp">Filed · not sent</p>
+                  <h2 id="filed-action-title">Inhibit Heater B</h2>
+                  <p class="lede" id="filed-action-sub">Recorded in the library. ORBIT did not uplink.</p>
+                  <p class="fb-badge" id="filed-feedback-badge" hidden></p>
+                  <blockquote class="operator-note" id="operator-note" hidden></blockquote>
+                  <button type="button" class="text-btn" id="open-closeout">Read full close-out</button>
+                </div>
+              </section>
 
               <section class="panel evidence-bundle knowledge-bundle is-collapsed" id="knowledge">
                 <button type="button" class="evidence-toggle" id="knowledge-toggle" aria-expanded="false" aria-controls="knowledge-panels">
@@ -258,17 +281,13 @@
                 </div>
               </section>
 
-              <section class="panel evidence-bundle is-collapsed" id="procedure">
-                <button type="button" class="evidence-toggle" id="procedure-toggle" aria-expanded="false" aria-controls="procedure-panels">
+              <section class="panel evidence-bundle is-pinned" id="procedure">
+                <div class="evidence-head">
                   <span class="evidence-toggle-main">
                     <span class="panel-kicker">Procedure</span>
                     <span class="evidence-toggle-title" id="procedure-toggle-title">EPS-17 · book</span>
                   </span>
-                  <span class="evidence-toggle-meta">
-                    <span class="evidence-toggle-state" id="procedure-toggle-state">Show</span>
-                    <span class="evidence-chevron" aria-hidden="true"></span>
-                  </span>
-                </button>
+                </div>
                 <div class="evidence-panels" id="procedure-panels">
                   <section class="panel panel-proc evidence-panel" id="procedure-body">
                     <article class="procedure">
@@ -302,17 +321,13 @@
                 </div>
               </section>
 
-              <section class="panel evidence-bundle is-collapsed" id="evidence">
-                <button type="button" class="evidence-toggle" id="evidence-toggle" aria-expanded="false" aria-controls="evidence-panels">
+              <section class="panel evidence-bundle is-pinned" id="evidence">
+                <div class="evidence-head">
                   <span class="evidence-toggle-main">
                     <span class="panel-kicker">Evidence</span>
                     <span class="evidence-toggle-title">Compare · lead-up · tape</span>
                   </span>
-                  <span class="evidence-toggle-meta">
-                    <span class="evidence-toggle-state" id="evidence-toggle-state">Show</span>
-                    <span class="evidence-chevron" aria-hidden="true"></span>
-                  </span>
-                </button>
+                </div>
                 <div class="evidence-panels" id="evidence-panels">
               <section class="panel panel-compare evidence-panel" id="compare">
                 <p class="panel-kicker">Compare</p>
@@ -345,30 +360,6 @@
                 <div class="traces" id="trace-stack"></div>
                 <p class="hover-read" id="hover-read"></p>
               </section>
-                </div>
-              </section>
-
-              <section class="panel panel-decide" id="action">
-                <div id="decide-open">
-                  <p class="panel-kicker">Decision</p>
-                  <p class="eyebrow">Suggested action</p>
-                  <h2 id="decide-title">None yet</h2>
-                  <p class="lede" id="decide-sub">Select a case to see a next step.</p>
-                  <p class="action-status" id="decide-meta"></p>
-                  <div class="decide-hypothesis" id="decide-hypothesis" hidden></div>
-                  <div class="decide-feedback" id="decide-feedback-root" hidden></div>
-                  <div class="form-actions action-row">
-                    <button type="button" class="btn" id="file-incident" hidden>File decision</button>
-                  </div>
-                </div>
-                <div id="decide-filed" hidden>
-                  <p class="panel-kicker">Filed</p>
-                  <p class="stamp">Filed · not sent</p>
-                  <h2 id="filed-action-title">Inhibit Heater B</h2>
-                  <p class="lede" id="filed-action-sub">Recorded in the library. ORBIT did not uplink.</p>
-                  <p class="fb-badge" id="filed-feedback-badge" hidden></p>
-                  <blockquote class="operator-note" id="operator-note" hidden></blockquote>
-                  <button type="button" class="text-btn" id="open-closeout">Read full close-out</button>
                 </div>
               </section>
             </div>
@@ -459,7 +450,7 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=pinfix1" type="module"></script>
+    <script src="/static/app.js?v=pin13" type="module"></script>
 
     <div class="slip-wrap" id="doc-slip" hidden>
       <div class="slip doc-slip" role="dialog" aria-modal="true" aria-labelledby="doc-slip-title">
