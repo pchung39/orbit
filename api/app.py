@@ -914,9 +914,18 @@ app.include_router(api)
 app.mount("/static", StaticFiles(directory=UI_DIR), name="static")
 
 
+def _about() -> FileResponse:
+    return FileResponse(UI_DIR / "about.html")
+
+
 @app.get("/")
 def marketing_home() -> FileResponse:
     return _landing()
+
+
+@app.get("/about")
+def about_orbit() -> FileResponse:
+    return _about()
 
 
 @app.get("/app")

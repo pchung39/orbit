@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=pin13" />
+    <link rel="stylesheet" href="/static/styles.css?v=pin27" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -29,6 +29,7 @@
         <button type="button" class="app-tab" id="tab-trust">Trust</button>
       </nav>
       <div class="appbar-actions">
+        <a class="appbar-about" href="/about">About Orbit</a>
         <button type="button" class="craft-chip" id="store-status" aria-label="Open trust and data sources">
           <span class="pulse"></span>
           <span class="name">AURORA-1</span>
@@ -84,7 +85,7 @@
             <div class="orbit-wrap home-craft-orbit" id="home-orbit" aria-hidden="true"></div>
           </header>
           <section class="home-path is-collapsed" id="home-path" aria-label="90-second walkthrough"></section>
-          <section class="home-proof" id="home-proof" aria-label="Eval proof" hidden></section>
+          <section class="home-proof" id="home-proof" aria-label="Eval" hidden></section>
           <section class="home-desk" id="home-desk" aria-label="Desk queue"></section>
         </section>
 
@@ -112,20 +113,20 @@
 
         <section class="trust-desk" id="trust-desk" aria-label="Trust and data sources">
           <header class="trust-head" id="trust-head"></header>
-          <section class="trust-score-panel" id="trust-score-panel" aria-label="Eval Explorer">
+          <section class="trust-score-panel" id="trust-score-panel" aria-label="Eval">
             <div id="trust-scorecard-slot"></div>
           </section>
-          <section class="trust-release-case-panel" id="trust-release-case-panel" hidden aria-label="Eval case detail">
+          <section class="trust-release-case-panel" id="trust-release-case-panel" hidden aria-label="Eval flight">
             <div id="trust-release-case-slot"></div>
           </section>
           <section class="trust-panel trust-sources-panel" id="trust-sources-panel" aria-labelledby="trust-sources-title">
             <header class="trust-panel-head">
               <div>
-                <p class="panel-kicker">Evidence plane</p>
-                <h2 id="trust-sources-title">Sources</h2>
+                <p class="panel-kicker">The window</p>
+                <h2 id="trust-sources-title">Tape in. Book on the desk.</h2>
                 <p class="trust-panel-lede">
-                  Mission archive stays upstream. Opening a case fetches a window into a sealed package.
-                  Library is the searchable book ORBIT indexes locally.
+                  Opening a case seals a slice of the archive. The investigator searches the local book.
+                  Updating a list does not unseal a case.
                 </p>
               </div>
             </header>
@@ -138,27 +139,25 @@
           <details class="trust-fold" id="trust-fold-tapes">
             <summary class="trust-fold-summary">
               <span>
-                <p class="panel-kicker">Inventory</p>
-                <h2 id="trust-tapes-title">Upstream catalog · sealed in ORBIT</h2>
+                <p class="panel-kicker">Tapes</p>
+                <h2 id="trust-tapes-title">What you can seal from</h2>
               </span>
               <span class="trust-fold-hint">Browse</span>
             </summary>
-            <p class="trust-panel-lede">Upstream tapes are seal sources. Sealed runs are the packages ORBIT stores for cases.</p>
+            <p class="trust-panel-lede">Upstream tapes stay outside. Sealed runs are the packages already on cases.</p>
             <div class="trust-tapes" id="trust-tapes"></div>
           </details>
           <details class="trust-fold" id="trust-fold-library">
             <summary class="trust-fold-summary">
               <span>
-                <p class="panel-kicker">Library index</p>
-                <h2 id="trust-library-title">Searchable sources</h2>
+                <p class="panel-kicker">Book</p>
+                <h2 id="trust-library-title">What the investigator searches</h2>
               </span>
               <span class="trust-fold-hint">Browse docs</span>
             </summary>
-            <p class="trust-panel-lede">Procedures and prior close-outs in the local search index.</p>
+            <p class="trust-panel-lede">Procedures and prior closes in the local book.</p>
             <div class="trust-sources" id="trust-sources"></div>
           </details>
-          <div class="trust-grid" id="trust-grid"></div>
-          <footer class="trust-foot" id="trust-foot"></footer>
         </section>
 
         <div class="case-desk" id="case-desk">
@@ -222,7 +221,7 @@
                   <p class="panel-kicker">Decision</p>
                   <p class="eyebrow">Suggested action</p>
                   <h2 id="decide-title">None yet</h2>
-                  <p class="lede" id="decide-sub">Select a case to see a next step.</p>
+                  <p class="lede" id="decide-sub">Run investigation to stamp a recommended action. ORBIT does not send it.</p>
                   <p class="action-status" id="decide-meta"></p>
                   <div class="decide-hypothesis" id="decide-hypothesis" hidden></div>
                   <div class="decide-feedback" id="decide-feedback-root" hidden></div>
@@ -450,7 +449,7 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=pin13" type="module"></script>
+    <script src="/static/app.js?v=pin27" type="module"></script>
 
     <div class="slip-wrap" id="doc-slip" hidden>
       <div class="slip doc-slip" role="dialog" aria-modal="true" aria-labelledby="doc-slip-title">

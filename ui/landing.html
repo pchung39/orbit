@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/landing.css?v=30" />
+    <link rel="stylesheet" href="/static/landing.css?v=32" />
   </head>
 
   <body>
@@ -34,7 +34,10 @@
             </svg>
             <span class="brand-text"><b>Orbit</b></span>
           </a>
-          <a class="link-desk" href="/app">Desk →</a>
+          <div class="topbar-actions">
+            <a class="link-about" href="/about">About Orbit</a>
+            <a class="link-desk" href="/app">Desk →</a>
+          </div>
         </header>
       </div>
 
@@ -331,33 +334,33 @@
           <div class="wrap">
             <div class="sec-head">
               <p class="eyebrow">Measured, not claimed</p>
-              <h2 class="h-sec" id="rates-t">The scorecard on disk is the one Trust renders.</h2>
+              <h2 class="h-sec" id="rates-t">The eval on disk is the one Trust renders.</h2>
               <p class="lede">
-                Five cases: four named closes and one decoy the report has to refuse. Every rate is
-                scored against the matching close — no hand-waving.
+                Five scenarios: four real faults and one that must be refused. Naming a cause is not
+                enough — the report also has to hold, leave a healthy heater alone, and stamp every claim.
               </p>
             </div>
 
             <div class="rates">
               <div class="rate">
                 <p class="rate-n">4/4</p>
-                <p class="rate-label">Named closes correct</p>
-                <p class="rate-def">Heater, payload and battery faults where the report picks the matching root cause and action.</p>
+                <p class="rate-label">Names the fault</p>
+                <p class="rate-def">When something broke, the report said what.</p>
               </div>
               <div class="rate">
                 <p class="rate-n">1/1</p>
-                <p class="rate-label">Withheld when the bar isn't met</p>
-                <p class="rate-def">The decoy case, where ORBIT must omit a root cause and recommend hold instead of inventing a FAULT id.</p>
+                <p class="rate-label">Holds when unsure</p>
+                <p class="rate-def">When the evidence is thin, it does not invent a cause.</p>
               </div>
               <div class="rate">
                 <p class="rate-n">3/3</p>
-                <p class="rate-label">No false heater inhibit</p>
-                <p class="rate-def">Contrast cases where inhibiting Heater B would be wrong, and the report leaves it alone.</p>
+                <p class="rate-label">Leaves a healthy heater</p>
+                <p class="rate-def">Never recommends shutting one down that isn’t the fault.</p>
               </div>
               <div class="rate">
                 <p class="rate-n">5/5</p>
-                <p class="rate-label">Source tags clean</p>
-                <p class="rate-def">Reports that stamp all four tags and keep timeline facts out of causal language.</p>
+                <p class="rate-label">Stamps every claim</p>
+                <p class="rate-def">Observed, derived, documented, hypothesis — on the sentence.</p>
               </div>
             </div>
 

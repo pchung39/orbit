@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "kind": "candidate",
-  "run_id": "run-20260901T063743Z-rules",
-  "generated_at": "2026-09-01T06:37:43Z",
+  "run_id": "run-20260901T082500Z-rules",
+  "generated_at": "2026-09-01T08:25:00Z",
   "suite_fingerprint": "529ade154695a0e6a2144223ac37a12e0733ae6afbc24935da4e6b44be892c0b",
   "suite_case_ids": [
     "eps204",
@@ -18,7 +18,7 @@
   },
   "scorecard": {
     "provider": "rules",
-    "generated_at": "2026-09-01T06:37:43Z",
+    "generated_at": "2026-09-01T08:25:00Z",
     "ok": true,
     "cases_ok": 5,
     "cases_total": 5,

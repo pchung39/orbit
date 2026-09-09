@@ -1,10 +1,10 @@
 {
-  "generated_at": "2026-09-01T07:09:30Z",
+  "generated_at": "2026-09-09T08:10:35Z",
   "baseline": {
-    "run_id": "run-20260901T063743Z-rules",
-    "baseline_id": "bl-20260901T065425Z",
-    "approved_at": "2026-09-01T06:54:25Z",
-    "generated_at": "2026-09-01T06:37:43Z",
+    "run_id": "run-20260901T082500Z-rules",
+    "baseline_id": "bl-20260901T185133Z",
+    "approved_at": "2026-09-01T18:51:33Z",
+    "generated_at": "2026-09-01T08:25:00Z",
     "agent": {
       "provider": "rules",
       "model": null,
@@ -12,8 +12,8 @@
     }
   },
   "candidate": {
-    "run_id": "run-20260901T063743Z-rules",
-    "generated_at": "2026-09-01T06:37:43Z",
+    "run_id": "run-20260901T082500Z-rules",
+    "generated_at": "2026-09-01T08:25:00Z",
     "agent": {
       "provider": "rules",
       "model": null,

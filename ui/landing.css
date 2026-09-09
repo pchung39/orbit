@@ -180,6 +180,22 @@ ul { padding: 0; list-style: none; }
 
 @media (min-width: 780px) { .craftline { display: flex; } }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px 14px;
+}
+.link-about {
+  font: 500 var(--t-xs)/1 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: var(--mute);
+  padding: 9px 4px;
+  white-space: nowrap;
+}
+.link-about:hover,
+.link-about.is-on { color: var(--ink); }
 .link-desk {
   font: 500 var(--t-xs)/1 var(--mono);
   letter-spacing: 0.12em;
@@ -1784,12 +1800,14 @@ section { position: relative; }
     padding-bottom: 12px;
   }
 
+  .link-about,
   .link-desk {
     min-height: 44px;
     display: inline-flex;
     align-items: center;
     padding: 8px 4px;
   }
+  .link-desk { padding: 8px 4px; }
 
   .hero {
     padding: 28px 0 36px;

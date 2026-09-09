@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "kind": "approved_baseline",
-  "run_id": "run-20260901T063743Z-rules",
-  "generated_at": "2026-09-01T06:37:43Z",
+  "run_id": "run-20260901T082500Z-rules",
+  "generated_at": "2026-09-01T08:25:00Z",
   "suite_fingerprint": "529ade154695a0e6a2144223ac37a12e0733ae6afbc24935da4e6b44be892c0b",
   "suite_case_ids": [
     "eps204",
@@ -18,7 +18,7 @@
   },
   "scorecard": {
     "provider": "rules",
-    "generated_at": "2026-09-01T06:37:43Z",
+    "generated_at": "2026-09-01T08:25:00Z",
     "ok": true,
     "cases_ok": 5,
     "cases_total": 5,
@@ -507,7 +507,7 @@
       "withhold_explanation": "Why withholding is correct for marg001:\n- Heater B current (~1.97 A) is below the EPS-17 step-4 \u22652\u00d7 bar \u2014 not prime-suspect territory.\n- SCIENCE_MODE is a confounder in the same window, not proof of payload guilt.\n- Prior INC-0187 must be ruled out as a non-match, not used as confirmation.\n- Correct action is hold / do not command \u2014 no inhibit Heater B, no payload safe, no FAULT id."
     }
   },
-  "baseline_id": "bl-20260901T065425Z",
-  "approved_at": "2026-09-01T06:54:25Z",
+  "baseline_id": "bl-20260901T185133Z",
+  "approved_at": "2026-09-01T18:51:33Z",
   "note": "promoted from Trust release view"
 }

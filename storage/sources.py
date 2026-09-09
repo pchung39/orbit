@@ -386,7 +386,7 @@ def sync_telemetry(conn: Any) -> dict[str, Any]:
     _last_sync["telemetry"] = at
     _push_activity(
         "telemetry",
-        f"Archive catalog refreshed · {len(available)}/{len(catalog)} tapes reachable upstream",
+        f"Tape list updated · {len(available)}/{len(catalog)} reachable upstream",
         {"runs": [row["id"] for row in available]},
     )
     return connector_telemetry(conn)
@@ -402,7 +402,7 @@ def sync_library(conn: Any) -> dict[str, Any]:
     incidents = sum(1 for d in docs if d.get("kind") == "incident")
     _push_activity(
         "library",
-        f"Library index rebuilt · {n_docs} documents · {procedures} procedures · {incidents} priors",
+        f"Library re-indexed · {n_docs} documents · {procedures} procedures · {incidents} priors",
         {"documents": n_docs, "procedures": procedures, "incidents": incidents},
     )
     return connector_library(conn)
@@ -420,16 +420,16 @@ def connector_telemetry(conn: Any) -> dict[str, Any]:
         "role": "upstream",
         "name": "Mission archive",
         "description": (
-            "Upstream tape catalog. Opening a case fetches a warn±pad window and stores "
-            "only that sealed package in ORBIT — not the full orbit, not a live downlink."
+            "Tapes you can open a case from. Opening a case copies a warn±pad window and seals it. "
+            "Already-sealed cases do not change."
         ),
         "adapter": ADAPTER,
         "auto": False,
         "status": status,
         "last_sync_at": last,
         "next_sync_at": None,
-        "schedule": "on demand",
-        "action_label": "Refresh catalog",
+        "schedule": None,
+        "action_label": "Update tape list" if available else "Connect archive",
         "stats": {
             "catalog": len(available),
             "sealed": len(sealed),
@@ -450,16 +450,16 @@ def connector_library(conn: Any) -> dict[str, Any]:
         "role": "index",
         "name": "Library index",
         "description": (
-            "Procedures and prior close-outs ORBIT searches during investigation. "
-            "Rebuild embeddings on publish — not a live docs feed."
+            "Procedures and prior closes the investigator searches. Re-index after the book changes. "
+            "Does not rewrite sealed cases."
         ),
         "adapter": ADAPTER,
         "auto": False,
         "status": status,
         "last_sync_at": last,
         "next_sync_at": None,
-        "schedule": "on publish",
-        "action_label": "Rebuild index",
+        "schedule": None,
+        "action_label": "Re-index book" if docs else "Connect library",
         "stats": {
             "documents": len(docs),
             "procedures": procedures,
