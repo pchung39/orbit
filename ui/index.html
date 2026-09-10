@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=pin31" />
+    <link rel="stylesheet" href="/static/styles.css?v=pin32" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -116,45 +116,44 @@
           <section class="trust-release-case-panel" id="trust-release-case-panel" hidden aria-label="Eval flight">
             <div id="trust-release-case-slot"></div>
           </section>
-          <section class="trust-panel trust-sources-panel" id="trust-sources-panel" aria-labelledby="trust-sources-title">
+          <section class="trust-panel trust-sources-panel source-explorer-panel" id="trust-sources-panel" aria-labelledby="trust-sources-title">
             <header class="trust-panel-head">
               <div>
-                <p class="panel-kicker">The window</p>
-                <h2 id="trust-sources-title">Tape in. Book on the desk.</h2>
+                <p class="panel-kicker">Data sources</p>
+                <h2 id="trust-sources-title">Explore the data behind the investigations</h2>
                 <p class="trust-panel-lede">
-                  Opening a case seals a slice of the archive. The investigator searches the local book.
-                  Updating a list does not unseal a case.
+                  Browse the telemetry datasets, saved evidence snapshots, and reference documents available to ORBIT.
                 </p>
               </div>
             </header>
-            <div class="trust-connectors" id="trust-connectors"></div>
-            <div class="trust-activity" id="trust-activity" hidden>
-              <p class="trust-activity-kicker">Recent activity</p>
-              <ul class="trust-activity-list" id="trust-activity-list"></ul>
+            <div class="source-rel" aria-label="How sources relate">
+              <p class="source-rel-line"><span class="source-rel-from">Telemetry dataset</span><span class="source-rel-arrow" aria-hidden="true">→</span><span class="source-rel-to">saved case snapshot</span></p>
+              <p class="source-rel-line"><span class="source-rel-from is-doc">Procedures and prior incidents</span><span class="source-rel-arrow" aria-hidden="true">→</span><span class="source-rel-to is-doc">investigation context</span></p>
+              <p class="source-rel-note">
+                Opening a case saves a window of telemetry for investigation. Procedures and prior incidents provide context for interpreting that evidence.
+              </p>
             </div>
+            <div class="source-explorer" id="source-explorer" aria-live="polite"></div>
+            <aside class="source-preserve" aria-labelledby="source-preserve-title">
+              <h3 id="source-preserve-title">What a saved snapshot preserves</h3>
+              <p>
+                A saved snapshot retains the telemetry window captured for a case. Refreshing the dataset catalog does not replace that saved evidence.
+                Reference documents are browsable here, but the exact document version used by an investigation is not recorded.
+              </p>
+            </aside>
+            <details class="source-maint" id="source-maint">
+              <summary>Data maintenance</summary>
+              <p class="source-maint-lede">
+                Manual catalog and index actions. They do not rewrite sealed snapshots, case reports, or recorded assessments.
+              </p>
+              <div class="source-maint-grid" id="source-maint-actions"></div>
+              <p class="source-maint-status" id="source-maint-status" hidden></p>
+              <div class="source-maint-activity" id="source-maint-activity" hidden>
+                <p class="source-maint-activity-kicker">Recent activity</p>
+                <ul class="source-maint-activity-list" id="source-maint-activity-list"></ul>
+              </div>
+            </details>
           </section>
-          <details class="trust-fold" id="trust-fold-tapes">
-            <summary class="trust-fold-summary">
-              <span>
-                <p class="panel-kicker">Tapes</p>
-                <h2 id="trust-tapes-title">What you can seal from</h2>
-              </span>
-              <span class="trust-fold-hint">Browse</span>
-            </summary>
-            <p class="trust-panel-lede">Upstream tapes stay outside. Sealed runs are the packages already on cases.</p>
-            <div class="trust-tapes" id="trust-tapes"></div>
-          </details>
-          <details class="trust-fold" id="trust-fold-library">
-            <summary class="trust-fold-summary">
-              <span>
-                <p class="panel-kicker">Book</p>
-                <h2 id="trust-library-title">What the investigator searches</h2>
-              </span>
-              <span class="trust-fold-hint">Browse docs</span>
-            </summary>
-            <p class="trust-panel-lede">Procedures and prior closes in the local book.</p>
-            <div class="trust-sources" id="trust-sources"></div>
-          </details>
         </section>
 
         <div class="case-desk" id="case-desk">
@@ -434,7 +433,7 @@
       <div class="tape-inspector" role="dialog" aria-modal="true" aria-labelledby="inspector-title">
         <header class="tape-inspector-head">
           <div>
-            <p class="panel-kicker">Tape inspector</p>
+            <p class="panel-kicker">Telemetry inspector</p>
             <h2 id="inspector-title">Samples</h2>
             <p class="tape-inspector-lede" id="inspector-lede"></p>
           </div>
@@ -455,7 +454,7 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=pin31" type="module"></script>
+    <script src="/static/app.js?v=pin32" type="module"></script>
 
     <div class="slip-wrap" id="doc-slip" hidden>
       <div class="slip doc-slip" role="dialog" aria-modal="true" aria-labelledby="doc-slip-title">

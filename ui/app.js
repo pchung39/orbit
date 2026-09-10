@@ -616,6 +616,14 @@ const state = {
   sourcesLoading: false,
   sourcesSyncing: null,
   archiveCatalog: [],
+  sourceExplorer: {
+    category: "datasets",
+    docFilter: "all",
+    selectedId: null,
+    listScroll: 0,
+    detailOpen: false,
+  },
+  maintStatus: null,
   inspector: {
     open: false,
     runId: null,
@@ -625,6 +633,9 @@ const state = {
     pinClock: null,
     loading: false,
     data: null,
+    savedClockStart: null,
+    savedClockEnd: null,
+    savedChannelValues: null,
   },
 };
 
@@ -1804,6 +1815,10 @@ async function loadTrust() {
 async function syncSource(connectorId) {
   if (state.sourcesSyncing) return;
   state.sourcesSyncing = connectorId;
+  state.maintStatus = {
+    tone: "loading",
+    message: connectorId === "telemetry" ? "Refreshing dataset catalog…" : "Rebuilding document search index…",
+  };
   renderTrust();
   try {
     const res = await fetch(apiUrl(`/sources/${encodeURIComponent(connectorId)}/sync`), { method: "POST" });
@@ -1820,10 +1835,21 @@ async function syncSource(connectorId) {
     if (data.connector && !(state.sources.connectors || []).some((c) => c.id === data.connector.id)) {
       state.sources.connectors = [...(state.sources.connectors || []), data.connector];
     }
+    state.maintStatus = {
+      tone: "ok",
+      message:
+        connectorId === "telemetry"
+          ? "Dataset catalog refreshed. Saved snapshots and cases were not changed."
+          : "Document search index rebuilt. Sealed snapshots and reports were not rewritten.",
+    };
     await loadTrust();
     await loadBootstrapLists();
     if (connectorId === "telemetry") await loadArchiveCatalog();
   } catch (err) {
+    state.maintStatus = {
+      tone: "bad",
+      message: err.message || "Could not update source",
+    };
     window.alert(err.message || "Could not update source");
     renderTrust();
   } finally {
@@ -1869,77 +1895,430 @@ function formatSyncAt(iso) {
   }
 }
 
-function renderConnectors() {
-  const root = $("trust-connectors");
-  const activityRoot = $("trust-activity");
-  const activityList = $("trust-activity-list");
-  if (!root) return;
+function formatMissionSpan(start, end) {
+  if (!start && !end) return "—";
+  if (start && end) return `${start}–${end} UTC`;
+  return `${start || end} UTC`;
+}
+
+function documentOriginLabel(doc) {
+  const path = String(doc?.path || "");
+  if (path.startsWith("filed:")) return "Filed investigation";
+  if (/\/procedures\//.test(path) || path.includes("procedures/")) return "Local procedure";
+  if (/\/incidents\//.test(path) || path.includes("incidents/")) return "Prior incident record";
+  if (doc?.kind === "procedure") return "Local procedure";
+  if (doc?.kind === "incident") return "Prior incident record";
+  return null;
+}
+
+function documentShortDescription(doc) {
+  const use = libraryUse(doc);
+  if (use && use !== doc.id) return use;
+  const title = String(doc?.title || "").trim();
+  if (title && title !== doc.id) return title;
+  return "";
+}
+
+function incidentsForRun(runId) {
+  return (state.incidents || []).filter((item) => item.run_id === runId);
+}
+
+function ingestedRunIds() {
+  const fromTrust = (state.trust?.runs || [])
+    .map((run) => String(run.id))
+    .filter((id) => !id.startsWith("sealed_"));
+  const fromRuns = (state.runs || []).map((run) => String(run.id)).filter((id) => !id.startsWith("sealed_"));
+  return new Set([...fromTrust, ...fromRuns]);
+}
+
+function explorerDatasets() {
+  return sortTapes(archiveRunsOnly());
+}
+
+function explorerSnapshots() {
+  const sealed = (state.trust?.runs || []).filter((run) => String(run.id).startsWith("sealed_"));
+  return [...sealed].sort((a, b) => String(a.id).localeCompare(String(b.id)));
+}
+
+function explorerDocuments() {
+  const docs = state.trust?.documents || state.docs || [];
+  const filter = state.sourceExplorer.docFilter;
+  return docs.filter((doc) => {
+    if (filter === "procedures") return doc.kind === "procedure";
+    if (filter === "incidents") return doc.kind === "incident";
+    return true;
+  });
+}
+
+function explorerCounts() {
+  const docs = state.trust?.documents || state.docs || [];
+  return {
+    datasets: explorerDatasets().length,
+    snapshots: explorerSnapshots().length,
+    documents: docs.length,
+  };
+}
+
+function rememberExplorerListScroll() {
+  const list = $("source-explorer-list");
+  if (list) state.sourceExplorer.listScroll = list.scrollTop;
+}
+
+function restoreExplorerListScroll() {
+  const list = $("source-explorer-list");
+  if (list) list.scrollTop = state.sourceExplorer.listScroll || 0;
+}
+
+function setExplorerCategory(category) {
+  if (state.sourceExplorer.category === category) return;
+  rememberExplorerListScroll();
+  state.sourceExplorer.category = category;
+  state.sourceExplorer.selectedId = null;
+  state.sourceExplorer.detailOpen = false;
+  state.sourceExplorer.listScroll = 0;
+  renderSourceExplorer();
+}
+
+function setExplorerDocFilter(filter) {
+  rememberExplorerListScroll();
+  state.sourceExplorer.docFilter = filter;
+  const stillVisible = explorerDocuments().some((doc) => doc.id === state.sourceExplorer.selectedId);
+  if (!stillVisible) {
+    state.sourceExplorer.selectedId = null;
+    state.sourceExplorer.detailOpen = false;
+  }
+  state.sourceExplorer.listScroll = 0;
+  renderSourceExplorer();
+}
+
+function selectExplorerRecord(id, { openDetail = true } = {}) {
+  rememberExplorerListScroll();
+  state.sourceExplorer.selectedId = id;
+  state.sourceExplorer.detailOpen = Boolean(openDetail);
+  renderSourceExplorer();
+}
+
+function closeExplorerDetail() {
+  state.sourceExplorer.detailOpen = false;
+  renderSourceExplorer();
+}
+
+function openSlipFromDataset(runId) {
+  const bound = (state.alarms || []).find((alarm) => alarm.bind?.run_id === runId);
+  openSlip();
+  if (bound) setPick("alarm", bound.id);
+  setPick("run", runId);
+  syncSuggestedTitle();
+}
+
+function openInspectorForSnapshot(run) {
+  const defaults = defaultInspectForRun(sourceRunId(run.id, run.notes));
+  openInspector({
+    runId: run.id,
+    channel: defaults.channel,
+    alarm: defaults.alarm,
+    window: "full",
+    savedClockStart: run.clock_start || null,
+    savedClockEnd: run.clock_end || null,
+    savedChannelValues: run.samples ?? null,
+  });
+}
+
+function renderMaintenance() {
+  const actions = $("source-maint-actions");
+  const status = $("source-maint-status");
+  const activityRoot = $("source-maint-activity");
+  const activityList = $("source-maint-activity-list");
+  if (!actions) return;
 
   const connectors = state.sources?.connectors || [];
-  if (!connectors.length) {
-    root.innerHTML = `<p class="trust-empty">Sources unavailable. Is the API running?</p>`;
-    if (activityRoot) activityRoot.hidden = true;
-    return;
-  }
+  const byId = Object.fromEntries(connectors.map((c) => [c.id, c]));
+  const telemetry = byId.telemetry;
+  const library = byId.library;
+  const syncing = state.sourcesSyncing;
+  const telemetryBusy = syncing === "telemetry";
+  const libraryBusy = syncing === "library";
+  const anyBusy = Boolean(syncing);
 
-  root.innerHTML = connectors
-    .map((c) => {
-      const syncing = state.sourcesSyncing === c.id;
-      const linked = c.status === "ready" || c.status === "synced";
-      const isArchive = c.id === "telemetry";
-      const stats = c.stats || {};
-      const kicker = isArchive ? "Archive" : "Book";
-      const title = isArchive ? "Mission tape" : "Library";
-      const purpose = isArchive
-        ? "Listed tapes you can open a case from."
-        : "Procedures and priors the report can cite.";
-      const primary = syncing
-        ? "Working…"
-        : linked
-          ? isArchive
-            ? "Update list"
-            : "Re-index"
-          : isArchive
-            ? "Connect archive"
-            : "Connect library";
-      const browse = linked
-        ? `<button type="button" class="text-btn" data-trust-browse="${isArchive ? "tapes" : "library"}">${isArchive ? "Browse tapes" : "Browse book"}</button>`
-        : "";
-      const facts = isArchive
-        ? `<div><dt>Listed</dt><dd>${stats.catalog ?? "—"}</dd></div>
-           <div><dt>Sealed</dt><dd>${stats.sealed ?? "—"}</dd></div>`
-        : `<div><dt>Procedures</dt><dd>${stats.procedures ?? "—"}</dd></div>
-           <div><dt>Priors</dt><dd>${stats.incidents ?? "—"}</dd></div>`;
-      const join = isArchive
-        ? `<div class="trust-path-join" aria-hidden="true"><span>seal on open</span></div>`
-        : "";
-      return `${isArchive ? `<div class="trust-path">` : ""}
-        <article class="trust-path-node ${linked ? "is-linked" : "is-unlinked"}${syncing ? " is-syncing" : ""}">
-          <p class="panel-kicker">${kicker}</p>
-          <h3>${escapeHtml(title)}</h3>
-          <p class="trust-path-purpose">${escapeHtml(purpose)}</p>
-          <dl class="trust-facts">${facts}</dl>
-          <div class="trust-card-actions">
-            ${browse}
-            <button type="button" class="${linked ? "text-btn" : "btn"}" data-source-sync="${escapeHtml(c.id)}" ${syncing ? "disabled" : ""}>${escapeHtml(primary)}</button>
-          </div>
-        </article>
-        ${join}
-        ${isArchive ? "" : `</div>`}`;
-    })
-    .join("");
+  const telemetryLabel = telemetryBusy
+    ? "Refreshing…"
+    : "Refresh dataset catalog";
+  const libraryLabel = libraryBusy ? "Rebuilding…" : "Rebuild document search index";
+
+  actions.innerHTML = `
+    <div class="source-maint-item">
+      <button type="button" class="text-btn" data-source-sync="telemetry" ${anyBusy || !telemetry ? "disabled" : ""}>${escapeHtml(telemetryLabel)}</button>
+      <p>Re-checks which upstream telemetry datasets are available for opening cases. Does not replace saved snapshots or change existing cases or reports.</p>
+      ${telemetry?.stats?.label ? `<p class="source-maint-meta">${escapeHtml(telemetry.stats.label)}${telemetry.last_sync_at ? ` · last ${escapeHtml(formatSyncAt(telemetry.last_sync_at))}` : ""}</p>` : ""}
+    </div>
+    <div class="source-maint-item">
+      <button type="button" class="text-btn" data-source-sync="library" ${anyBusy || !library ? "disabled" : ""}>${escapeHtml(libraryLabel)}</button>
+      <p>Re-embeds procedures and prior incidents for search. Does not rewrite sealed snapshots, case reports, or recorded assessments.</p>
+      ${library?.stats?.label ? `<p class="source-maint-meta">${escapeHtml(library.stats.label)}${library.last_sync_at ? ` · last ${escapeHtml(formatSyncAt(library.last_sync_at))}` : ""}</p>` : ""}
+    </div>`;
+
+  if (status) {
+    if (state.maintStatus?.message) {
+      status.hidden = false;
+      status.className = `source-maint-status is-${state.maintStatus.tone || "ok"}`;
+      status.textContent = state.maintStatus.message;
+    } else {
+      status.hidden = true;
+      status.textContent = "";
+    }
+  }
 
   const activity = state.sources?.activity || [];
   if (activityRoot && activityList) {
     activityRoot.hidden = activity.length === 0;
     activityList.innerHTML = activity
+      .slice(0, 6)
       .map(
         (ev) => `<li><span class="when">${escapeHtml(formatSyncAt(ev.at))}</span>
-          <span class="conn">${escapeHtml(ev.connector === "telemetry" ? "archive" : ev.connector || "")}</span>
+          <span class="conn">${escapeHtml(ev.connector === "telemetry" ? "datasets" : ev.connector === "library" ? "documents" : ev.connector || "")}</span>
           <span class="msg">${escapeHtml(ev.message || "")}</span></li>`
       )
       .join("");
   }
+}
+
+function renderExplorerDatasetDetail(run) {
+  const copy = tapeCopy(run);
+  const ingested = ingestedRunIds().has(run.id);
+  const span = formatMissionSpan(run.clock_start, run.clock_end);
+  const steps = run.samples != null ? `${Number(run.samples).toLocaleString()} time steps` : "—";
+  const simNote = run.notes || copy.note || "";
+  return `
+    <div class="source-detail-head">
+      <p class="source-detail-kicker">Dataset</p>
+      <h3>${escapeHtml(copy.title)}</h3>
+      <p class="source-detail-id"><code>${escapeHtml(run.id)}</code></p>
+    </div>
+    <dl class="source-detail-facts">
+      <div><dt>Available range</dt><dd>${escapeHtml(span)}</dd></div>
+      <div><dt>Recorded samples</dt><dd>${escapeHtml(steps)} <span class="source-detail-hint">CSV time steps in the upstream tape</span></dd></div>
+      <div><dt>Origin</dt><dd>Mission archive (upstream)</dd></div>
+    </dl>
+    ${
+      simNote
+        ? `<details class="source-sim-notes"><summary>Simulation notes</summary><p>${escapeHtml(simNote)}</p><p class="source-detail-hint">Authored scenario context — not an investigation finding.</p></details>`
+        : ""
+    }
+    <div class="source-detail-actions">
+      <button type="button" class="btn" data-explorer-open-case="${escapeHtml(run.id)}">Open case from dataset</button>
+      ${
+        ingested
+          ? `<button type="button" class="text-btn" data-explorer-inspect-dataset="${escapeHtml(run.id)}">Inspect dataset</button>`
+          : `<p class="source-detail-hint">Raw source browsing creates no case. Use Open case from dataset to start the existing create flow.</p>`
+      }
+    </div>`;
+}
+
+function renderExplorerSnapshotDetail(run) {
+  const copy = tapeCopy(run);
+  const span = formatMissionSpan(run.clock_start, run.clock_end);
+  const linked = incidentsForRun(run.id);
+  const values =
+    run.samples != null
+      ? `${Number(run.samples).toLocaleString()} channel values`
+      : "—";
+  const linkedHtml = linked.length
+    ? `<ul class="source-linked-cases">${linked
+        .map(
+          (inc) => `<li><button type="button" class="text-btn" data-explorer-open-incident="${escapeHtml(inc.id)}">Open linked case ${escapeHtml(inc.id)}</button></li>`
+        )
+        .join("")}</ul>`
+    : `<p class="source-detail-hint">No linked case recorded</p>`;
+  return `
+    <div class="source-detail-head">
+      <p class="source-detail-kicker">Saved snapshot</p>
+      <h3>${escapeHtml(copy.title)}</h3>
+      <p class="source-detail-id"><code>${escapeHtml(run.id)}</code></p>
+    </div>
+    <dl class="source-detail-facts">
+      <div><dt>Saved window</dt><dd>${escapeHtml(span)}</dd></div>
+      <div><dt>Stored values</dt><dd>${escapeHtml(values)} <span class="source-detail-hint">one row per channel at each time step</span></dd></div>
+      <div><dt>Source dataset</dt><dd><code>${escapeHtml(sourceRunId(run.id, run.notes) || "—")}</code></dd></div>
+      <div><dt>Linked incident</dt><dd>${linked.length ? escapeHtml(linked.map((i) => i.id).join(", ")) : "None recorded"}</dd></div>
+    </dl>
+    <div class="source-detail-actions">
+      <button type="button" class="btn" data-explorer-inspect-snapshot="${escapeHtml(run.id)}">Inspect samples</button>
+      ${linkedHtml}
+    </div>`;
+}
+
+function renderExplorerDocumentDetail(doc) {
+  const origin = documentOriginLabel(doc);
+  const desc = documentShortDescription(doc);
+  const typeLabel = doc.kind === "procedure" ? "Procedure" : doc.kind === "incident" ? "Prior incident" : doc.kind || "Document";
+  return `
+    <div class="source-detail-head">
+      <p class="source-detail-kicker">Reference document</p>
+      <h3>${escapeHtml(doc.title || doc.id)}</h3>
+      <p class="source-detail-id"><code>${escapeHtml(doc.id)}</code></p>
+    </div>
+    <dl class="source-detail-facts">
+      <div><dt>Type</dt><dd>${escapeHtml(typeLabel)}</dd></div>
+      ${origin ? `<div><dt>Origin</dt><dd>${escapeHtml(origin)}</dd></div>` : ""}
+      ${desc ? `<div><dt>Summary</dt><dd>${escapeHtml(desc)}</dd></div>` : ""}
+    </dl>
+    ${
+      doc.path
+        ? `<details class="source-tech-details"><summary>Technical details</summary><p class="source-detail-path"><code>${escapeHtml(doc.path)}</code></p></details>`
+        : ""
+    }
+    <p class="source-detail-hint">Library membership does not mean this document was used in every report.</p>
+    <div class="source-detail-actions">
+      <button type="button" class="btn" data-explorer-read-doc="${escapeHtml(doc.id)}">Read document</button>
+    </div>`;
+}
+
+function renderSourceExplorer() {
+  const root = $("source-explorer");
+  if (!root) return;
+
+  if (state.trustLoading && !state.trust) {
+    root.innerHTML = `<p class="trust-empty">Loading sources…</p>`;
+    renderMaintenance();
+    return;
+  }
+  if (!state.trust && !state.archiveCatalog?.length) {
+    root.innerHTML = `<p class="trust-empty">Sources unavailable. Is the API running?</p>`;
+    renderMaintenance();
+    return;
+  }
+
+  const counts = explorerCounts();
+  const category = state.sourceExplorer.category;
+  const selectedId = state.sourceExplorer.selectedId;
+  const detailOpen = state.sourceExplorer.detailOpen;
+
+  let records = [];
+  let intro = "";
+  if (category === "datasets") {
+    records = explorerDatasets();
+    intro = "Source telemetry available for creating an investigation.";
+  } else if (category === "snapshots") {
+    records = explorerSnapshots();
+    intro = "Saved telemetry windows available for investigation and review.";
+  } else {
+    records = explorerDocuments();
+    intro =
+      "Procedures and prior incidents available as investigation context. Library membership does not mean a document was used in every report.";
+  }
+
+  const selected =
+    category === "documents"
+      ? records.find((doc) => doc.id === selectedId) || null
+      : records.find((run) => run.id === selectedId) || null;
+
+  const tabs = `
+    <div class="source-cats" role="tablist" aria-label="Source categories">
+      <button type="button" role="tab" id="source-cat-datasets" aria-selected="${category === "datasets"}" class="source-cat ${category === "datasets" ? "is-on" : ""}" data-explorer-cat="datasets">Datasets <span class="source-cat-count">${counts.datasets}</span></button>
+      <button type="button" role="tab" id="source-cat-snapshots" aria-selected="${category === "snapshots"}" class="source-cat ${category === "snapshots" ? "is-on" : ""}" data-explorer-cat="snapshots">Saved snapshots <span class="source-cat-count">${counts.snapshots}</span></button>
+      <button type="button" role="tab" id="source-cat-documents" aria-selected="${category === "documents"}" class="source-cat ${category === "documents" ? "is-on" : ""}" data-explorer-cat="documents">Reference documents <span class="source-cat-count">${counts.documents}</span></button>
+    </div>`;
+
+  const docFilters =
+    category === "documents"
+      ? `<div class="source-doc-filters" role="group" aria-label="Document type">
+          <button type="button" class="source-filter ${state.sourceExplorer.docFilter === "all" ? "is-on" : ""}" data-explorer-doc-filter="all">All</button>
+          <button type="button" class="source-filter ${state.sourceExplorer.docFilter === "procedures" ? "is-on" : ""}" data-explorer-doc-filter="procedures">Procedures</button>
+          <button type="button" class="source-filter ${state.sourceExplorer.docFilter === "incidents" ? "is-on" : ""}" data-explorer-doc-filter="incidents">Prior incidents</button>
+        </div>`
+      : "";
+
+  let listHtml = "";
+  if (!records.length) {
+    listHtml =
+      category === "datasets"
+        ? `<p class="trust-empty">No datasets in the catalog yet. Refresh the dataset catalog under Data maintenance.</p>`
+        : category === "snapshots"
+          ? `<p class="trust-empty">No saved snapshots yet. Opening a case saves a telemetry window here.</p>`
+          : `<p class="trust-empty">No reference documents indexed. Rebuild the document search index under Data maintenance.</p>`;
+  } else if (category === "datasets") {
+    listHtml = `<div class="source-list-head source-list-head-datasets" aria-hidden="true"><span>Name</span><span>Range</span><span>Time steps</span></div>
+      ${records
+        .map((run) => {
+          const copy = tapeCopy(run);
+          const on = run.id === selectedId ? "is-on" : "";
+          return `<button type="button" class="source-row source-row-dataset ${on}" data-explorer-select="${escapeHtml(run.id)}" aria-pressed="${run.id === selectedId}">
+            <span class="source-row-main">
+              <strong>${escapeHtml(copy.title)}</strong>
+              <code class="source-row-id">${escapeHtml(run.id)}</code>
+            </span>
+            <span class="source-row-meta">${escapeHtml(formatMissionSpan(run.clock_start, run.clock_end))}</span>
+            <span class="source-row-count">${run.samples != null ? Number(run.samples).toLocaleString() : "—"}</span>
+          </button>`;
+        })
+        .join("")}`;
+  } else if (category === "snapshots") {
+    listHtml = `<div class="source-list-head source-list-head-snapshots" aria-hidden="true"><span>Source</span><span>Saved window</span><span>Values</span></div>
+      ${records
+        .map((run) => {
+          const copy = tapeCopy(run);
+          const on = run.id === selectedId ? "is-on" : "";
+          const linked = incidentsForRun(run.id);
+          return `<button type="button" class="source-row source-row-snapshot ${on}" data-explorer-select="${escapeHtml(run.id)}" aria-pressed="${run.id === selectedId}">
+            <span class="source-row-main">
+              <strong>${escapeHtml(copy.title)}</strong>
+              <code class="source-row-id">${escapeHtml(run.id)}</code>
+              ${linked.length ? `<span class="source-row-link">${escapeHtml(linked.map((i) => i.id).join(", "))}</span>` : `<span class="source-row-link is-muted">No linked case recorded</span>`}
+            </span>
+            <span class="source-row-meta">${escapeHtml(formatMissionSpan(run.clock_start, run.clock_end))}</span>
+            <span class="source-row-count" title="Channel values stored for this snapshot">${run.samples != null ? Number(run.samples).toLocaleString() : "—"}</span>
+          </button>`;
+        })
+        .join("")}`;
+  } else {
+    listHtml = records
+      .map((doc) => {
+        const on = doc.id === selectedId ? "is-on" : "";
+        const origin = documentOriginLabel(doc);
+        const desc = documentShortDescription(doc);
+        const typeLabel = doc.kind === "procedure" ? "Procedure" : "Prior incident";
+        return `<button type="button" class="source-row source-row-doc kind-${escapeHtml(doc.kind || "doc")} ${on}" data-explorer-select="${escapeHtml(doc.id)}" aria-pressed="${doc.id === selectedId}">
+          <span class="source-row-main">
+            <span class="source-row-type">${escapeHtml(typeLabel)}</span>
+            <strong>${escapeHtml(doc.title || doc.id)}</strong>
+            <code class="source-row-id">${escapeHtml(doc.id)}</code>
+            ${desc ? `<span class="source-row-desc">${escapeHtml(desc)}</span>` : ""}
+            ${origin ? `<span class="source-row-origin">${escapeHtml(origin)}</span>` : ""}
+          </span>
+        </button>`;
+      })
+      .join("");
+  }
+
+  let detailHtml = "";
+  if (!selected) {
+    detailHtml = `<div class="source-detail-empty"><p>Select a source to inspect its contents and metadata.</p></div>`;
+  } else if (category === "datasets") {
+    detailHtml = renderExplorerDatasetDetail(selected);
+  } else if (category === "snapshots") {
+    detailHtml = renderExplorerSnapshotDetail(selected);
+  } else {
+    detailHtml = renderExplorerDocumentDetail(selected);
+  }
+
+  root.innerHTML = `
+    ${tabs}
+    <p class="source-intro">${escapeHtml(intro)}</p>
+    ${docFilters}
+    <div class="source-browser ${detailOpen && selected ? "is-detail-open" : ""}">
+      <div class="source-list" id="source-explorer-list" role="listbox" aria-label="${escapeHtml(category)}">${listHtml}</div>
+      <aside class="source-detail ${category === "documents" ? "is-docs" : category === "snapshots" ? "is-snap" : "is-data"}" id="source-explorer-detail" aria-live="polite">
+        <button type="button" class="source-detail-back text-btn" data-explorer-detail-back ${detailOpen && selected ? "" : "hidden"}>Back to list</button>
+        ${detailHtml}
+      </aside>
+    </div>`;
+
+  restoreExplorerListScroll();
+  renderMaintenance();
+}
+
+function renderConnectors() {
+  renderSourceExplorer();
 }
 
 function releaseVerdictTone(rec) {
@@ -2282,29 +2661,23 @@ function renderTrust() {
 
   const t = state.trust;
   const head = $("trust-head");
-  const tapes = $("trust-tapes");
-  const sources = $("trust-sources");
-  if (!head || !tapes || !sources) return;
+  if (!head) return;
 
   if (state.trustLoading && !t) {
     head.innerHTML = `<h1>Can I trust this?</h1><p class="trust-head-lede">Checking sources…</p>`;
-    tapes.innerHTML = `<p class="trust-empty">Loading…</p>`;
-    sources.innerHTML = "";
     const slot = $("trust-scorecard-slot");
     if (slot) {
       slot.innerHTML = buildScorecardHtml(null, state.releaseCompare, state.evalExplorer, true);
     }
-    renderConnectors();
+    renderSourceExplorer();
     _syncTrustPanels();
     return;
   }
   if (!t) {
     head.innerHTML = `<h1>Can I trust this?</h1><p class="trust-head-lede">Could not load store status. Is Postgres running?</p>`;
-    tapes.innerHTML = `<p class="trust-empty">Could not reach the archive. Connect it on Trust, then try again.</p>`;
-    sources.innerHTML = "";
     const slot = $("trust-scorecard-slot");
     if (slot) slot.innerHTML = buildScorecardHtml(null, state.releaseCompare, state.evalExplorer, false);
-    renderConnectors();
+    renderSourceExplorer();
     _syncTrustPanels();
     return;
   }
@@ -2330,60 +2703,7 @@ function renderTrust() {
     slot.innerHTML = buildScorecardHtml(t, state.releaseCompare, state.evalExplorer, false);
   }
 
-  const catalog = state.archiveCatalog?.length
-    ? state.archiveCatalog
-    : (t.runs || []).filter((run) => !String(run.id).startsWith("sealed_"));
-  const sealed = (t.runs || []).filter((run) => String(run.id).startsWith("sealed_"));
-  const inventory = [
-    ...catalog.map((run) => ({ ...run, _kind: "archive" })),
-    ...sealed.map((run) => ({ ...run, _kind: "sealed" })),
-  ];
-  const runRows = inventory.map((run) => {
-    const sealedRow = run._kind === "sealed" || String(run.id).startsWith("sealed_");
-    const copy = tapeCopy(run);
-    const on = run.id === state.deskRunId ? "is-on" : "";
-    const span =
-      run.clock_start && run.clock_end ? `${run.clock_start} → ${run.clock_end}` : "—";
-    const kind = sealedRow ? "Sealed" : "Upstream";
-    const title = sealedRow ? "Sealed evidence" : copy.title;
-    const note = copy.note || run.notes || "";
-    const actions = sealedRow
-      ? `<button type="button" class="text-btn" data-trust-inspect="${escapeHtml(run.id)}">Inspect</button><button type="button" class="text-btn" data-trust-tape="${escapeHtml(run.id)}">${run.id === state.deskRunId ? "Selected" : "View"}</button>`
-      : `<span class="trust-row-muted">Seal source</span>`;
-    return `<div class="trust-row ${on} ${sealedRow ? "is-sealed" : "is-archive"}">
-      <span class="id" title="${escapeHtml(run.id)}">${escapeHtml(run.id)}</span>
-      <div class="trust-row-copy">
-        <strong>${escapeHtml(title)}</strong>
-        ${note ? `<p class="meta">${escapeHtml(note)}</p>` : ""}
-      </div>
-      <span class="kind">${escapeHtml(kind)}</span>
-      <span class="n">${span}</span>
-      <span class="n">${(run.samples || 0).toLocaleString()}</span>
-      <span class="act trust-row-actions">${actions}</span>
-    </div>`;
-  });
-  tapes.innerHTML =
-    runRows.length > 0
-      ? `<div class="trust-cols"><span>Run</span><span>Title</span><span>Kind</span><span>Span</span><span>Samples</span><span></span></div>${runRows.join("")}`
-      : `<p class="trust-empty">No upstream catalog yet. Refresh the mission archive on Trust.</p>`;
-
-  const docRows = (t.documents || []).map((doc) => {
-    const kindCls = doc.kind === "procedure" ? "kind-procedure" : "kind-incident";
-    return `<div class="trust-source">
-      <span class="id ${kindCls}">${escapeHtml(doc.id)}</span>
-      <div>
-        <strong>${escapeHtml(doc.title || doc.id)}</strong>
-        <p class="path">${escapeHtml(doc.path || "")}</p>
-      </div>
-      <button type="button" class="text-btn" data-trust-doc="${escapeHtml(doc.id)}">Open</button>
-    </div>`;
-  });
-  sources.innerHTML =
-    docRows.length > 0
-      ? docRows.join("")
-      : `<p class="trust-empty">No library documents embedded. Run ingest to index procedures and priors.</p>`;
-
-  renderConnectors();
+  renderSourceExplorer();
   _syncTrustPanels();
 }
 
@@ -2393,11 +2713,6 @@ function _syncTrustPanels() {
   $("trust-score-panel")?.toggleAttribute("hidden", !overview);
   $("trust-release-case-panel")?.toggleAttribute("hidden", !releaseCase);
   $("trust-head")?.toggleAttribute("hidden", releaseCase);
-  const foldables = ["trust-fold-tapes", "trust-fold-library"];
-  foldables.forEach((id) => {
-    const el = $(id);
-    if (el) el.toggleAttribute("hidden", !overview);
-  });
   $("trust-sources-panel")?.toggleAttribute("hidden", !overview);
 }
 
@@ -2750,6 +3065,9 @@ function openInspector(opts = {}) {
     pinClock: opts.pinClock || (pinT != null ? clock(pinT) : null),
     loading: true,
     data: null,
+    savedClockStart: opts.savedClockStart ?? null,
+    savedClockEnd: opts.savedClockEnd ?? null,
+    savedChannelValues: opts.savedChannelValues ?? null,
   };
   $("tape-inspector")?.removeAttribute("hidden");
   document.body.classList.add("inspector-open");
@@ -2807,7 +3125,7 @@ function renderInspector() {
     </label>
     <div class="seg" role="group" aria-label="Inspector window">
       <button type="button" data-inspector-window="focus" class="${ins.window === "focus" ? "is-on" : ""}">Warn ± 8 min</button>
-      <button type="button" data-inspector-window="full" class="${ins.window === "full" ? "is-on" : ""}">Full run</button>
+      <button type="button" data-inspector-window="full" class="${ins.window === "full" ? "is-on" : ""}">Full saved window</button>
     </div>`;
 
   const meta = $("inspector-meta");
@@ -2826,10 +3144,28 @@ function renderInspector() {
     return;
   }
 
-  const parts = [
-    `${data.from_clock} → ${data.to_clock}`,
-    `${data.sample_count} samples`,
-  ];
+  const channelTitle =
+    (data.channels || []).find((row) => row.id === data.channel)?.title || data.channel || ins.channel;
+  const savedSpan =
+    ins.savedClockStart || ins.savedClockEnd
+      ? formatMissionSpan(ins.savedClockStart, ins.savedClockEnd)
+      : String(ins.runId || "").startsWith("sealed_") && data.from_clock && data.to_clock && ins.window === "full"
+        ? formatMissionSpan(data.from_clock, data.to_clock)
+        : null;
+  const viewingSpan = formatMissionSpan(data.from_clock, data.to_clock);
+  const viewingCount = `${Number(data.sample_count || 0).toLocaleString()} samples for ${channelTitle}`;
+  const parts = [];
+  if (savedSpan) {
+    parts.push(`<span class="inspector-window-line"><span class="k">Saved window</span> ${escapeHtml(savedSpan)}</span>`);
+  }
+  parts.push(
+    `<span class="inspector-window-line"><span class="k">Viewing</span> ${escapeHtml(viewingSpan)} · ${escapeHtml(viewingCount)}</span>`
+  );
+  if (ins.savedChannelValues != null && savedSpan) {
+    parts.push(
+      `<span class="inspector-window-line is-muted">${Number(ins.savedChannelValues).toLocaleString()} channel values in the saved package</span>`
+    );
+  }
   if (data.crossing) {
     parts.push(
       `<span class="tag-cross">first warn ${escapeHtml(data.crossing.channel)} @ ${escapeHtml(data.crossing.clock)} · ${escapeHtml(String(data.crossing.value_num ?? data.crossing.value_text ?? ""))}</span>`
@@ -2838,7 +3174,7 @@ function renderInspector() {
   if (data.pin) {
     parts.push(`<span class="tag-pin">pin ${escapeHtml(data.pin.clock)}</span>`);
   }
-  meta.innerHTML = parts.join(" · ");
+  meta.innerHTML = parts.join("");
 
   const events = data.events || [];
   eventsRoot.innerHTML =
@@ -2874,6 +3210,11 @@ function renderInspector() {
   samplesRoot.innerHTML = rows
     ? `<div class="inspector-cols"><span>Clock</span><span>Value</span><span>Ch</span></div>${rows}`
     : `<p class="trust-empty">No samples in this window.</p>`;
+
+  const samplesTitle = $("inspector-samples-title");
+  if (samplesTitle) {
+    samplesTitle.textContent = `Samples for ${channelTitle}`;
+  }
 
   const targetT = pinT ?? crossT;
   if (targetT != null && rows) {
@@ -4835,12 +5176,50 @@ function bind() {
       syncSource(syncBtn.dataset.sourceSync);
       return;
     }
-    const browse = ev.target.closest("[data-trust-browse]");
-    if (browse) {
-      const which = browse.dataset.trustBrowse;
-      const fold = $(which === "library" ? "trust-fold-library" : "trust-fold-tapes");
-      if (fold) fold.open = true;
-      fold?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const cat = ev.target.closest("[data-explorer-cat]");
+    if (cat) {
+      setExplorerCategory(cat.dataset.explorerCat);
+      return;
+    }
+    const docFilter = ev.target.closest("[data-explorer-doc-filter]");
+    if (docFilter) {
+      setExplorerDocFilter(docFilter.dataset.explorerDocFilter);
+      return;
+    }
+    const select = ev.target.closest("[data-explorer-select]");
+    if (select) {
+      selectExplorerRecord(select.dataset.explorerSelect, { openDetail: true });
+      return;
+    }
+    if (ev.target.closest("[data-explorer-detail-back]")) {
+      closeExplorerDetail();
+      return;
+    }
+    const openCase = ev.target.closest("[data-explorer-open-case]");
+    if (openCase) {
+      openSlipFromDataset(openCase.dataset.explorerOpenCase);
+      return;
+    }
+    const inspectDataset = ev.target.closest("[data-explorer-inspect-dataset]");
+    if (inspectDataset) {
+      openInspector({ runId: inspectDataset.dataset.explorerInspectDataset, window: "full" });
+      return;
+    }
+    const inspectSnapshot = ev.target.closest("[data-explorer-inspect-snapshot]");
+    if (inspectSnapshot) {
+      const run = explorerSnapshots().find((row) => row.id === inspectSnapshot.dataset.explorerInspectSnapshot);
+      if (run) openInspectorForSnapshot(run);
+      else openInspector({ runId: inspectSnapshot.dataset.explorerInspectSnapshot, window: "full" });
+      return;
+    }
+    const openIncident = ev.target.closest("[data-explorer-open-incident]");
+    if (openIncident) {
+      loadIncident(openIncident.dataset.explorerOpenIncident);
+      return;
+    }
+    const readDoc = ev.target.closest("[data-explorer-read-doc]");
+    if (readDoc) {
+      openDoc(readDoc.dataset.explorerReadDoc);
       return;
     }
     if (ev.target.closest("[data-trust-back]")) {
@@ -4865,11 +5244,24 @@ function bind() {
     }
     const inspect = ev.target.closest("[data-trust-inspect]");
     if (inspect) {
-      openInspector({ runId: inspect.dataset.trustInspect });
+      const run = explorerSnapshots().find((row) => row.id === inspect.dataset.trustInspect);
+      if (run) openInspectorForSnapshot(run);
+      else openInspector({ runId: inspect.dataset.trustInspect });
       return;
     }
     const doc = ev.target.closest("[data-trust-doc]");
     if (doc) openDoc(doc.dataset.trustDoc);
+  });
+  $("trust-desk").addEventListener("keydown", (ev) => {
+    const cat = ev.target.closest("[data-explorer-cat]");
+    if (cat && (ev.key === "ArrowRight" || ev.key === "ArrowLeft")) {
+      ev.preventDefault();
+      const order = ["datasets", "snapshots", "documents"];
+      const idx = order.indexOf(cat.dataset.explorerCat);
+      const next = order[(idx + (ev.key === "ArrowRight" ? 1 : order.length - 1)) % order.length];
+      setExplorerCategory(next);
+      $(`source-cat-${next}`)?.focus();
+    }
   });
   $("inspect-tape-btn")?.addEventListener("click", () => {
     if (!state.runId && !state.incident) return;
