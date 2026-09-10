@@ -3,11 +3,11 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>ORBIT — the close, not the chase</title>
+    <title>ORBIT — Spacecraft Investigation | Paul Chung</title>
     <meta name="color-scheme" content="light" />
     <meta
       name="description"
-      content="ORBIT is a spacecraft investigation desk. It seals the tape, walks the procedure, and hands an operator a reason with a receipt on every claim — then stops before the uplink."
+      content="An investigation workbench for spacecraft anomalies, designed and built by Paul Chung. Explore the prototype, product decisions, and evaluation approach."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -15,11 +15,11 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/landing.css?v=33" />
+    <link rel="stylesheet" href="/static/landing.css?v=34" />
   </head>
 
   <body>
-    <a class="skip" href="/app">Skip to the desk</a>
+    <a class="skip" href="#main">Skip to content</a>
     <div class="grain" aria-hidden="true"></div>
 
     <div class="shell">
@@ -34,342 +34,321 @@
             </svg>
             <span class="brand-text"><b>Orbit</b></span>
           </a>
-          <div class="topbar-actions">
-            <a class="link-desk" href="/about">About Orbit</a>
-            <a class="link-desk" href="/app">Desk →</a>
-          </div>
+          <nav class="topbar-actions" aria-label="Primary">
+            <a class="nav-link" href="/about">Design decisions</a>
+            <a class="nav-link" href="https://github.com/pchung39/orbit" rel="noopener noreferrer" target="_blank">Source</a>
+            <a class="link-desk" href="/app">Explore demo</a>
+          </nav>
         </header>
       </div>
 
-      <main>
-        <section class="hero">
-          <div class="wrap hero-wrap">
-            <div class="hero-top rise">
-              <h1 class="display">
-                <span>The close,</span>
-                <span class="mid">not the</span>
-                <span>chase.</span>
-              </h1>
+      <main id="main">
+        <!-- 1. Hero -->
+        <section class="hero" aria-labelledby="hero-t">
+          <div class="wrap hero-grid">
+            <div class="hero-copy">
+              <p class="eyebrow">ORBIT · Spacecraft anomaly investigation</p>
+              <h1 class="hero-title" id="hero-t">From spacecraft alarm to a decision you can explain.</h1>
               <p class="lede">
-                An alarm tells you something broke&mdash;not what caused it. ORBIT pulls your
-                telemetry, procedures, and mission history into one sealed case and surfaces the
-                source.
+                ORBIT brings telemetry, command history, procedures, and prior incidents into one
+                reviewable case. It helps operators assess what happened, examine the evidence, and
+                decide what to do next—including when to hold for more information.
+              </p>
+              <p class="byline">
+                Designed and built by
+                <a href="https://www.linkedin.com/in/paulchung39/" rel="noopener noreferrer" target="_blank">Paul Chung</a>
+              </p>
+              <p class="byline-sub">
+                Product manager and software engineer with experience building spacecraft ground
+                software and test automation at NASA JPL.
               </p>
               <div class="hero-actions">
-                <a class="btn" href="/app">Enter the desk →</a>
-                <a class="btn btn-ghost" href="#confounder">See the confounder</a>
+                <a class="btn" href="/app/incidents/INC-0204">Explore a sample investigation</a>
+                <a class="btn btn-ghost" href="/about">See the design decisions</a>
               </div>
+              <p class="status-line">Interactive prototype · Simulated spacecraft data · Rules-based browser demo</p>
             </div>
 
-            <aside class="hero-story rise rise-2" aria-hidden="true">
-              <div class="story">
-                <div class="story-stage">
-                  <span class="story-scrap story-scrap-a">
-                    <i></i><i></i><i></i>
-                    <em>tape</em>
-                  </span>
-                  <span class="story-scrap story-scrap-b">
-                    <b>EPS‑17</b>
-                    <em>book</em>
-                  </span>
-                  <span class="story-scrap story-scrap-c">
-                    <b>INC‑0187</b>
-                    <em>prior</em>
-                  </span>
-
-                  <div class="story-case">
-                    <div class="story-case-top">
-                      <span class="story-warn">
-                        <span class="story-warn-dot"></span>
-                        Bus V warn
-                      </span>
-                      <span class="story-seal">Sealed</span>
+            <aside class="hero-preview" aria-label="Sample investigation preview">
+              <p class="preview-kicker">Sample investigation · Simulated data</p>
+              <div class="preview-card">
+                <header class="preview-top">
+                  <span class="preview-id">INC-0204</span>
+                  <span class="preview-alarm">Bus voltage warn</span>
+                </header>
+                <div class="preview-body">
+                  <div class="preview-row">
+                    <span class="tagchip tag-observed">Observed</span>
+                    <p><code>HEATER_B_ENABLE</code> at 14:29:45 · heater B draws <b>3.73 A</b></p>
+                  </div>
+                  <div class="preview-row">
+                    <span class="tagchip tag-derived">Derived</span>
+                    <p><b>3.2×</b> the healthy ON reference of 1.17 A</p>
+                  </div>
+                  <div class="preview-row">
+                    <span class="tagchip tag-documented">Documented</span>
+                    <p>EPS-17 inhibit bar · at least <b>2×</b> healthy</p>
+                  </div>
+                  <div class="preview-decision">
+                    <div>
+                      <p class="preview-rec-label">Recommended action</p>
+                      <p class="preview-rec">Inhibit Heater B</p>
                     </div>
-                    <div class="story-case-body">
-                      <div class="story-tags">
-                        <span class="story-tag is-obs">Observed</span>
-                        <span class="story-tag is-der">Derived</span>
-                        <span class="story-tag is-doc">Documented</span>
-                      </div>
-                      <div class="story-hypo">
-                        <span class="story-tag is-hyp">Hypothesis</span>
-                        <p class="story-claim">Partial short in Heater B is loading the bus.</p>
-                      </div>
-                      <div class="story-decision">
-                        <span class="story-act">Inhibit Heater B</span>
-                        <span class="story-hold">
-                          <span class="story-hold-x">×</span>
-                          not sent
-                        </span>
-                      </div>
-                    </div>
+                    <span class="preview-not-sent" title="ORBIT does not uplink commands">
+                      <span aria-hidden="true">×</span> Not sent
+                    </span>
                   </div>
                 </div>
-                <p class="story-caption">Evidence in · hypothesis out · uplink stays dark</p>
               </div>
             </aside>
           </div>
         </section>
 
-        <section class="sec sec-flow" id="flow" aria-labelledby="flow-t">
+        <!-- 2. Defining decision -->
+        <section class="sec sec-tone" id="decision" aria-labelledby="decision-t">
+          <div class="wrap">
+            <div class="sec-head">
+              <p class="eyebrow">The decision that shaped the product</p>
+              <h2 class="h-sec" id="decision-t">Similar alarms. Different next steps.</h2>
+              <p class="lede">
+                Both cases trigger a low-voltage warning. Both include a payload entering science
+                mode. The deciding evidence is whether heater current meets the procedure’s
+                threshold for recommending an inhibit.
+              </p>
+            </div>
+
+            <div class="compare" role="list">
+              <article class="compare-panel is-met" role="listitem">
+                <header class="compare-head">
+                  <span class="compare-state" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="14" height="14"><path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                  <div>
+                    <p class="compare-status">Threshold met</p>
+                    <p class="compare-id">Case INC-0204</p>
+                  </div>
+                </header>
+                <dl class="compare-facts">
+                  <div>
+                    <dt>Heater current</dt>
+                    <dd><b>3.2×</b> its healthy reference</dd>
+                  </div>
+                  <div>
+                    <dt>Procedure threshold</dt>
+                    <dd>At least <b>2×</b></dd>
+                  </div>
+                </dl>
+                <p class="compare-rec is-act">
+                  <span class="compare-rec-k">Recommendation</span>
+                  Inhibit Heater B
+                </p>
+                <a class="compare-link" href="/app/incidents/INC-0204">Open the recommendation case</a>
+              </article>
+
+              <article class="compare-panel is-hold" role="listitem">
+                <header class="compare-head">
+                  <span class="compare-state" aria-hidden="true">
+                    <svg viewBox="0 0 16 16" width="14" height="14"><path d="M4 8h8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+                  </span>
+                  <div>
+                    <p class="compare-status">Threshold not met</p>
+                    <p class="compare-id">Case INC-0212</p>
+                  </div>
+                </header>
+                <dl class="compare-facts">
+                  <div>
+                    <dt>Heater current</dt>
+                    <dd><b>1.7×</b> its healthy reference</dd>
+                  </div>
+                  <div>
+                    <dt>Procedure threshold</dt>
+                    <dd>At least <b>2×</b></dd>
+                  </div>
+                </dl>
+                <p class="compare-rec is-hold-rec">
+                  <span class="compare-rec-k">Recommendation</span>
+                  Hold for more evidence
+                </p>
+                <a class="compare-link" href="/app/incidents/INC-0212">Open the hold case</a>
+              </article>
+            </div>
+
+            <p class="lede compare-note">
+              A useful investigator must recognize when the evidence supports an action—and when it
+              does not. I built the hold case first to make that requirement explicit.
+            </p>
+            <p class="boundary">
+              An operator reviews the recommendation. ORBIT cannot send spacecraft commands.
+            </p>
+          </div>
+        </section>
+
+        <!-- 3. Workflow + AI -->
+        <section class="sec" id="how" aria-labelledby="how-t">
           <div class="wrap">
             <div class="sec-head">
               <p class="eyebrow">How it works</p>
-              <h2 class="h-sec" id="flow-t">Sources in. Hypothesis out.</h2>
-              <p class="lede">
-                ORBIT pulls telemetry, procedure, and prior closes into one sealed run — then
-                builds a tagged case file the operator can defend.
-              </p>
+              <h2 class="h-sec" id="how-t">An investigation you can follow.</h2>
             </div>
 
-            <div class="flow" aria-hidden="true">
-              <p class="flow-col-label flow-label-src">Sources</p>
-              <p class="flow-col-label flow-label-out">Outcome</p>
-
-              <div class="flow-col flow-sources">
-                <div class="flow-src-stack">
-                  <article class="flow-src" data-src="0">
-                    <span class="flow-src-k">Telemetry</span>
-                    <b>Sealed window</b>
-                    <span class="flow-src-d">EPS.bus_voltage · THM.heater_b</span>
-                  </article>
-                  <article class="flow-src" data-src="1">
-                    <span class="flow-src-k">Procedure</span>
-                    <b>EPS‑17</b>
-                    <span class="flow-src-d">Inhibit bar ≥ 2× healthy</span>
-                  </article>
-                  <article class="flow-src" data-src="2">
-                    <span class="flow-src-k">Prior close</span>
-                    <b>INC‑0187</b>
-                    <span class="flow-src-d">Heater fault pattern</span>
-                  </article>
+            <ol class="steps">
+              <li class="step">
+                <span class="step-n" aria-hidden="true">01</span>
+                <div>
+                  <h3>Preserve the evidence</h3>
+                  <p>Save a fixed window of telemetry and events so the investigation can be reviewed against the same inputs later.</p>
                 </div>
-              </div>
-
-              <div class="flow-rail flow-rail-in" aria-hidden="true">
-                <svg class="flow-rail-svg" viewBox="0 0 120 78" preserveAspectRatio="xMidYMid meet">
-                  <path class="flow-wire is-in" d="M24 2 V28 C24 52 60 52 60 52" />
-                  <path class="flow-wire is-in" d="M60 2 V52" />
-                  <path class="flow-wire is-in" d="M96 2 V28 C96 52 60 52 60 52" />
-                  <path class="flow-wire is-in" d="M60 52 V64" />
-                  <path class="flow-wire-arrow is-in-tip" d="M50 58 L60 72 L70 58" />
-                </svg>
-              </div>
-
-              <div class="flow-mid">
-                <svg class="flow-join" viewBox="0 0 200 260" preserveAspectRatio="none" aria-hidden="true">
-                  <path class="flow-wire is-in" d="M0 36 C90 36, 100 130, 200 130" />
-                  <path class="flow-wire is-in" d="M0 130 H200" />
-                  <path class="flow-wire is-in" d="M0 224 C90 224, 100 130, 200 130" />
-                </svg>
-                <div class="flow-hub">
-                  <svg class="emblem emblem-hub" viewBox="0 0 64 64">
-                    <circle class="em-ring" cx="32" cy="32" r="27" />
-                    <ellipse class="em-orbit" cx="32" cy="32" rx="22" ry="9" />
-                    <circle class="em-core" cx="32" cy="32" r="5" />
-                    <circle class="em-node" cx="50" cy="22" r="3.5" />
-                  </svg>
-                  <span class="flow-hub-label">ORBIT</span>
+              </li>
+              <li class="step">
+                <span class="step-n" aria-hidden="true">02</span>
+                <div>
+                  <h3>Assess it in context</h3>
+                  <p>Use procedures and prior incidents to interpret the measurements and assess whether they support a recommendation.</p>
                 </div>
-                <svg class="flow-exit" viewBox="0 0 120 40" preserveAspectRatio="none" aria-hidden="true">
-                  <path class="flow-wire is-out" d="M0 20 H100" />
-                  <path class="flow-wire-arrow" d="M96 12 L112 20 L96 28" />
-                </svg>
-              </div>
+              </li>
+              <li class="step">
+                <span class="step-n" aria-hidden="true">03</span>
+                <div>
+                  <h3>Show the basis for the decision</h3>
+                  <p>Present the evidence, calculations, citations, and proposed explanation together. Hold when the available evidence is insufficient.</p>
+                </div>
+              </li>
+            </ol>
 
-              <div class="flow-rail flow-rail-out" aria-hidden="true">
-                <svg class="flow-rail-svg" viewBox="0 0 40 64" preserveAspectRatio="xMidYMid meet">
-                  <path class="flow-wire is-out" d="M20 2 V46" />
-                  <path class="flow-wire-arrow is-out-tip" d="M10 38 L20 54 L30 38" />
-                </svg>
-              </div>
-
-              <div class="flow-col flow-out">
-                <article class="flow-result">
-                  <div class="flow-steps">
-                    <span class="tagchip tag-observed">OBSERVED</span>
-                    <span class="flow-arrow">→</span>
-                    <span class="tagchip tag-derived">DERIVED</span>
-                    <span class="flow-arrow">→</span>
-                    <span class="tagchip tag-documented">DOCUMENTED</span>
-                    <span class="flow-arrow">→</span>
-                    <span class="tagchip tag-hypothesis">HYPOTHESIS</span>
-                  </div>
-                  <p class="flow-claim">Partial short in Heater B is loading the bus.</p>
-                  <p class="flow-rec">Inhibit Heater B · <em>not sent</em></p>
-                </article>
-              </div>
+            <div class="ai-fit">
+              <h3 id="ai-fit-t">Where the AI fits</h3>
+              <p>
+                In this workflow, the investigator decides what evidence to examine, uses tools to
+                retrieve or calculate it, and assesses whether the results support a conclusion.
+              </p>
+              <p>
+                ORBIT’s browser demo uses a rules-based investigator to establish repeatable
+                reference behavior. Experimental LLM providers are available separately through the
+                command line. The published evaluation results cover the rules-based provider.
+              </p>
             </div>
           </div>
         </section>
 
-        <section class="sec sec-confounder" id="confounder" aria-labelledby="confounder-t">
+        <!-- 4. Reviewable output -->
+        <section class="sec sec-tone" id="labels" aria-labelledby="labels-t">
           <div class="wrap">
             <div class="sec-head">
-              <p class="eyebrow">The confounder</p>
-              <h2 class="h-sec" id="confounder-t">
-                Same alarm. Same sag. <i>One</i> meets the bar.
-              </h2>
+              <h2 class="h-sec" id="labels-t">See what is measured—and what is inferred.</h2>
               <p class="lede">
-                Two tapes, identical shape. Payload enters science mode on both. The procedure asks
-                one number — and only one heater clears it.
+                Each claim is labeled so a reviewer can distinguish recorded facts from
+                calculations, documentation, and proposed explanations.
               </p>
             </div>
 
-            <div class="diptych">
-              <article class="case case-act">
-                <header class="case-top">
-                  <span class="case-id">INC&#8209;0204</span>
-                  <span class="case-sub">Bus voltage warn<br />run eps204</span>
-                </header>
-                <dl class="rows">
-                  <div class="row is-same"><dt>Alarm</dt><dd>EPS.bus_voltage</dd></div>
-                  <div class="row is-same"><dt>Bus floor</dt><dd>25.67 V &nbsp;·&nbsp; under warn</dd></div>
-                  <div class="row is-same"><dt>Payload</dt><dd>SCIENCE_MODE &nbsp;·&nbsp; 0.96 A</dd></div>
-                  <div class="row is-same"><dt>Procedure</dt><dd>EPS&#8209;17 &nbsp;·&nbsp; bar is ≥ 2× healthy</dd></div>
-                  <div class="row is-pivot">
-                    <dt>Heater B</dt>
-                    <dd>
-                      3.73 A &nbsp;→&nbsp; 3.2×
-                      <small>Meets the bar</small>
-                      <span class="bar" style="--gate: 50%"><i style="width: 80%"></i></span>
-                    </dd>
-                  </div>
-                </dl>
-                <div class="verdict is-act">
-                  <b>Inhibit Heater B.</b>
-                  <span>Recommended · not sent</span>
+            <div class="report" aria-label="Annotated report excerpt from INC-0204">
+              <div class="report-row">
+                <span class="tagchip tag-observed">Observed</span>
+                <div>
+                  <p class="report-claim">Command <code>HEATER_B_ENABLE</code> at 14:29:45.</p>
+                  <p class="report-src">Command log · sealed case evidence</p>
                 </div>
-              </article>
-
-              <article class="case case-hold">
-                <header class="case-top">
-                  <span class="case-id">INC&#8209;0212</span>
-                  <span class="case-sub">Bus voltage — marginal<br />run marg001</span>
-                </header>
-                <dl class="rows">
-                  <div class="row is-same"><dt>Alarm</dt><dd>EPS.bus_voltage</dd></div>
-                  <div class="row is-same"><dt>Bus floor</dt><dd>26.05 V &nbsp;·&nbsp; under warn</dd></div>
-                  <div class="row is-same"><dt>Payload</dt><dd>SCIENCE_MODE &nbsp;·&nbsp; 0.96 A</dd></div>
-                  <div class="row is-same"><dt>Procedure</dt><dd>EPS&#8209;17 &nbsp;·&nbsp; bar is ≥ 2× healthy</dd></div>
-                  <div class="row is-pivot">
-                    <dt>Heater B</dt>
-                    <dd>
-                      2.04 A &nbsp;→&nbsp; 1.7×
-                      <small>Short of the bar</small>
-                      <span class="bar is-under" style="--gate: 50%"><i style="width: 43.5%"></i></span>
-                    </dd>
-                  </div>
-                </dl>
-                <div class="verdict is-hold">
-                  <b>Hold. Do not command.</b>
-                  <span>No FAULT id invented</span>
+              </div>
+              <div class="report-row">
+                <span class="tagchip tag-derived">Derived</span>
+                <div>
+                  <p class="report-claim">Heater draw is 3.2× the healthy ON reference.</p>
+                  <p class="report-src">Computed: 3.73 A ÷ 1.17 A</p>
                 </div>
-              </article>
+              </div>
+              <div class="report-row">
+                <span class="tagchip tag-documented">Documented</span>
+                <div>
+                  <p class="report-claim">EPS-17 requires at least 2× healthy for an inhibit recommendation.</p>
+                  <p class="report-src">Procedure EPS-17 · prior close INC-0187</p>
+                </div>
+              </div>
+              <div class="report-row">
+                <span class="tagchip tag-hypothesis">Hypothesis</span>
+                <div>
+                  <p class="report-claim">A partial short in Heater B is loading the bus.</p>
+                  <p class="report-src">Proposed explanation · subject to operator review</p>
+                </div>
+              </div>
             </div>
+
+            <p class="lede closing-note">
+              The labels make the report easier to inspect and challenge. They do not turn a
+              hypothesis into a fact.
+            </p>
           </div>
         </section>
 
-        <section class="sec" id="tags" aria-labelledby="tags-t">
+        <!-- 5. Evaluation -->
+        <section class="sec" id="eval" aria-labelledby="eval-t">
           <div class="wrap">
             <div class="sec-head">
-              <p class="eyebrow">Receipts</p>
-              <h2 class="h-sec" id="tags-t">Every sentence gets a stamp.</h2>
+              <p class="eyebrow">Evaluation</p>
+              <h2 class="h-sec" id="eval-t">A correct answer is only part of the test.</h2>
               <p class="lede">
-                Measured. Computed. Cited. Proposed. Facts don't wear hypothesis clothes.
+                The suite checks both the decision and the evidence supporting it. A report can
+                reach the expected conclusion and still fail because its claims are unsupported or
+                its recommendation is inappropriate.
               </p>
             </div>
 
-            <div class="ladder">
-              <div class="rung">
-                <span class="tagchip tag-observed">OBSERVED</span>
-                <p class="rung-claim">Command <code>HEATER_B_ENABLE</code> at 14:29:45.</p>
-                <p class="rung-src">Command log · sealed run fault1</p>
-              </div>
-              <div class="rung">
-                <span class="tagchip tag-derived">DERIVED</span>
-                <p class="rung-claim">Heater draw is 3.2× the healthy ON family.</p>
-                <p class="rung-src">Computed: 3.73 A ÷ 1.17 A</p>
-              </div>
-              <div class="rung">
-                <span class="tagchip tag-documented">DOCUMENTED</span>
-                <p class="rung-claim">EPS‑17 sets the inhibit bar at two times healthy.</p>
-                <p class="rung-src">Procedure EPS‑17 §4 · prior close INC‑0187</p>
-              </div>
-              <div class="rung">
-                <span class="tagchip tag-hypothesis">HYPOTHESIS</span>
-                <p class="rung-claim">Partial short in Heater B is the load on the bus.</p>
-                <p class="rung-src">Proposed — not yet proven · operator decides</p>
-              </div>
+            <div class="result-strip" aria-label="Evaluation summary">
+              <div><b>55</b><span>checks</span></div>
+              <div><b>5</b><span>simulated scenarios</span></div>
+              <div><b>Rules</b><span>provider</span></div>
+              <div><b>Passed</b><span>release gate</span></div>
             </div>
+
+            <ul class="check-cats">
+              <li>
+                <h3>Outcome</h3>
+                <p>Does the cause and recommended action match the expected result?</p>
+              </li>
+              <li>
+                <h3>Hold behavior</h3>
+                <p>When the evidence is insufficient, does the investigator hold and explain what is missing?</p>
+              </li>
+              <li>
+                <h3>Evidence support</h3>
+                <p>Do claims have the required source labels, calculations, and citations?</p>
+              </li>
+              <li>
+                <h3>Alternative cases</h3>
+                <p>Does the investigator avoid a heater inhibit when that action is inappropriate?</p>
+              </li>
+            </ul>
+
+            <p class="lede">
+              Designated failures block release even when the overall score improves.
+            </p>
+            <p class="scope-note">
+              These results cover a small regression suite using simulated data. They do not
+              establish LLM performance, reliability on real flight data, or readiness for
+              operational use.
+            </p>
+            <p class="sec-cta">
+              <a class="btn" href="/app/trust">Inspect all evaluation checks</a>
+            </p>
           </div>
         </section>
 
-        <section class="sec" id="seal" aria-labelledby="seal-t">
-          <div class="wrap split">
-            <div class="split-copy">
-              <p class="eyebrow">Evidence</p>
-              <h2 class="h-sec" id="seal-t">Not the archive. <i>The window.</i></h2>
-              <p class="lede">
-                Opening a case fetches a slice of the upstream tape — warn time plus a pad — and
-                seals it. The investigation runs against a package that cannot move. No live
-                downlink. No CSV upload. No tape that changes between two readings of the same
-                report.
-              </p>
-              <p class="note">Inspect any channel in the sealed run: Trust → Inspect.</p>
-            </div>
-
-            <div class="seal" aria-hidden="true">
-              <div class="seal-scale"><span>14:00</span><span>14:32 WARN</span><span>15:04</span></div>
-              <div class="seal-band"><span class="seal-win"></span></div>
-              <p class="seal-legend">
-                <span>Upstream archive · full orbit</span>
-                <span><b>Sealed package · warn ± pad</b></span>
-              </p>
-            </div>
-          </div>
-        </section>
-
-        <section class="sec" id="rates" aria-labelledby="rates-t">
-          <div class="wrap">
-            <div class="sec-head">
-              <p class="eyebrow">Measured, not claimed</p>
-              <h2 class="h-sec" id="rates-t">The eval on disk is the one Trust renders.</h2>
-              <p class="lede">
-                Five scenarios: four real faults and one that must be refused. Naming a cause is not
-                enough — the report also has to hold, leave a healthy heater alone, and stamp every claim.
-              </p>
-            </div>
-
-            <div class="rates">
-              <div class="rate">
-                <p class="rate-n">4/4</p>
-                <p class="rate-label">Names the fault</p>
-                <p class="rate-def">When something broke, the report said what.</p>
-              </div>
-              <div class="rate">
-                <p class="rate-n">1/1</p>
-                <p class="rate-label">Holds when unsure</p>
-                <p class="rate-def">When the evidence is thin, it does not invent a cause.</p>
-              </div>
-              <div class="rate">
-                <p class="rate-n">3/3</p>
-                <p class="rate-label">Leaves a healthy heater</p>
-                <p class="rate-def">Never recommends shutting one down that isn’t the fault.</p>
-              </div>
-              <div class="rate">
-                <p class="rate-n">5/5</p>
-                <p class="rate-label">Stamps every claim</p>
-                <p class="rate-def">Observed, derived, documented, hypothesis — on the sentence.</p>
-              </div>
-            </div>
-
-            <div class="rates-foot">
-              <p class="note">55 of 55 checks · provider <b>rules</b> · deterministic harness</p>
-              <div class="rates-actions">
-                <span class="gate-chip">Release gate · PASS vs baseline</span>
-                <a class="btn btn-sm" href="/app">Open the desk →</a>
-              </div>
+        <!-- 6. Close -->
+        <section class="sec sec-close" id="built" aria-labelledby="built-t">
+          <div class="wrap close-inner">
+            <h2 class="h-sec" id="built-t">Built end to end by Paul Chung.</h2>
+            <p class="lede">
+              I designed the product scope, investigation workflow, evidence model, application,
+              and evaluation suite.
+            </p>
+            <p class="lede">
+              ORBIT brings together my experience building spacecraft software at NASA JPL and
+              delivering customer-facing software products. It explores how to make AI-assisted
+              investigation useful, reviewable, and testable.
+            </p>
+            <div class="hero-actions">
+              <a class="btn" href="/about">Read the product case study</a>
+              <a class="btn btn-ghost" href="https://github.com/pchung39/orbit" rel="noopener noreferrer" target="_blank">View source</a>
+              <a class="btn btn-ghost" href="https://www.linkedin.com/in/paulchung39/" rel="noopener noreferrer" target="_blank">Connect on LinkedIn</a>
             </div>
           </div>
         </section>
@@ -378,18 +357,17 @@
       <footer class="foot">
         <div class="wrap foot-inner">
           <span>
-            ORBIT · investigation workbench for Aurora‑1 · built by
+            ORBIT · investigation workbench ·
             <a href="https://www.linkedin.com/in/paulchung39/" rel="noopener noreferrer" target="_blank">Paul Chung</a>
           </span>
-          <nav>
-            <a href="/app">Desk</a>
-            <a href="/app/incidents">Incidents</a>
+          <nav aria-label="Footer">
+            <a href="/about">Design decisions</a>
+            <a href="/app">Demo</a>
             <a href="/app/trust">Trust</a>
+            <a href="https://github.com/pchung39/orbit" rel="noopener noreferrer" target="_blank">Source</a>
           </nav>
         </div>
       </footer>
     </div>
-
-    <script src="/static/landing.js?v=13"></script>
   </body>
 </html>
