@@ -274,53 +274,11 @@ button.brand:hover .wordmark { color: var(--signal-2); }
 .app-tab.is-on .n { color: var(--signal); }
 
 .appbar-actions { display: flex; align-items: center; gap: 12px; }
-.appbar-about {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-3);
-  text-decoration: none;
-  padding: 6px 2px;
-  white-space: nowrap;
-}
-.appbar-about:hover { color: var(--signal); }
-.craft-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 5px 10px;
-  background: var(--surface-2);
-  border: 1px solid var(--line-2);
-  font: inherit;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.1em;
-  color: var(--text-2);
-  cursor: pointer;
-}
-.craft-chip:hover { border-color: var(--line-3); background: var(--surface-3); }
-.craft-chip .name { color: var(--text); font-weight: 500; }
-.craft-chip.is-on .pulse { color: var(--signal); }
-.craft-chip.is-empty .pulse { color: var(--warn); }
 .theme-btn { position: relative; }
 .theme-btn svg { width: 15px; height: 15px; display: block; }
 .theme-btn .i-sun { display: none; }
 [data-theme="light"] .theme-btn .i-sun { display: block; }
 [data-theme="light"] .theme-btn .i-moon { display: none; }
-.pulse {
-  width: 6px;
-  height: 6px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: currentColor;
-  animation: pulse 2.4s ease-out infinite;
-}
-@keyframes pulse {
-  0% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
-  70% { box-shadow: 0 0 0 6px transparent; opacity: 0.55; }
-  100% { box-shadow: 0 0 0 0 transparent; opacity: 1; }
-}
 
 /* ── Shell ──────────────────────────────────────────────────── */
 .app {
@@ -382,6 +340,11 @@ body.view-trust #case-desk { display: none; }
   font-weight: 500;
   padding: 6px 12px;
   cursor: pointer;
+}
+a.btn-bar {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 .btn-bar:hover { background: var(--surface-3); border-color: var(--signal); color: var(--signal); }
 .text-btn {
@@ -4291,6 +4254,5 @@ body.is-filed .panel-decide .panel-kicker { color: var(--signal); }
 }
 @media (prefers-reduced-motion: reduce) {
   .stage { transition: none; }
-  .pulse { animation: none; }
   .stage { scroll-behavior: auto; }
 }

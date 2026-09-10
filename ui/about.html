@@ -11,8 +11,8 @@
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   >
-  <link rel="stylesheet" href="/static/landing.css?v=32">
-  <link rel="stylesheet" href="/static/about.css?v=1">
+  <link rel="stylesheet" href="/static/landing.css?v=33">
+  <link rel="stylesheet" href="/static/about.css?v=3">
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -29,7 +29,7 @@
           <span class="brand-text"><b>Orbit</b></span>
         </a>
         <div class="topbar-actions">
-          <a class="link-about is-on" href="/about">About Orbit</a>
+          <a class="link-desk is-on" href="/about">About Orbit</a>
           <a class="link-desk" href="/app">Desk →</a>
         </div>
       </header>
@@ -193,76 +193,133 @@
 
 <!-- DECISIONS -->
 <section class="blk">
-  <div class="rail"><b>Decisions</b>Six records · option, cost, reversal</div>
+  <div class="rail"><b>Decisions</b>Six calls · one line</div>
   <div class="body">
-    <h2>The decision log</h2>
-    <p>Each record is written the way I would defend it in a review. The real alternative, what the choice cost, and what would make me change my mind.</p>
+    <h2>Six calls that shaped ORBIT</h2>
+    <p>Read the bold line. That is the call. Open one if you want the defense: what I skipped, why, and what would make me reverse it.</p>
 
-    <div class="rec">
-      <h3>Freeze the evidence instead of querying the archive live</h3>
-      <dl>
-        <dt>Alternative</dt><dd>Let the agent query the archive whenever it wants, the way an engineer would.</dd>
-        <dt>Chose</dt><dd>Opening a case pulls the warn time plus a pad, freezes it, and every later step reads only that package.</dd>
-        <dt>Because</dt><dd>A run you cannot repeat cannot be audited or graded. If the data moves between two readings, the eval is measuring noise and the board is reading fiction.</dd>
-        <dt>Cost</dt><dd>Real investigations grow past their window. Today an operator has to open a new case, and I have no way to widen one in place.</dd>
-        <dt>Reverse if</dt><dd>Operators hit the window edge in most cases. Then freezing becomes versioned snapshots instead of a single pull.</dd>
-      </dl>
-    </div>
-
-    <div class="rec">
-      <h3>Tag every claim, not every document</h3>
-      <dl>
-        <dt>Alternative</dt><dd>Footnotes at the end of a paragraph, which is what most retrieval tools ship.</dd>
-        <dt>Chose</dt><dd>Four tags applied sentence by sentence: <span class="mono">observed</span>, <span class="mono">derived</span>, <span class="mono">documented</span>, <span class="mono">hypothesis</span>.</dd>
-        <dt>Because</dt><dd>A footnote proves a source exists. It does not say whether this sentence was measured, calculated, quoted, or guessed. That is the reviewer's real question.</dd>
-        <dt>Cost</dt><dd>Denser reports, harder generation, and a new way to fail: a true claim under the wrong tag. The suite grew a whole family of checks for that.</dd>
-        <dt>Reverse if</dt><dd>Operators start ignoring the tags. Proof nobody reads is overhead in a safety costume.</dd>
-      </dl>
-    </div>
-
-    <div class="rec">
-      <h3>Take the limit from the procedure, not from the model</h3>
-      <dl>
-        <dt>Alternative</dt><dd>Ask the model whether a heater draw looks wrong. It will answer at any value, and it will sound sure.</dd>
-        <dt>Chose</dt><dd>EPS-17 sets the inhibit limit at 2× the healthy ON family. ORBIT shows the math, 3.73 ÷ 1.17 = 3.2×, and cites the section.</dd>
-        <dt>Because</dt><dd>That limit already passed engineering review. Working it out again at run time throws the review away and makes the answer wobble between runs.</dd>
-        <dt>Cost</dt><dd>ORBIT is only as good as the book. On a subsystem with no written limit it has much less to say. That is the honest answer, not a gap to cover up.</dd>
-        <dt>Reverse if</dt><dd>Never for safety limits. The most I would add is proposing a limit for a human to approve, still tagged as a hypothesis.</dd>
-      </dl>
-    </div>
-
-    <div class="rec">
-      <h3>Put the case it must refuse on the landing page</h3>
-      <dl>
-        <dt>Alternative</dt><dd>Show the four clean closes, which is what every portfolio project does.</dd>
-        <dt>Chose</dt><dd>One of the five scenarios is a case ORBIT has to refuse, sitting right next to its twin.</dd>
-        <dt>Because</dt><dd>Anyone judging an agent for mission work is looking for the edge where it makes things up. Handing them that edge, with the refusal graded, is a stronger claim than four wins and takes less time to verify.</dd>
-        <dt>Cost</dt><dd>The headline is a hold instead of a solve. That reads as less impressive for about ten seconds.</dd>
-        <dt>Reverse if</dt><dd>Nothing so far. It is the first thing reviewers open.</dd>
-      </dl>
-    </div>
-
-    <div class="rec">
-      <h3>Use fixed rules first and make the model earn its place</h3>
-      <dl>
-        <dt>Alternative</dt><dd>Lead with an LLM. Faster to demo, closer to where the attention is.</dd>
-        <dt>Chose</dt><dd>Report writing sits behind a provider interface. Graded runs use the rules provider, so all 55 checks repeat exactly.</dd>
-        <dt>Because</dt><dd>If the system under test is random, a red check has two possible causes and you cannot tell them apart. Do not build the ruler out of the same rubber as the thing you are measuring.</dd>
-        <dt>Cost</dt><dd>The rules path will not carry to a new subsystem. It is scaffolding, and I say so.</dd>
-        <dt>Reverse if</dt><dd>Not a reversal, a next step. Run a model provider against the same 55 checks so the comparison is fair.</dd>
-      </dl>
-    </div>
-
-    <div class="rec">
-      <h3>Let safety checks veto the release on their own</h3>
-      <dl>
-        <dt>Alternative</dt><dd>One total score with a pass mark, which is how most eval dashboards work.</dd>
-        <dt>Chose</dt><dd>The gate returns <span class="mono">PASS</span>, <span class="mono">BLOCKED</span>, or <span class="mono">INSUFFICIENT_COVERAGE</span>. A safety or source failure blocks on its own, whatever the total says.</dd>
-        <dt>Because</dt><dd>A total score lets a build that invented a fault ID ship because it wrote well on four other cases. These failures are not interchangeable, so the scoring must not treat them as if they are.</dd>
-        <dt>Cost</dt><dd>Builds get blocked on single checks. That is real friction for one person.</dd>
-        <dt>Reverse if</dt><dd>The gate keeps blocking on a check that turns out to hold my opinion rather than the procedure's rule. That is a bad check, not a bad rule.</dd>
-      </dl>
-    </div>
+    <ol class="choices">
+      <li>
+        <details class="choice" open>
+          <summary>
+            <span class="choice-n">01</span>
+            <span class="choice-head">
+              <h3>Freeze the tape</h3>
+              <p>Once a case opens, the evidence is locked. It cannot change while you investigate.</p>
+            </span>
+            <span class="choice-mark" aria-hidden="true"></span>
+          </summary>
+          <dl>
+            <dt>Instead of</dt>
+            <dd>Letting the agent query the live archive whenever it wants, the way an engineer would.</dd>
+            <dt>Why</dt>
+            <dd>If the data can move, you cannot audit the run or grade the agent. A second look might be a different story. If a case outgrows the window, you open a new one.</dd>
+            <dt>Reverse if</dt>
+            <dd>Operators hit the window edge in most cases. Then freeze a series of snapshots, not one pull.</dd>
+          </dl>
+        </details>
+      </li>
+      <li>
+        <details class="choice">
+          <summary>
+            <span class="choice-n">02</span>
+            <span class="choice-head">
+              <h3>Stamp every sentence</h3>
+              <p>Each line says how we know it: measured, calculated, quoted, or guessed.</p>
+            </span>
+            <span class="choice-mark" aria-hidden="true"></span>
+          </summary>
+          <dl>
+            <dt>Instead of</dt>
+            <dd>A footnote at the end of the paragraph, which is what most retrieval tools ship.</dd>
+            <dt>Why</dt>
+            <dd>A footnote proves a source exists. It does not tell a reviewer whether this sentence is a measurement or a guess. Wrong stamps are their own failure — the eval checks for that.</dd>
+            <dt>Reverse if</dt>
+            <dd>Operators stop reading the stamps. Proof nobody uses is just extra work.</dd>
+          </dl>
+        </details>
+      </li>
+      <li>
+        <details class="choice">
+          <summary>
+            <span class="choice-n">03</span>
+            <span class="choice-head">
+              <h3>Use the procedure’s limit</h3>
+              <p>The inhibit bar comes from the procedure. The model does not get to pick a new one.</p>
+            </span>
+            <span class="choice-mark" aria-hidden="true"></span>
+          </summary>
+          <dl>
+            <dt>Instead of</dt>
+            <dd>Asking the model whether a heater “looks wrong.” It will answer at any value, and it will sound sure.</dd>
+            <dt>Why</dt>
+            <dd>EPS-17 already set the bar at 2× healthy. That passed engineering review. Recalculating it at run time throws the review away. On a subsystem with no written limit, ORBIT has less to say — that is the honest answer.</dd>
+            <dt>Reverse if</dt>
+            <dd>Never for a safety limit. At most, propose one for a human to approve, tagged as a guess.</dd>
+          </dl>
+        </details>
+      </li>
+      <li>
+        <details class="choice">
+          <summary>
+            <span class="choice-n">04</span>
+            <span class="choice-head">
+              <h3>Show the case with no answer</h3>
+              <p>One of the five scenarios must be refused. It sits next to its twin on the landing page.</p>
+            </span>
+            <span class="choice-mark" aria-hidden="true"></span>
+          </summary>
+          <dl>
+            <dt>Instead of</dt>
+            <dd>Leading with the four clean closes, which is what every demo does.</dd>
+            <dt>Why</dt>
+            <dd>Anyone judging this for mission work is looking for the moment it makes things up. Handing them that case is faster to check than four wins.</dd>
+            <dt>Reverse if</dt>
+            <dd>Nothing so far. It is the first thing reviewers open.</dd>
+          </dl>
+        </details>
+      </li>
+      <li>
+        <details class="choice">
+          <summary>
+            <span class="choice-n">05</span>
+            <span class="choice-head">
+              <h3>Grade the rules first</h3>
+              <p>Scored runs use a rules engine, so the same 55 checks come back the same way every time.</p>
+            </span>
+            <span class="choice-mark" aria-hidden="true"></span>
+          </summary>
+          <dl>
+            <dt>Instead of</dt>
+            <dd>Leading with an LLM because it demos faster.</dd>
+            <dt>Why</dt>
+            <dd>If the system under test is random, a failed check has two causes and you cannot tell them apart. The rules path will not carry to a new subsystem — it is scaffolding, and I say so.</dd>
+            <dt>Reverse if</dt>
+            <dd>Not a reversal. The next step is running a model on the same 55 checks.</dd>
+          </dl>
+        </details>
+      </li>
+      <li>
+        <details class="choice">
+          <summary>
+            <span class="choice-n">06</span>
+            <span class="choice-head">
+              <h3>One safety miss blocks the ship</h3>
+              <p>A build that invents a fault ID cannot ship, even if it scored well everywhere else.</p>
+            </span>
+            <span class="choice-mark" aria-hidden="true"></span>
+          </summary>
+          <dl>
+            <dt>Instead of</dt>
+            <dd>One total score with a pass mark, which is how most eval dashboards work.</dd>
+            <dt>Why</dt>
+            <dd>A total lets a dangerous miss hide behind four good cases. These failures are not interchangeable, so the gate must not treat them as if they are.</dd>
+            <dt>Reverse if</dt>
+            <dd>The gate keeps blocking on a check that is my opinion, not the procedure’s rule. That is a bad check, not a bad rule.</dd>
+          </dl>
+        </details>
+      </li>
+    </ol>
   </div>
 </section>
 
@@ -391,24 +448,20 @@
       <tr><td class="n met">5 / 5</td><td>Tags clean, no cause language in plain timeline facts.</td></tr>
     </table>
     <p>55 of 55, rules provider, gate <span class="met">PASS</span> against baseline. The Trust page reads the same file the gate reads and shows every check, so a visitor can open any one of them instead of trusting a summary.</p>
-    <div class="shot">Screenshot slot — Trust page, per-check results and baseline comparison<br>replace with a capture from /app/trust</div>
 
-    <h3>What this eval cannot tell you</h3>
-    <p>The same standard, turned on the eval itself.</p>
+    <h3>Where the eval stops</h3>
+    <p>Stated here rather than left for a reader to find, because a trust layer that will not audit itself is decoration.</p>
     <ul>
-      <li><b>Five scenarios is thin.</b> It catches problems in behavior I already thought about. It says nothing about failures I have not imagined, and those are the ones that matter.</li>
-      <li><b>The checks hold my judgment.</b> Where the procedure is explicit, the check is solid. Where it is not, I decided alone. No second reviewer.</li>
-      <li><b>Planted faults are easier than real ones.</b> No dropouts, no clock drift, no sensor that dies in the middle.</li>
-      <li><b>One refusal case is not a refusal rate.</b> It proves refusal can be represented and graded. It says nothing about the many borderline cases in between.</li>
-      <li><b>Nothing here measures confidence.</b> The gate checks that the agent held back when the limit was not met. It does not check whether the agent's confidence matches how often it is right.</li>
+      <li><b>The suite is deep, not wide.</b> Five scenarios lock down the behaviors that carry the most risk: the refusal, the contrast cases, the tags. That is a regression suite by design. Breadth is the next investment, and it is a scale problem rather than a design problem.</li>
+      <li><b>The scenarios are built, not flown.</b> Planted faults give a known answer key, which is what makes grading possible at all. Real telemetry adds dropouts, clock drift, and sensors that fail mid-event. Those belong in the suite once the trust layer has proven out on clean data.</li>
+      <li><b>It grades behavior, not confidence.</b> The gate proves the agent holds back when the limit is not met. Whether its stated confidence tracks how often it is right is a separate layer, and it needs a wider suite before the number would mean anything.</li>
     </ul>
 
-    <h3>What I would add to the eval next, in order</h3>
+    <h3>What comes next, in order</h3>
     <ul>
-      <li><b>Same case, small changes.</b> Shift the window, add sensor noise, rename the channel, change the units. The verdict must not move. This is the direct fix for the planted-clue risk above, and it is cheap.</li>
-      <li><b>Cases built to mislead.</b> A prior close that almost applies. A procedure that almost matches. A case with two live candidate causes.</li>
-      <li><b>Operator disagreements as new checks.</b> Every time a filed decision differs from the recommendation, that is a candidate check. It turns real use into coverage, which is the only honest way a small suite grows.</li>
-      <li><b>A model provider on the same 55 checks.</b> Same checks, same gate, same baseline. Until that runs, the current result proves the harness, not the agent.</li>
+      <li><b>Same case, small changes.</b> Shift the window, add sensor noise, rename the channel, change the units. The verdict must not move. This proves the agent is reasoning from the evidence rather than from the shape of the scenario, and it costs almost nothing to run.</li>
+      <li><b>Cases built to mislead.</b> A prior close that almost applies. A procedure that almost matches. A case with two live candidate causes and no clean winner. These are the cases where a confident system does the most damage, so they earn their place first.</li>
+      <li><b>The model provider through the same gate.</b> Same 55 checks, same baseline, same veto rules. The provider interface exists for exactly this, so the comparison is like for like and the model has to clear the bar the rules path already cleared.</li>
     </ul>
   </div>
 </section>
@@ -437,22 +490,6 @@
       <li><b>Record.</b> Write the review document after the fact, where the reader is the board and there is no clock. Move on when reports are accepted without rework.</li>
       <li><b>Advisory.</b> Sit beside the operator during a live response, still with no path to the uplink. This is the last stage. Most agent products try to start here.</li>
     </ul>
-    <div class="shot">Screenshot slot — the desk mid-investigation, tags visible<br>replace with a capture from /app</div>
-  </div>
-</section>
-
-<!-- SEQUENCING -->
-<section class="blk">
-  <div class="rail"><b>Timebox</b>Six weeks · stop conditions set first</div>
-  <div class="body">
-    <h2>What would have ended the project</h2>
-    <p>Six weeks, with the exit conditions written before the first commit. Work with no stopping rule becomes a hobby, then a sunk cost.</p>
-    <ul>
-      <li>If refusal could not be graded as its own outcome, the whole premise was wrong and the project stopped.</li>
-      <li>If claims could not be tagged reliably enough to test, the idea was just footnotes and not worth building.</li>
-      <li>If the gate could not block a build on one safety check without hand-editing the results, the scoring was decoration.</li>
-    </ul>
-    <p>All three cleared. What did not clear is written into the eval section above, unsanded.</p>
     <p class="foot">Paul Chung · former NASA JPL, ground software and spacecraft test automation<br>
     <a href="/app">Open the desk</a> · <a href="/app/trust">Trust page</a> · <a href="https://github.com/pchung39/orbit">Source</a> · <a href="https://www.linkedin.com/in/paulchung39/">LinkedIn</a></p>
   </div>

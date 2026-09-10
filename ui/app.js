@@ -1745,15 +1745,6 @@ function closeFileSlip() {
   $("file-slip").hidden = true;
 }
 
-function setStoreStatus(ok, detail) {
-  const el = $("store-status");
-  if (!el) return;
-  el.classList.toggle("is-on", ok);
-  el.classList.toggle("is-empty", !ok);
-  const st = el.querySelector(".st");
-  if (st) st.textContent = detail || (ok ? "STORE OK" : "NO STORE");
-}
-
 function trustTone(ok, warn) {
   if (ok) return "ok";
   if (warn) return "warn";
@@ -1774,7 +1765,6 @@ async function loadTrust() {
     ]);
     if (!trustRes.ok) throw new Error(`trust ${trustRes.status}`);
     state.trust = await trustRes.json();
-    setStoreStatus(state.trust.store?.linked, state.trust.store?.linked ? "STORE OK" : "NO STORE");
     if (sourcesRes.ok) {
       state.sources = await sourcesRes.json();
     } else {
@@ -1811,7 +1801,6 @@ async function loadTrust() {
       warnings: [],
     };
     state.evalExplorer = null;
-    setStoreStatus(false, "NO STORE");
     if ($("trust-head")) {
       $("trust-head").innerHTML = `<h1>Can I trust this?</h1><p class="trust-head-lede">${escapeHtml(err.message)}</p>`;
     }
@@ -4437,7 +4426,6 @@ function bind() {
   $("tab-home").addEventListener("click", () => goHome());
   $("tab-incidents").addEventListener("click", () => goIncidents());
   $("tab-trust").addEventListener("click", () => goTrust());
-  $("store-status").addEventListener("click", () => goTrust());
   $("back-incidents").addEventListener("click", () => goIncidents());
   $("go-home-brand").addEventListener("click", () => goHome());
   $("home").addEventListener("click", (ev) => {
@@ -4841,7 +4829,6 @@ async function boot() {
   state.alarms = await alarmRes.json();
   state.docs = docsRes.ok ? await docsRes.json() : [];
   await loadArchiveCatalog();
-  setStoreStatus(state.runs.length > 0);
   fillCreateForm();
   renderIncidents();
   state.deskRunId =
