@@ -10,10 +10,11 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=pin28" />
+    <link rel="stylesheet" href="/static/styles.css?v=pin31" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
+    <div class="sr-only" id="investigation-live" aria-live="polite" aria-atomic="true"></div>
 
     <header class="appbar">
       <button type="button" class="brand" id="go-home-brand" aria-label="ORBIT overview">
@@ -47,7 +48,7 @@
       <main class="stage" id="stage">
         <section class="home" id="home">
           <p class="home-board-lede" id="home-lede" hidden></p>
-          <header class="home-craft" id="home-craft">
+          <header class="home-craft home-craft-compact" id="home-craft">
             <div class="home-craft-copy">
               <div class="home-bar-id">
                 <svg class="logo-aurora home-bar-logo" viewBox="0 0 48 48" aria-hidden="true">
@@ -65,8 +66,8 @@
                   <p class="home-bar-name">Aurora-1</p>
                 </div>
               </div>
-              <div class="home-brief" id="home-brief" aria-label="Product brief"></div>
-              <div class="home-craft-readouts">
+              <div class="home-brief" id="home-brief" aria-label="Mission context"></div>
+              <div class="home-craft-readouts" aria-label="Orbit context">
                 <div class="home-craft-read">
                   <p class="home-craft-read-k">Illumination</p>
                   <p class="home-bar-tag" id="home-illum">—</p>
@@ -79,9 +80,10 @@
             </div>
             <div class="orbit-wrap home-craft-orbit" id="home-orbit" aria-hidden="true"></div>
           </header>
-          <section class="home-path is-collapsed" id="home-path" aria-label="90-second walkthrough"></section>
-          <section class="home-proof" id="home-proof" aria-label="Eval" hidden></section>
-          <section class="home-desk" id="home-desk" aria-label="Desk queue"></section>
+          <section class="home-start" id="home-start" aria-label="Featured investigation"></section>
+          <section class="home-desk" id="home-desk" aria-label="Incident queue"></section>
+          <section class="home-path" id="home-path" aria-label="Demo guide"></section>
+          <section class="home-proof" id="home-proof" aria-label="Evaluation summary" hidden></section>
         </section>
 
         <section class="incidents-desk" id="incidents-desk">
@@ -184,18 +186,19 @@
                 <div class="report-head">
                   <div>
                     <p class="panel-kicker">Investigation</p>
-                    <h2>The investigation</h2>
-                    <p class="hint">ORBIT assembles this from the tape and the book. Every claim is stamped with how we know it.</p>
+                    <h2 id="investigation-heading">Investigate this alarm</h2>
+                    <p class="hint" id="investigation-hint">Review the saved telemetry, command history, and relevant procedures to generate a recommendation with supporting evidence.</p>
+                    <p class="investigation-support" id="investigation-support">Uses the rules-based investigator. No spacecraft commands are sent.</p>
                     <p class="investigation-teaser" id="investigation-teaser" hidden></p>
                     <details class="prov-ref" id="prov-ref">
                       <summary class="prov-ref-summary">
                         <span class="prov-ref-label">Source tags</span>
                       </summary>
                       <ul class="prov-ref-defs" aria-label="Source tag meanings">
-                        <li><span class="tag tag-observed">OBSERVED</span><span>in telemetry or the command log</span></li>
-                        <li><span class="tag tag-derived">DERIVED</span><span>computed from telemetry</span></li>
-                        <li><span class="tag tag-documented">DOCUMENTED</span><span>procedure or prior close-out</span></li>
-                        <li><span class="tag tag-hypothesis">HYPOTHESIS</span><span>proposed cause, not yet proven</span></li>
+                        <li><span class="tag tag-observed">OBSERVED</span><span>A command or measurement recorded in the case evidence</span></li>
+                        <li><span class="tag tag-derived">DERIVED</span><span>A calculation based on recorded measurements</span></li>
+                        <li><span class="tag tag-documented">DOCUMENTED</span><span>A statement supported by a cited procedure or prior incident</span></li>
+                        <li><span class="tag tag-hypothesis">HYPOTHESIS</span><span>A proposed explanation that remains subject to review</span></li>
                       </ul>
                     </details>
                   </div>
@@ -206,40 +209,44 @@
                 </div>
                 <div class="findings" id="findings-body">
                   <div class="investigation-empty">
-                    <p>Run investigation to stamp this case with a source-tagged report.</p>
+                    <p>The full investigation report will appear here after you run the investigator.</p>
                   </div>
                 </div>
               </section>
 
               <section class="panel panel-decide" id="action">
                 <div id="decide-open">
-                  <p class="panel-kicker">Decision</p>
-                  <p class="eyebrow">Suggested action</p>
-                  <h2 id="decide-title">None yet</h2>
-                  <p class="lede" id="decide-sub">Run investigation to stamp a recommended action. ORBIT does not send it.</p>
+                  <p class="panel-kicker">Recommendation</p>
+                  <p class="eyebrow" id="decide-status-line">Suggested next step</p>
+                  <h2 id="decide-title">Pending investigation</h2>
+                  <p class="lede" id="decide-sub">Run the investigation to generate a recommendation with supporting evidence. ORBIT does not send commands.</p>
                   <p class="action-status" id="decide-meta"></p>
+                  <div class="result-summary" id="result-summary" hidden></div>
                   <div class="decide-hypothesis" id="decide-hypothesis" hidden></div>
                   <div class="decide-feedback" id="decide-feedback-root" hidden></div>
                   <div class="form-actions action-row">
-                    <button type="button" class="btn" id="file-incident" hidden>File decision</button>
+                    <button type="button" class="btn" id="file-incident" hidden>Record assessment</button>
                   </div>
+                  <p class="case-demo-next" id="case-demo-next" hidden></p>
                 </div>
                 <div id="decide-filed" hidden>
-                  <p class="panel-kicker">Filed</p>
-                  <p class="stamp">Filed · not sent</p>
+                  <p class="panel-kicker">Assessment recorded</p>
+                  <p class="stamp">Recorded · not sent</p>
                   <h2 id="filed-action-title">Inhibit Heater B</h2>
-                  <p class="lede" id="filed-action-sub">Recorded in the library. ORBIT did not uplink.</p>
+                  <p class="lede" id="filed-action-sub">Saved with this case. ORBIT did not uplink a command. Recording does not confirm that the physical anomaly is resolved.</p>
                   <p class="fb-badge" id="filed-feedback-badge" hidden></p>
                   <blockquote class="operator-note" id="operator-note" hidden></blockquote>
                   <button type="button" class="text-btn" id="open-closeout">Read full close-out</button>
                 </div>
               </section>
 
+              
+
               <section class="panel evidence-bundle knowledge-bundle is-collapsed" id="knowledge">
                 <button type="button" class="evidence-toggle" id="knowledge-toggle" aria-expanded="false" aria-controls="knowledge-panels">
                   <span class="evidence-toggle-main">
-                    <span class="panel-kicker">Knowledge</span>
-                    <span class="evidence-toggle-title" id="knowledge-toggle-title">Procedure · priors · related</span>
+                    <span class="panel-kicker">Library</span>
+                    <span class="evidence-toggle-title" id="knowledge-toggle-title">Procedures and prior incidents</span>
                   </span>
                   <span class="evidence-toggle-meta">
                     <span class="evidence-toggle-state" id="knowledge-toggle-state">Show</span>
@@ -248,7 +255,7 @@
                 </button>
                 <div class="evidence-panels" id="knowledge-panels">
                   <section class="panel evidence-panel knowledge-panel">
-                    <p class="hint">Documents this case is built on — chosen by the same analysis as the report — plus neighbors ranked by meaning. Search to look past this case.</p>
+                    <p class="hint">Documents referenced by this investigation, plus related search results. Related hits are ranked by search similarity—not confidence that they support the recommendation.</p>
                     <form class="knowledge-search" id="knowledge-form">
                       <label class="sr-only" for="knowledge-q">Search procedures and priors</label>
                       <svg class="lib-ico" viewBox="0 0 16 16" aria-hidden="true">
@@ -275,17 +282,21 @@
                 </div>
               </section>
 
-              <section class="panel evidence-bundle is-pinned" id="procedure">
-                <div class="evidence-head">
+              <section class="panel evidence-bundle is-collapsed" id="procedure">
+                <button type="button" class="evidence-toggle" id="procedure-toggle" aria-expanded="false" aria-controls="procedure-panels">
                   <span class="evidence-toggle-main">
                     <span class="panel-kicker">Procedure</span>
-                    <span class="evidence-toggle-title" id="procedure-toggle-title">EPS-17 · book</span>
+                    <span class="evidence-toggle-title" id="procedure-toggle-title">EPS-17 · procedure</span>
                   </span>
-                </div>
+                  <span class="evidence-toggle-meta">
+                    <span class="evidence-toggle-state" id="procedure-toggle-state">Show</span>
+                    <span class="evidence-chevron" aria-hidden="true"></span>
+                  </span>
+                </button>
                 <div class="evidence-panels" id="procedure-panels">
                   <section class="panel panel-proc evidence-panel" id="procedure-body">
                     <article class="procedure">
-                      <p class="eyebrow">Book</p>
+                      <p class="eyebrow">Procedure</p>
                       <header class="proc-head">
                         <p class="proc-id" id="proc-id">EPS-17</p>
                         <div>
@@ -307,9 +318,9 @@
                           <dd id="proc-goal">Find the load that just came on. Do not guess the payload first.</dd>
                         </div>
                       </dl>
-                      <p class="hint">Green on a step means this case already has the evidence. It is not a sign-off. The last step is still a human command — ORBIT does not send it.</p>
+                      <p class="hint">Step markers reflect evidence available in this case after investigation. They are not a sign-off. The last step remains a human command — ORBIT does not send it.</p>
                       <ol class="proc" id="proc"></ol>
-                      <button type="button" class="text-btn" id="open-proc">Read full procedure in Knowledge</button>
+                      <button type="button" class="text-btn" id="open-proc">Read full procedure</button>
                     </article>
                   </section>
                 </div>
@@ -319,30 +330,30 @@
                 <div class="evidence-head">
                   <span class="evidence-toggle-main">
                     <span class="panel-kicker">Evidence</span>
-                    <span class="evidence-toggle-title">Compare · lead-up · tape</span>
+                    <span class="evidence-toggle-title">Compare · lead-up · evidence snapshot</span>
                   </span>
                 </div>
                 <div class="evidence-panels" id="evidence-panels">
               <section class="panel panel-compare evidence-panel" id="compare">
                 <p class="panel-kicker">Compare</p>
-                <h2>Load currents at first warn</h2>
-                <p class="hint">Heater, payload, and bus at the moment the alarm channel crossed. Compare each to its healthy ON — the last command is a clue, not the cause.</p>
+                <h2>Load currents at first warning</h2>
+                <p class="hint">Heater, payload, and bus at the moment the alarm channel crossed. Compare each to its healthy ON range. A recent command is context, not by itself a cause.</p>
                 <div class="compare" id="compare-grid"></div>
               </section>
 
               <section class="panel panel-commands evidence-panel" id="commands">
                 <p class="panel-kicker">Lead-up</p>
                 <h2>Commands to the crossing</h2>
-                <p class="hint">Enables, mode changes, and the first warn on one strip. Click a row to pin the tape.</p>
+                <p class="hint">Enables, mode changes, and the first warning on one strip. Select a row to pin the evidence snapshot.</p>
                 <ol class="timeline lead-timeline" id="timeline"></ol>
               </section>
 
               <section class="panel panel-traces evidence-panel" id="traces">
                 <div class="row">
                   <div>
-                    <p class="panel-kicker">Tape</p>
+                    <p class="panel-kicker">Evidence snapshot</p>
                     <h2>Telemetry</h2>
-                    <p class="hint" id="trace-caption">Same window. Dashed lines are the lead-up and the first warn.</p>
+                    <p class="hint" id="trace-caption">Same window. Dashed lines are the lead-up and the first warning.</p>
                   </div>
                   <div class="seg" role="group" aria-label="Time window">
                     <button type="button" data-window="focus" class="is-on">Warn ± 8 min</button>
@@ -398,22 +409,22 @@
       <div class="slip slip-file" role="dialog" aria-modal="true" aria-labelledby="file-slip-title">
         <aside class="slip-stub">
           <div>
-            <p class="eyebrow" id="file-slip-title">File</p>
+            <p class="eyebrow" id="file-slip-title">Record</p>
             <p class="slip-id" id="file-slip-id">INC-····</p>
           </div>
-          <p class="slip-stub-note">Records the decision. Does not uplink a command.</p>
+          <p class="slip-stub-note">Saves your assessment with this case. Does not uplink a command or confirm that the physical anomaly is resolved.</p>
         </aside>
         <form class="slip-body" id="file-form">
-          <p class="pick-label">Action</p>
+          <p class="pick-label">Recommended action</p>
           <p class="file-action" id="file-slip-action">Inhibit Heater B</p>
-          <p class="hint">You are recording this decision. Step 6 stays <strong>Not sent</strong>.</p>
-          <label class="slip-title-field">Operator remark
-            <textarea name="note" id="file-note" rows="4" placeholder="Heater was already ~3× before SCIENCE_MODE. Do not safe the payload."></textarea>
+          <p class="hint">This records the investigation assessment in ORBIT. It does not send a spacecraft command.</p>
+          <label class="slip-title-field">Operator note <span class="opt">optional · stored with this case</span>
+            <textarea name="note" id="file-note" rows="4" placeholder="Why you agree or disagree with the assessment…"></textarea>
           </label>
           <div class="file-feedback" id="file-feedback"></div>
           <div class="form-actions">
             <button type="button" class="text-btn" id="cancel-file">Cancel</button>
-            <button type="submit" class="btn" id="confirm-file">File decision</button>
+            <button type="submit" class="btn" id="confirm-file">Record assessment</button>
           </div>
         </form>
       </div>
@@ -444,7 +455,7 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=pin28" type="module"></script>
+    <script src="/static/app.js?v=pin31" type="module"></script>
 
     <div class="slip-wrap" id="doc-slip" hidden>
       <div class="slip doc-slip" role="dialog" aria-modal="true" aria-labelledby="doc-slip-title">

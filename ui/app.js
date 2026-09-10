@@ -4,19 +4,7 @@ const APP_BASE = "/app";
 /** Demo: every ticket can re-run investigation with a synthesis animation. */
 const DEMO_MODE = true;
 
-const INVESTIGATION_STEPS = [
-  "Sealing telemetry",
-  "Reading command log",
-  "Matching procedure",
-  "Deriving load ratios",
-  "Tagging sources",
-  "Assembling hypothesis",
-  "Writing report",
-];
-const INVESTIGATION_STEP_MS = 420;
-
 let investigationStepTimer = null;
-let investigationStepIndex = 0;
 
 function apiUrl(path) {
   if (!path.startsWith("/")) path = `/${path}`;
@@ -102,9 +90,9 @@ function alarmTitle(alarm) {
 }
 
 function statusLabel(status) {
-  if (status === "recommended") return "Ready";
-  if (status === "filed") return "Filed";
-  return "Open";
+  if (status === "recommended") return "Ready for review";
+  if (status === "filed") return "Assessment recorded";
+  return "Not investigated";
 }
 
 function incStatusChip(status) {
@@ -224,7 +212,7 @@ function familyLine(item, all) {
 function rowCta(item) {
   if (DEMO_MODE) return { jump: "investigation", label: "Investigate" };
   if (item.status === "filed") return { jump: "closeout", label: "Read close-out" };
-  if (item.status === "recommended") return { jump: "action", label: "File decision" };
+  if (item.status === "recommended") return { jump: "action", label: "Record assessment" };
   return { jump: "investigation", label: "Investigate" };
 }
 
@@ -242,27 +230,6 @@ function rowInvestigateBtn(incidentId) {
   return `<button type="button" class="inc-investigate"${disabled} data-investigate="${escapeHtml(incidentId)}">Investigate</button>`;
 }
 
-function startInvestigationAnimation() {
-  return new Promise((resolve) => {
-    stopInvestigationAnimation();
-    investigationStepIndex = 0;
-    renderInvestigationProgress();
-    if (INVESTIGATION_STEPS.length <= 1) {
-      resolve();
-      return;
-    }
-    investigationStepTimer = window.setInterval(() => {
-      if (investigationStepIndex >= INVESTIGATION_STEPS.length - 1) {
-        stopInvestigationAnimation();
-        window.setTimeout(resolve, Math.round(INVESTIGATION_STEP_MS * 0.65));
-        return;
-      }
-      investigationStepIndex += 1;
-      renderInvestigationProgress();
-    }, INVESTIGATION_STEP_MS);
-  });
-}
-
 function stopInvestigationAnimation() {
   if (investigationStepTimer) {
     window.clearInterval(investigationStepTimer);
@@ -273,29 +240,30 @@ function stopInvestigationAnimation() {
 function renderInvestigationProgress() {
   const body = $("findings-body");
   if (!body || !state.investigating) return;
-  const step = INVESTIGATION_STEPS[investigationStepIndex];
-  const trail = INVESTIGATION_STEPS.map(
-    (label, i) =>
-      `<li class="investigation-synth-item${i === investigationStepIndex ? " is-active" : i < investigationStepIndex ? " is-done" : ""}">${escapeHtml(label)}</li>`
-  ).join("");
-  body.innerHTML = `<div class="investigation-synth" aria-live="polite" aria-busy="true">
-    <div class="investigation-synth-visual" aria-hidden="true">
-      <span class="investigation-synth-orbit"></span>
-      <span class="investigation-synth-core"></span>
-      <span class="investigation-synth-scan"></span>
-    </div>
-    <p class="investigation-synth-kicker">Synthesizing case</p>
-    <p class="investigation-synth-step">${escapeHtml(step)}…</p>
-    <ol class="investigation-synth-trail">${trail}</ol>
+  body.innerHTML = `<div class="investigation-progress" aria-live="polite" aria-busy="true">
+    <p class="investigation-progress-kicker">Investigation in progress</p>
+    <p class="investigation-progress-copy">Reviewing case evidence and preparing the report.</p>
   </div>`;
   document.body.classList.add("is-investigating");
+  announceLive("Investigation in progress. Reviewing case evidence and preparing the report.");
+}
+
+function announceLive(message) {
+  const el = $("investigation-live");
+  if (!el) return;
+  el.textContent = "";
+  window.setTimeout(() => {
+    el.textContent = message;
+  }, 20);
 }
 
 function workingGuess(a) {
   if (!a) return null;
+  const heaterA = a.heaterAAtCmd ?? a.heaterA;
+  const ratio = a.ratioAtCmd ?? a.ratio;
   if (a.suspect) {
     return {
-      suspect: `Heater B ${fmt(a.heaterA, 2)} A · ${fmt(a.ratio, 1)}× healthy`,
+      suspect: `Heater B ${fmt(heaterA, 2)} A · ${fmt(ratio, 1)}× healthy max`,
       last: a.science ? `SCIENCE_MODE at ${clock(a.science.time_s)}` : a.heaterCmd ? "HEATER_B_ENABLE" : "—",
       decoy: Boolean(a.science),
       recommend: "Inhibit Heater B",
@@ -322,8 +290,8 @@ function workingGuess(a) {
   }
   if (a.withheld) {
     return {
-      suspect: a.ratio != null
-        ? `Heater B ${fmt(a.heaterA, 2)} A · ${fmt(a.ratio, 1)}× — below ≥2× bar`
+      suspect: ratio != null
+        ? `Heater B ${fmt(heaterA, 2)} A · ${fmt(ratio, 1)}× — below ≥2× threshold`
         : "No load ≥2× healthy",
       last: a.science ? `SCIENCE_MODE at ${clock(a.science.time_s)}` : a.heaterCmd ? "HEATER_B_ENABLE" : "—",
       decoy: Boolean(a.science),
@@ -350,9 +318,9 @@ function isHoldFeedback(a, fb) {
 
 function feedbackVerdictLabel(verdict, isHold) {
   if (isHold) {
-    return verdict === "confirmed" ? "Hold confirmed" : "Hold rejected";
+    return verdict === "confirmed" ? "Agreed with hold" : "Disagreed with hold";
   }
-  return verdict === "confirmed" ? "Hypothesis confirmed" : "Hypothesis rejected";
+  return verdict === "confirmed" ? "Agreed with assessment" : "Disagreed with assessment";
 }
 
 function feedbackFormHtml({ editable, compact, noteId = "feedback-note", mode = "hypothesis" }) {
@@ -360,11 +328,11 @@ function feedbackFormHtml({ editable, compact, noteId = "feedback-note", mode = 
   const verdict = activeFeedbackVerdict();
   const note = fb?.note || "";
   const isHold = mode === "hold";
-  const kicker = isHold ? "Decision review" : "Hypothesis review";
-  const aria = isHold ? "Confirm or reject hold decision" : "Confirm or reject hypothesis";
+  const kicker = isHold ? "Operator assessment" : "Operator assessment";
+  const aria = isHold ? "Agree or disagree with the hold recommendation" : "Agree or disagree with the assessment";
   const hint = isHold
-    ? "ORBIT did not assert a root cause. Confirm or reject whether hold was correct. Saved for eval. Does not change uplink."
-    : "Saved locally for future eval runs. Does not change the recommended action or uplink anything.";
+    ? "Stored with this case for local review and future eval export. Does not change the recommendation, send a command, or confirm a physical fault. A third “need more evidence” state is not persisted yet."
+    : "Stored with this case for local review and future eval export. Does not change the recommendation, send a command, or confirm a physical fault. A third “need more evidence” state is not persisted yet.";
   if (!editable) {
     if (!fb) return "";
     const hold = isHoldFeedback(analysis(), fb);
@@ -379,15 +347,15 @@ function feedbackFormHtml({ editable, compact, noteId = "feedback-note", mode = 
   return `<div class="guess-feedback ${compact ? "is-compact" : ""}">
     <p class="guess-kicker">${escapeHtml(kicker)}</p>
     <div class="fb-toggle" role="group" aria-label="${escapeHtml(aria)}">
-      <button type="button" class="fb-opt ${verdict === "confirmed" ? "is-on" : ""}" data-fb-verdict="confirmed">Confirmed</button>
-      <button type="button" class="fb-opt ${verdict === "rejected" ? "is-on" : ""}" data-fb-verdict="rejected">Rejected</button>
+      <button type="button" class="fb-opt ${verdict === "confirmed" ? "is-on" : ""}" data-fb-verdict="confirmed">Agree with assessment</button>
+      <button type="button" class="fb-opt ${verdict === "rejected" ? "is-on" : ""}" data-fb-verdict="rejected">Disagree</button>
     </div>
-    <label class="fb-note-label">Note <span class="opt">optional</span>
+    <label class="fb-note-label">Note <span class="opt">optional · stored with this case</span>
       <textarea class="feedback-note" id="${noteId}" rows="2" placeholder="${isHold ? "Why hold was or was not the right call…" : "Why you agree or disagree…"}">${escapeHtml(note)}</textarea>
     </label>
     ${compact ? "" : `<p class="hint fb-hint">${escapeHtml(hint)}</p>`}
     <div class="guess-feedback-actions">
-      <button type="button" class="btn btn-ghost btn-sm fb-save" data-save-feedback ${state.feedbackSaving ? "disabled" : ""}>${state.feedbackSaving ? "Saving…" : fb ? "Update feedback" : "Save feedback"}</button>
+      <button type="button" class="btn btn-ghost btn-sm fb-save" data-save-feedback ${state.feedbackSaving ? "disabled" : ""}>${state.feedbackSaving ? "Saving…" : fb ? "Update assessment" : "Save assessment"}</button>
     </div>
   </div>`;
 }
@@ -421,7 +389,7 @@ async function saveFeedback(scopeEl) {
   const scope = scopeEl || $("decide-feedback-root");
   const on = scope?.querySelector("[data-fb-verdict].is-on");
   if (!on) {
-    window.alert("Choose confirmed or rejected first.");
+    window.alert("Choose Agree with assessment or Disagree first.");
     return;
   }
   const noteEl = scope.querySelector(".feedback-note");
@@ -453,16 +421,19 @@ async function saveFeedback(scopeEl) {
 
 function hypothesisContextHtml(a, g) {
   if (!g) return "";
+  const lastLabel = a?.science && g.last.includes("SCIENCE_MODE")
+    ? `${g.last} · most recent mode change`
+    : g.last;
   if (g.withheld) {
     return `<dl class="hyp-context">
       <div><dt>Status</dt><dd>${escapeHtml(g.suspect)}</dd></div>
-      <div class="${g.decoy ? "is-decoy" : ""}"><dt>Last command</dt><dd>${escapeHtml(g.last)}${g.decoy ? " <em>confounder</em>" : ""}</dd></div>
+      <div><dt>Last command</dt><dd>${escapeHtml(lastLabel)}</dd></div>
       <div class="is-act"><dt>Decision</dt><dd>${escapeHtml(g.recommend)} <i>no command</i></dd></div>
     </dl>`;
   }
   return `<dl class="hyp-context">
-    <div><dt>Suspect</dt><dd>${escapeHtml(g.suspect)}</dd></div>
-    <div class="${g.decoy ? "is-decoy" : ""}"><dt>Last command</dt><dd>${escapeHtml(g.last)}${g.decoy ? " <em>decoy</em>" : ""}</dd></div>
+    <div><dt>Suspect load</dt><dd>${escapeHtml(g.suspect)}</dd></div>
+    <div><dt>Last command</dt><dd>${escapeHtml(lastLabel)}</dd></div>
     <div class="is-act"><dt>Recommend</dt><dd>${escapeHtml(g.recommend)} <i>not sent</i></dd></div>
   </dl>`;
 }
@@ -574,23 +545,23 @@ function tracesToDraw() {
 
 const DEMO_STORY = [
   {
-    id: "INC-0205",
-    n: "01",
-    title: "Earn the close",
-    blurb: "Heater-only fault — inhibit when the load is guilty.",
+    id: "INC-0204",
+    n: "1",
+    title: "Run an investigation",
+    blurb: "Open INC-0204 and inspect the recommendation.",
     primary: true,
   },
   {
-    id: "INC-0210",
-    n: "02",
-    title: "Same alarm, different culprit",
-    blurb: "Payload spike — do not inhibit Heater B.",
+    id: "INC-0212",
+    n: "2",
+    title: "Compare a hold case",
+    blurb: "Open INC-0212 to see what happens when the evidence does not meet the procedure’s threshold.",
   },
   {
     id: null,
-    n: "03",
-    title: "Prove it on the eval",
-    blurb: "Four rates. Naming a fault is not enough — it also has to hold.",
+    n: "3",
+    title: "Inspect the evaluations",
+    blurb: "Review the checks behind the published results.",
     trust: true,
   },
 ];
@@ -619,7 +590,7 @@ const state = {
   report: null,
   investigating: false,
   evidenceOpen: true,
-  procedureOpen: true,
+  procedureOpen: false,
   knowledgeOpen: false,
   filing: false,
   feedback: null,
@@ -748,6 +719,9 @@ function analysis() {
     !payloadSuspect &&
     !batterySuspect &&
     (marginal || Boolean(heaterCmd || science));
+  const heaterAtCmd = heaterCmd ? sampleAt(series("THM.heater_b_current"), heaterCmd.time_s) : null;
+  const heaterAAtCmd = heaterAtCmd?.value_num ?? null;
+  const ratioAtCmd = heaterAAtCmd != null ? heaterAAtCmd / healthyMax : null;
   return {
     warn,
     t,
@@ -758,6 +732,9 @@ function analysis() {
     heaterA,
     ratio,
     healthyMax,
+    heaterAtCmd,
+    heaterAAtCmd,
+    ratioAtCmd,
     payloadA,
     payloadRatio,
     payloadHealthy,
@@ -811,6 +788,13 @@ function escapeHtml(s) {
     .replaceAll(">", "&gt;");
 }
 
+const TAG_MEANING = {
+  observed: "A command or measurement recorded in the case evidence",
+  derived: "A calculation based on recorded measurements",
+  documented: "A statement supported by a cited procedure or prior incident",
+  hypothesis: "A proposed explanation that remains subject to review",
+};
+
 function stampTags(html) {
   return html.replace(/\[([A-Z /—-]+)\]/g, (_, raw) => {
     const key = raw.toLowerCase();
@@ -821,7 +805,8 @@ function stampTags(html) {
         : key.includes("documented")
           ? "documented"
           : "observed";
-    return `<span class="tag tag-${cls}">${escapeHtml(raw)}</span>`;
+    const title = TAG_MEANING[cls] || "";
+    return `<span class="tag tag-${cls}" title="${escapeHtml(title)}" tabindex="0">${escapeHtml(raw)}</span>`;
   });
 }
 
@@ -1010,7 +995,11 @@ function tagClass(tag) {
 
 function tagsHtml(tags) {
   return tags
-    .map((tag) => `<span class="tag tag-${tagClass(tag)}">${escapeHtml(tag)}</span>`)
+    .map((tag) => {
+      const cls = tagClass(tag);
+      const title = TAG_MEANING[cls] || "";
+      return `<span class="tag tag-${cls}" title="${escapeHtml(title)}" tabindex="0">${escapeHtml(tag)}</span>`;
+    })
     .join("");
 }
 
@@ -1095,8 +1084,8 @@ function renderTimelineFinding(block) {
     })
     .join("");
   return `<article class="finding evidence">
-    <h3>Timeline</h3>
-    <p class="hint">Click a row to pin that time on the traces.</p>
+    <h3>Event timeline</h3>
+    <p class="hint">Select a row to pin that time on the evidence snapshot.</p>
     <ol class="ev">${rows}</ol>
   </article>`;
 }
@@ -1273,9 +1262,9 @@ function updateReadouts() {
 
 const INC_FILTERS = [
   { id: "all", label: "All", match: () => true },
-  { id: "open", label: "Open", match: (item) => item.status !== "filed" && item.status !== "recommended" },
-  { id: "ready", label: "Ready", match: (item) => item.status === "recommended" },
-  { id: "filed", label: "Filed", match: (item) => item.status === "filed" },
+  { id: "open", label: "Not investigated", match: (item) => item.status !== "filed" && item.status !== "recommended" },
+  { id: "ready", label: "Ready for review", match: (item) => item.status === "recommended" },
+  { id: "filed", label: "Assessment recorded", match: (item) => item.status === "filed" },
 ];
 
 const INC_CATEGORY_ORDER = ["bus", "payload", "battery", "other"];
@@ -3069,8 +3058,7 @@ function syncEvidenceBundle() {
 }
 
 function syncProcedureBundle() {
-  state.procedureOpen = true;
-  syncFold("procedure", true, "procedure-toggle", "procedure-toggle-state");
+  syncFold("procedure", state.procedureOpen, "procedure-toggle", "procedure-toggle-state");
 }
 
 function syncKnowledgeBundle() {
@@ -3101,6 +3089,24 @@ function updateInvestigationChrome() {
   document.body.classList.toggle("is-investigating", state.investigating);
   const hero = $("investigation");
   if (hero) hero.classList.toggle("has-report", hasReport && !state.investigating);
+  const heading = $("investigation-heading");
+  const hint = $("investigation-hint");
+  const support = $("investigation-support");
+  if (heading) {
+    heading.textContent = hasReport
+      ? "Investigation findings"
+      : state.investigating
+        ? "Investigation in progress"
+        : "Investigate this alarm";
+  }
+  if (hint) {
+    hint.textContent = hasReport
+      ? "Full source-tagged findings from the rules-based investigator. Select a timestamped claim to pin the evidence snapshot."
+      : "Review the saved telemetry, command history, and relevant procedures to generate a recommendation with supporting evidence.";
+  }
+  if (support) {
+    support.hidden = hasReport;
+  }
   const rerun = $("rerun-investigation");
   if (rerun) {
     rerun.hidden = DEMO_MODE || filed || !hasReport;
@@ -3110,18 +3116,16 @@ function updateInvestigationChrome() {
   if (assemble) {
     assemble.hidden = !DEMO_MODE && (filed || hasReport);
     assemble.disabled = state.investigating || !state.incidentId;
-    assemble.textContent = state.investigating ? "Investigating…" : hasReport ? "Re-run investigation" : "Run investigation";
+    assemble.textContent = state.investigating
+      ? "Investigation in progress"
+      : hasReport
+        ? "Re-run investigation"
+        : "Run investigation";
   }
   const teaser = $("investigation-teaser");
   if (teaser) {
-    const guess = workingGuess(analysis());
-    if (!hasReport && guess && !filed) {
-      teaser.hidden = false;
-      teaser.textContent = `Working guess: ${guess.suspect}${guess.decoy ? " · payload confounder present" : ""}`;
-    } else {
-      teaser.hidden = true;
-      teaser.textContent = "";
-    }
+    teaser.hidden = true;
+    teaser.textContent = "";
   }
   syncCaseFolds();
 }
@@ -3187,28 +3191,28 @@ function renderHomeBrief() {
   root.innerHTML = `
     <p class="home-brief-eyebrow">Investigation workbench</p>
     <p class="home-brief-lede">
-      Assembles sealed evidence, the procedure, and a similar prior into a source-tagged report —
-      then stops at a human decision. Filing records the close; it never uplinks.
+      Review sealed telemetry, procedures, and prior incidents for Aurora-1 anomalies —
+      then stop at a human decision. Recording an assessment never uplinks a command.
+    </p>
+    <p class="home-context-line">Simulated mission · Rules-based investigator · No spacecraft commands</p>
+    <p class="home-credit">
+      <a href="https://www.linkedin.com/in/paulchung39/" target="_blank" rel="noopener noreferrer">Built by Paul Chung</a>
+      <span aria-hidden="true"> · </span>
+      <a href="/about">Design decisions</a>
     </p>`;
 }
 
 function renderHomePath() {
   const root = $("home-path");
   if (!root) return;
-  const expanded = Boolean(state.pathExpanded);
-  root.classList.toggle("is-collapsed", !expanded);
-
+  root.classList.remove("is-collapsed");
   const steps = DEMO_STORY.map((beat) => {
     const primary = beat.primary ? " is-primary" : "";
     let action = "";
     if (beat.trust) {
-      action = `<button type="button" class="home-demo-link" data-go-trust>
-              Open the eval
-            </button>`;
+      action = `<button type="button" class="home-demo-link" data-go-trust>Inspect evaluation results</button>`;
     } else if (beat.id) {
-      action = `<button type="button" class="home-demo-link" data-open-case="${escapeHtml(beat.id)}" data-jump="walk">
-              Open ${escapeHtml(beat.id)}
-            </button>`;
+      action = `<button type="button" class="home-demo-link" data-open-case="${escapeHtml(beat.id)}" data-jump="investigation">Open ${escapeHtml(beat.id)}</button>`;
     }
     return `<li class="home-demo-step${primary}">
           <span class="home-demo-n" aria-hidden="true">${escapeHtml(beat.n)}</span>
@@ -3222,13 +3226,42 @@ function renderHomePath() {
 
   root.innerHTML = `
     <div class="home-path-head">
-      <p class="home-path-label">90-second walkthrough</p>
-      <button type="button" class="home-path-toggle" id="home-path-toggle" aria-expanded="${expanded ? "true" : "false"}" aria-controls="home-path-body">
-        ${expanded ? "Hide steps" : "Show steps"}
-      </button>
+      <p class="home-path-label">Demo guide</p>
     </div>
     <div class="home-path-body" id="home-path-body">
       <ol class="home-demo-steps">${steps}</ol>
+    </div>`;
+}
+
+function renderHomeStart() {
+  const root = $("home-start");
+  if (!root) return;
+  const featured = state.incidents.find((item) => item.id === "INC-0204");
+  const st = featured?.status || "open";
+  let ctaLabel = "Open sample investigation";
+  let jump = "investigation";
+  let statusNote = "Not investigated yet — open the case, then run the investigation.";
+  if (st === "recommended") {
+    ctaLabel = "Review sample investigation";
+    jump = "action";
+    statusNote = "A report is ready for review. Opening the case will not reset it.";
+  } else if (st === "filed") {
+    ctaLabel = "Open recorded sample";
+    jump = "action";
+    statusNote = "An assessment is already recorded for this case.";
+  }
+  root.innerHTML = `
+    <div class="home-start-copy">
+      <p class="home-start-kicker">Start here</p>
+      <h2 class="home-start-title">Investigate a spacecraft power anomaly</h2>
+      <p class="home-start-lede">Aurora-1 has triggered a low-voltage warning. Review the telemetry, run an investigation, and inspect the evidence behind the recommendation.</p>
+      <p class="home-start-case"><span class="home-start-case-id">Start with INC-0204</span>
+        <span class="home-start-case-copy">A heater activation and a payload mode change precede the warning. Examine which event the evidence supports investigating further.</span></p>
+      <p class="home-start-status">${escapeHtml(statusNote)}</p>
+      <div class="home-start-actions">
+        <button type="button" class="btn" data-open-case="INC-0204" data-jump="${escapeHtml(jump)}">${escapeHtml(ctaLabel)}</button>
+        <button type="button" class="btn-ghost btn" data-open-slip>Open case</button>
+      </div>
     </div>`;
 }
 
@@ -3243,6 +3276,15 @@ function deskQueueItems(limit = 5) {
   return all.slice(0, limit);
 }
 
+function homeQueueMeta(item) {
+  const when = openedClock(item.opened_at);
+  const bits = [
+    `<span class="chip chip-xs inc-alarm-chip">${escapeHtml(alarmShort(item.alarm))}</span>`,
+  ];
+  if (when) bits.push(`<span class="inc-opened">${when} UTC</span>`);
+  return bits.join("");
+}
+
 function renderHomeDesk() {
   const root = $("home-desk");
   if (!root) return;
@@ -3250,7 +3292,7 @@ function renderHomeDesk() {
   const openN = all.filter((item) => item.status === "open").length;
   const readyN = all.filter((item) => item.status === "recommended").length;
   const filedN = all.filter((item) => item.status === "filed").length;
-  const rows = deskQueueItems(5);
+  const rows = deskQueueItems(8);
   const list = rows.length
     ? rows
         .map((item) => {
@@ -3261,7 +3303,7 @@ function renderHomeDesk() {
             <span class="id">${escapeHtml(item.id)}</span>
             <span class="inc-detail">
               <strong class="inc-headline">${escapeHtml(caseHeadline(item))}</strong>
-              <span class="inc-meta-line">${incRowMeta(item)}</span>
+              <span class="inc-meta-line">${homeQueueMeta(item)}</span>
             </span>
             <span class="inc-status-col">${incStatusChip(st)}</span>
           </div>`;
@@ -3272,11 +3314,11 @@ function renderHomeDesk() {
   root.innerHTML = `
     <div class="home-desk-head">
       <div>
-        <p class="home-desk-kicker">Desk</p>
-        <h2 class="home-desk-title">Next up</h2>
+        <p class="home-desk-kicker">Cases</p>
+        <h2 class="home-desk-title">Incident queue</h2>
       </div>
       <div class="home-desk-actions">
-        <button type="button" class="text-btn" data-go-incidents>${openN} open · ${readyN} ready · ${filedN} filed — all</button>
+        <button type="button" class="text-btn" data-go-incidents>${openN} not investigated · ${readyN} ready · ${filedN} recorded — all</button>
         <button type="button" class="btn-ghost btn home-desk-open" data-open-slip>Open case</button>
       </div>
     </div>
@@ -3286,40 +3328,57 @@ function renderHomeDesk() {
 function renderHomeProof() {
   const root = $("home-proof");
   if (!root) return;
-  const sc = state.trust?.eval?.scorecard;
-  if (!sc) {
-    root.hidden = true;
-    root.innerHTML = "";
+  if (state.trustLoading && !state.trust) {
+    root.hidden = false;
+    root.innerHTML = `
+      <div class="home-proof-head">
+        <div>
+          <p class="home-proof-kicker">Evaluation</p>
+          <p class="home-proof-title">Loading evaluation results…</p>
+        </div>
+      </div>`;
     return;
   }
-  const rates = [sc.diagnosis, sc.withhold, sc.false_inhibit, sc.provenance].filter(Boolean).slice(0, 4);
+  const sc = state.trust?.eval?.scorecard;
+  if (!sc) {
+    root.hidden = false;
+    root.innerHTML = `
+      <div class="home-proof-head">
+        <div>
+          <p class="home-proof-kicker">Evaluation</p>
+          <p class="home-proof-title">Evaluation results are unavailable right now.</p>
+          <p class="home-proof-note">Open Trust to inspect the store, or regenerate the scorecard artifact.</p>
+        </div>
+        <button type="button" class="btn-ghost btn" data-go-trust>Inspect evaluation results</button>
+      </div>`;
+    return;
+  }
+  const checksOk = sc.checks_ok;
+  const checksTotal = sc.checks_total;
+  const casesTotal = sc.cases_total;
+  const gate = state.releaseCompare?.recommendation;
+  const gateLabel = gate === "PASS" ? "passed" : gate ? String(gate).toLowerCase() : "unavailable";
+  const provider = sc.provider || state.releaseCompare?.candidate?.agent?.provider || "rules";
   root.hidden = false;
   root.innerHTML = `
     <div class="home-proof-head">
       <div>
-        <p class="home-proof-kicker">Eval</p>
-        <p class="home-proof-title">${escapeHtml(`${sc.cases_ok} of ${sc.cases_total} scenarios passed`)}</p>
+        <p class="home-proof-kicker">Evaluation</p>
+        <p class="home-proof-title">${escapeHtml(`${checksOk}/${checksTotal} checks across ${casesTotal} simulated scenarios`)}</p>
+        <p class="home-proof-meta">${escapeHtml(String(provider))} provider · Release gate: ${escapeHtml(gateLabel)}</p>
+        <p class="home-proof-note">These results cover the current regression suite, not operational validation.</p>
       </div>
-      <button type="button" class="text-btn" data-go-trust>Open eval</button>
-    </div>
-    <div class="home-proof-chips">
-      ${rates
-        .map(
-          (r) => `<button type="button" class="home-proof-chip" data-go-trust title="${escapeHtml(evalMetricCopy(r.id, r.label).gloss)}">
-            <span class="k">${escapeHtml(metricShortLabel(r.id, r.label))}</span>
-            <span class="v">${escapeHtml(r.display || `${r.passed}/${r.total}`)}</span>
-          </button>`
-        )
-        .join("")}
+      <button type="button" class="btn" data-go-trust>Inspect evaluation results</button>
     </div>`;
 }
 
 function renderHome() {
   renderHomeCraft();
   renderHomeBrief();
+  renderHomeStart();
+  renderHomeDesk();
   renderHomePath();
   renderHomeProof();
-  renderHomeDesk();
 }
 
 async function loadDesk(runId) {
@@ -3348,17 +3407,31 @@ async function goIncidents() {
 
 
 function renderCaseNext() {
-  const root = $("case-next");
+  const headerNext = $("case-next");
+  if (headerNext) {
+    headerNext.hidden = true;
+    headerNext.innerHTML = "";
+  }
+  const root = $("case-demo-next");
   if (!root) return;
   const id = state.incidentId;
-  if (id === "INC-0205") {
-    root.hidden = false;
-    root.innerHTML = `<span class="case-next-note">Next:</span>
-      <button type="button" class="home-demo-link" data-open-case="INC-0210" data-jump="walk">same alarm, different culprit — INC-0210</button>`;
+  const ready = hasSuccessfulInvestigation();
+  if (!ready || (id !== "INC-0204" && id !== "INC-0205")) {
+    root.hidden = true;
+    root.innerHTML = "";
     return;
   }
-  root.hidden = true;
-  root.innerHTML = "";
+  root.hidden = false;
+  root.innerHTML = `
+    <div class="case-demo-card">
+      <p class="case-demo-kicker">Demo follow-up</p>
+      <h3 class="case-demo-title">See when the recommendation changes</h3>
+      <p class="case-demo-copy">Compare this investigation with INC-0212, where the evidence does not meet the procedure’s threshold.</p>
+      <div class="case-demo-actions">
+        <button type="button" class="btn" data-open-case="INC-0212" data-jump="investigation">Explore the hold case</button>
+        <button type="button" class="text-btn" data-go-trust>Inspect the evaluation checks</button>
+      </div>
+    </div>`;
 }
 
 function renderAlarm(a) {
@@ -3416,13 +3489,14 @@ function renderAlarm(a) {
     </dd>
   </div>`);
   if (inc) {
-    if (a.warn) parts.push(caseFactHtml("First warn", when, "warn"));
+    if (a.warn) parts.push(caseFactHtml("First warning (UTC)", when, "warn"));
     else if (when) parts.push(caseFactHtml("Opened", when));
     parts.push(caseFactHtml("Entry", alarm));
     if (inc.run_id) {
       const copy = tapeCopy({ id: inc.run_id });
-      parts.push(caseFactHtml("Tape", copy.title, null, inc.run_id));
+      parts.push(caseFactHtml("Evidence snapshot", copy.title, null, inc.run_id));
     }
+    parts.push(caseFactHtml("Context", "Simulated data · Rules-based investigator"));
   }
   $("case-meta").innerHTML = parts.join("");
   renderAlarmMargin(v, ch);
@@ -3451,7 +3525,11 @@ function renderAlarmMargin(value, ch) {
   const pct = Math.abs(past / limit) * 100;
   el.hidden = false;
   el.querySelector("i").style.width = `${fill.toFixed(0)}%`;
-  el.querySelector(".pct").textContent = `${pct.toFixed(pct < 10 ? 1 : 0)}% ${past > 0 ? "past warn" : "margin"}`;
+  const crossed = past > 0;
+  const direction = below
+    ? (crossed ? "below threshold" : "above threshold")
+    : (crossed ? "above threshold" : "below threshold");
+  el.querySelector(".pct").textContent = `${pct.toFixed(pct < 10 ? 1 : 0)}% ${direction}`;
 }
 
 function renderCompare(a) {
@@ -3460,28 +3538,30 @@ function renderCompare(a) {
     root.innerHTML = "";
     return;
   }
+  const concluded = hasSuccessfulInvestigation();
+  const healthyMin = meta("THM.heater_b_current").nominal_range?.[0];
   const cards = [
     {
       k: "Heater B",
       v: a.heaterA,
       unit: "A",
-      why: a.heaterMarginal
-        ? `Elevated (~${fmt(a.ratio, 1)}×) but below EPS-17 prime-suspect bar (≥2×).`
-        : `Healthy ON is ${fmt(meta("THM.heater_b_current").nominal_range?.[0], 1)}–${fmt(a.healthyMax, 1)} A.`,
+      why: concluded && a.heaterMarginal
+        ? `Elevated (~${fmt(a.ratio, 1)}× healthy max ${fmt(a.healthyMax, 1)} A) but below EPS-17’s ≥2× threshold.`
+        : `Healthy ON range ${fmt(healthyMin, 1)}–${fmt(a.healthyMax, 1)} A (ratio uses healthy max ${fmt(a.healthyMax, 1)} A). Values shown at first warning.`,
       ratio: a.ratio != null ? `${fmt(a.ratio, 1)}× healthy max` : "",
-      cls: a.suspect ? "suspect" : a.heaterMarginal ? "marginal" : "",
+      cls: concluded ? (a.suspect ? "suspect" : a.heaterMarginal ? "marginal" : "") : "",
     },
     {
       k: "Payload",
       v: a.payloadA,
       unit: "A",
-      why: a.payloadSuspect
+      why: concluded && a.payloadSuspect
         ? `SCIENCE_MODE draw is ${fmt(a.payloadRatio, 1)}× the ${fmt(a.payloadHealthy, 1)} A healthy baseline.`
         : a.science
-          ? `SCIENCE_MODE at ${clock(a.science.time_s)} — looks guilty only if current is ≥2× ~0.9 A.`
+          ? `Most recent mode change: SCIENCE_MODE at ${clock(a.science.time_s)}. Relevance depends on measured current vs ~${fmt(a.payloadHealthy, 1)} A science.`
           : "Payload never left STANDBY in this run.",
       ratio: a.payloadRatio != null ? `${fmt(a.payloadRatio, 1)}× science` : a.mode?.value_text || "",
-      cls: a.payloadSuspect ? "suspect-payload" : a.science && !a.suspect ? "confounder" : "",
+      cls: concluded ? (a.payloadSuspect ? "suspect-payload" : a.science && !a.suspect ? "confounder" : "") : "",
     },
     a.batterySuspect
       ? {
@@ -3553,13 +3633,18 @@ function renderTimeline(a) {
     .map((item) => {
       const pinId = `tl:${item.t}`;
       const on = isLeadUpPinned(item.t);
+      const concluded = hasSuccessfulInvestigation();
+      const modeChange = item.title === "SCIENCE_MODE";
       const tags = [
-        item.suspect ? `<span class="crumb-tag is-suspect">Suspect</span>` : "",
-        item.marginal && !item.suspect ? `<span class="crumb-tag is-marginal">Elevated</span>` : "",
-        item.last && !item.suspect ? `<span class="crumb-tag is-last">Last</span>` : "",
-        item.warn ? `<span class="crumb-tag is-warn">Warn</span>` : "",
+        concluded && item.suspect ? `<span class="crumb-tag is-suspect">Suspect</span>` : "",
+        concluded && item.marginal && !item.suspect ? `<span class="crumb-tag is-marginal">Elevated</span>` : "",
+        item.last && modeChange ? `<span class="crumb-tag is-last">Most recent mode change</span>` : "",
+        item.last && !modeChange && !item.suspect ? `<span class="crumb-tag is-last">Most recent command</span>` : "",
+        item.warn ? `<span class="crumb-tag is-warn">Warning</span>` : "",
       ].join("");
-      return `<li class="tl-item kind-${item.kind} ${item.warn ? "is-warn" : ""} ${item.suspect ? "is-suspect" : ""} ${item.marginal && !item.suspect ? "is-marginal" : ""} ${item.last && !item.suspect ? "is-last" : ""} ${on ? "is-on" : ""}" data-t="${item.t}" data-pin-id="${pinId}">
+      const suspectCls = concluded && item.suspect ? "is-suspect" : "";
+      const margCls = concluded && item.marginal && !item.suspect ? "is-marginal" : "";
+      return `<li class="tl-item kind-${item.kind} ${item.warn ? "is-warn" : ""} ${suspectCls} ${margCls} ${item.last && !item.suspect ? "is-last" : ""} ${on ? "is-on" : ""}" data-t="${item.t}" data-pin-id="${pinId}">
         <button type="button" class="tl-row ${on ? "is-on" : ""}">
           <span class="tl-time">${clock(item.t)}</span>
           <span class="tl-track" aria-hidden="true"><i class="tl-dot"></i></span>
@@ -3626,20 +3711,30 @@ function renderProc(a) {
   $("proc-entry").innerHTML = book.entry;
   $("proc-goal").textContent = book.goal;
   const title = $("procedure-toggle-title");
-  if (title) title.textContent = `${id} · book`;
+  if (title) title.textContent = `${id} · procedure`;
   const named = Boolean(a?.suspect || a?.payloadSuspect || a?.batterySuspect);
-  const status = {
-    confirm: a?.warn ? "Satisfied" : "",
-    commands: a?.windowEvents.length ? "Satisfied" : "",
-    currents: a?.heaterA != null || a?.payloadA != null ? "Satisfied" : "",
-    ratio: named ? "Satisfied" : a?.withheld ? "Below bar" : "",
-    payload: a ? "Satisfied" : "",
-    action: named ? "Not sent" : a?.withheld ? "Blocked" : "",
-  };
+  const ready = hasSuccessfulInvestigation();
+  const status = ready
+    ? {
+        confirm: a?.warn ? "Evidence present" : "",
+        commands: a?.windowEvents.length ? "Evidence present" : "",
+        currents: a?.heaterA != null || a?.payloadA != null ? "Evidence present" : "",
+        ratio: named ? "Threshold met" : a?.withheld ? "Below threshold" : "",
+        payload: a ? "Reviewed" : "",
+        action: named ? "Not sent" : a?.withheld ? "Hold" : "",
+      }
+    : {
+        confirm: "",
+        commands: "",
+        currents: "",
+        ratio: "",
+        payload: "",
+        action: "",
+      };
   $("proc").innerHTML = book.steps.map((step) => {
     const label = status[step.id];
-    const done = label === "Satisfied";
-    const blocked = label === "Blocked" || label === "Below bar";
+    const done = label === "Evidence present" || label === "Threshold met" || label === "Reviewed";
+    const blocked = label === "Hold" || label === "Below threshold";
     const human = step.human && Boolean(label) && !blocked;
     return `<li class="${done ? "is-done" : ""} ${human ? "is-action" : ""} ${blocked ? "is-blocked" : ""}">
       <span class="proc-n">${step.n}</span>
@@ -3647,6 +3742,169 @@ function renderProc(a) {
       <span class="proc-state">${escapeHtml(label)}</span>
     </li>`;
   }).join("");
+}
+
+function resultEvidencePin(t, label) {
+  if (t == null) return "";
+  return `<button type="button" class="result-pin" data-t="${t}" data-pin-id="result:${t}">${escapeHtml(label)}</button>`;
+}
+
+function buildResultSummary(a) {
+  if (!a || !hasSuccessfulInvestigation()) return "";
+  const heaterA = a.heaterAAtCmd ?? a.heaterA;
+  const ratio = a.ratioAtCmd ?? a.ratio;
+  const heaterT = a.heaterCmd?.time_s ?? a.t;
+  const warnT = a.warn?.time_s ?? a.t;
+  const payloadT = a.science?.time_s ?? a.t;
+  if (a.suspect) {
+    return {
+      status: "Investigation complete · Awaiting operator review",
+      heading: "Recommended next step: inhibit Heater B",
+      summary: "Heater B’s current exceeds the procedure’s threshold for identifying a suspect load. The payload current is near its expected science-mode level.",
+      evidence: [
+        {
+          html: `Heater B: <strong>${fmt(heaterA, 2)} A</strong> at ${a.heaterCmd ? "heater enable" : "first warning"} (${clock(heaterT)}) — approximately <strong>${fmt(ratio, 1)}×</strong> the upper healthy reference of <strong>${fmt(a.healthyMax, 1)} A</strong>.`,
+          t: heaterT,
+          tag: "OBSERVED / DERIVED",
+        },
+        {
+          html: `Procedure EPS-17: identifies a load drawing at least <strong>2×</strong> its healthy reference as the prime suspect.`,
+          t: null,
+          tag: "DOCUMENTED",
+          action: "procedure",
+        },
+        {
+          html: `Payload: <strong>${fmt(a.payloadA, 2)} A</strong> at the warning, near the expected science-mode current (~${fmt(a.payloadHealthy, 1)} A).`,
+          t: warnT,
+          tag: "OBSERVED",
+        },
+      ],
+      uncertaintyTitle: "What remains unconfirmed",
+      uncertainty: "The evidence supports Heater B as the suspect load. Confirmation of the physical fault and recovery after intervention are not established by this report.",
+    };
+  }
+  if (a.withheld) {
+    return {
+      status: "Investigation complete · Awaiting operator review",
+      heading: "Recommended next step: hold — do not command",
+      summary: "Heater current is elevated but does not meet EPS-17’s ≥2× threshold for recommending an inhibit. The case stays open for more evidence.",
+      evidence: [
+        {
+          html: `Heater B: <strong>${fmt(heaterA, 2)} A</strong> (~<strong>${fmt(ratio, 1)}×</strong> healthy max <strong>${fmt(a.healthyMax, 1)} A</strong>) — below the ≥2× procedure threshold.`,
+          t: heaterT,
+          tag: "OBSERVED / DERIVED",
+        },
+        {
+          html: `Procedure EPS-17: requires at least <strong>2×</strong> healthy reference before recommending an inhibit.`,
+          t: null,
+          tag: "DOCUMENTED",
+          action: "procedure",
+        },
+        {
+          html: a.science
+            ? `SCIENCE_MODE is present, but payload current (<strong>${fmt(a.payloadA, 2)} A</strong>) is not ≥2× science and cannot close the case alone.`
+            : `No load clears the ≥2× bar in the sealed window.`,
+          t: payloadT,
+          tag: "DOCUMENTED",
+        },
+      ],
+      uncertaintyTitle: "What remains missing",
+      uncertainty: "A load meeting the ≥2× threshold, or an authorized diagnostic, would change this recommendation. Hold is not an investigation failure.",
+    };
+  }
+  if (a.payloadSuspect) {
+    return {
+      status: "Investigation complete · Awaiting operator review",
+      heading: "Recommended next step: safe payload to STANDBY",
+      summary: "Payload current meets the procedure threshold. Heater current does not support a heater inhibit.",
+      evidence: [
+        {
+          html: `Payload: <strong>${fmt(a.payloadA, 2)} A</strong> (~<strong>${fmt(a.payloadRatio, 1)}×</strong> science baseline ${fmt(a.payloadHealthy, 1)} A).`,
+          t: warnT,
+          tag: "OBSERVED / DERIVED",
+        },
+        {
+          html: `Heater B remains below the ≥2× inhibit threshold.`,
+          t: heaterT,
+          tag: "OBSERVED",
+        },
+      ],
+      uncertaintyTitle: "What remains unconfirmed",
+      uncertainty: "Physical fault confirmation and recovery after intervention are not established by this report.",
+    };
+  }
+  if (a.batterySuspect) {
+    return {
+      status: "Investigation complete · Awaiting operator review",
+      heading: "Recommended next step: continue EPS-09",
+      summary: "Pack voltage sagged with healthy load currents. Do not inhibit the heater or payload.",
+      evidence: [
+        {
+          html: `Battery voltage crossed its warning with load currents remaining healthy.`,
+          t: warnT,
+          tag: "OBSERVED",
+        },
+      ],
+      uncertaintyTitle: "What remains unconfirmed",
+      uncertainty: "Pack health checkout remains an operator follow-up. This report does not confirm a completed recovery.",
+    };
+  }
+  return {
+    status: "Investigation complete · Awaiting operator review",
+    heading: "Recommended next step: keep reading",
+    summary: "No load currently meets a procedure threshold for action.",
+    evidence: [],
+    uncertaintyTitle: "What remains unconfirmed",
+    uncertainty: "Additional measurements or an authorized diagnostic may change the recommendation.",
+  };
+}
+
+function renderResultSummary(a) {
+  const root = $("result-summary");
+  if (!root) return;
+  if (!hasSuccessfulInvestigation() || !a || state.incident?.status === "filed") {
+    // Still show for filed? Show compact. Actually show for ready and filed.
+  }
+  if (!hasSuccessfulInvestigation() || !a) {
+    root.hidden = true;
+    root.innerHTML = "";
+    return;
+  }
+  const model = buildResultSummary(a);
+  if (!model) {
+    root.hidden = true;
+    root.innerHTML = "";
+    return;
+  }
+  const evidence = (model.evidence || [])
+    .map((row) => {
+      const tag = row.tag
+        ? `<span class="tag tag-${tagClass(row.tag)}" title="${escapeHtml(TAG_MEANING[tagClass(row.tag)] || "")}" tabindex="0">${escapeHtml(row.tag)}</span>`
+        : "";
+      let action = "";
+      if (row.action === "procedure") {
+        action = `<button type="button" class="text-btn result-jump" data-jump-procedure>Review procedure</button>`;
+      } else if (row.t != null) {
+        action = resultEvidencePin(row.t, "Inspect supporting evidence");
+      }
+      return `<li class="result-evidence-item">
+        <div class="result-evidence-main">${row.html} ${tag}</div>
+        ${action ? `<div class="result-evidence-actions">${action}</div>` : ""}
+      </li>`;
+    })
+    .join("");
+  root.hidden = false;
+  root.innerHTML = `
+    ${evidence ? `<ul class="result-evidence">${evidence}</ul>` : ""}
+    <div class="result-uncertainty">
+      <h3>${escapeHtml(model.uncertaintyTitle)}</h3>
+      <p>${escapeHtml(model.uncertainty)}</p>
+    </div>
+    <p class="result-boundary">Recommendation only. ORBIT cannot send spacecraft commands.</p>
+    <div class="result-quick-actions">
+      <button type="button" class="text-btn" data-jump-evidence>Inspect supporting evidence</button>
+      <button type="button" class="text-btn" data-jump-procedure>Review procedure</button>
+    </div>`;
 }
 
 function renderDecision(a) {
@@ -3661,7 +3919,7 @@ function renderDecision(a) {
   filedPane.hidden = !filed;
   fileBtn.hidden = filed || !ready;
   fileBtn.disabled = Boolean(state.filing);
-  fileBtn.textContent = state.filing ? "Filing…" : "File decision";
+  fileBtn.textContent = state.filing ? "Recording…" : "Record assessment";
   panel?.classList.toggle("is-pending", !filed && !ready);
   if (filed) {
     const note = (state.incident.notes || "").trim();
@@ -3687,88 +3945,87 @@ function renderDecision(a) {
       }
     }
   }
+  const statusLine = $("decide-status-line");
   if (!ready) {
+    if (statusLine) statusLine.textContent = "Pending";
     if (state.investigating) {
-      $("decide-title").textContent = "Waiting on investigation";
-      $("decide-sub").textContent = "A recommended action appears here after the report stamps.";
+      $("decide-title").textContent = "Investigation in progress";
+      $("decide-sub").textContent = "The recommendation will appear here when the report is ready.";
     } else if (investigationFailed()) {
-      $("decide-title").textContent = "None yet";
-      $("decide-sub").textContent = "Investigation did not complete. Re-run to get a recommended action.";
+      $("decide-title").textContent = "Investigation did not complete";
+      $("decide-sub").textContent = "Evidence on this page is unchanged. Re-run to generate a new report; any previous successful report remains available only if still stored on the case.";
     } else {
-      $("decide-title").textContent = "None yet";
-      $("decide-sub").textContent = "Run investigation to stamp a recommended action. ORBIT does not send it.";
+      $("decide-title").textContent = "Pending investigation";
+      $("decide-sub").textContent = "Run the investigation to generate a recommendation. Results will appear here.";
     }
     status.textContent = "";
     fileBtn.hidden = true;
+    renderResultSummary(null);
     renderDecisionContext(null);
+    renderCaseNext();
     return;
   }
   if (!a) {
-    $("decide-title").textContent = "None yet";
+    if (statusLine) statusLine.textContent = "Pending";
+    $("decide-title").textContent = "Pending investigation";
     $("decide-sub").textContent = "Select a case to see a next step.";
     status.textContent = "";
     fileBtn.hidden = true;
+    renderResultSummary(null);
     renderDecisionContext(null);
+    renderCaseNext();
     return;
   }
+  if (statusLine) {
+    statusLine.textContent = filed ? "Assessment recorded" : "Investigation complete · Awaiting operator review";
+  }
+  const model = buildResultSummary(a);
   if (a.suspect) {
     $("decide-title").textContent = "Inhibit Heater B";
-    $("decide-sub").textContent = "Then watch EPS.bus_voltage recover. Leave the payload as-is unless the bus does not come back.";
+    $("decide-sub").textContent = model.summary;
     status.textContent = "Not sent";
     if (filed) {
       $("filed-action-title").textContent = "Inhibit Heater B";
-      $("filed-action-sub").textContent = "Recorded in the library. ORBIT did not uplink.";
+      $("filed-action-sub").textContent = "Saved with this case. ORBIT did not uplink a command. Recording does not confirm that the physical anomaly is resolved.";
     }
-    renderDecisionContext(a);
-    return;
-  }
-  if (a.payloadSuspect) {
+  } else if (a.payloadSuspect) {
     $("decide-title").textContent = "Safe payload to STANDBY";
-    $("decide-sub").textContent = "Payload current is ≥2× healthy science. Do not inhibit Heater B.";
+    $("decide-sub").textContent = model.summary;
     status.textContent = "Not sent";
     if (filed) {
       $("filed-action-title").textContent = "Safe payload to STANDBY";
-      $("filed-action-sub").textContent = "Recorded in the library. ORBIT did not uplink.";
+      $("filed-action-sub").textContent = "Saved with this case. ORBIT did not uplink a command.";
     }
-    renderDecisionContext(a);
-    return;
-  }
-  if (a.batterySuspect) {
+  } else if (a.batterySuspect) {
     $("decide-title").textContent = "Continue EPS-09";
-    $("decide-sub").textContent = "Pack sagged under a healthy load. Do not inhibit the heater or payload.";
+    $("decide-sub").textContent = model.summary;
     status.textContent = "Not sent";
     if (filed) {
       $("filed-action-title").textContent = "Continue EPS-09";
-      $("filed-action-sub").textContent = "Recorded in the library. ORBIT did not uplink.";
+      $("filed-action-sub").textContent = "Saved with this case. ORBIT did not uplink a command.";
     }
-    renderDecisionContext(a);
-    return;
-  }
-  if (!a.warn) {
+  } else if (!a.warn) {
     $("decide-title").textContent = "No action";
-    $("decide-sub").textContent = "No warn on this case.";
+    $("decide-sub").textContent = "No warning on this case.";
     status.textContent = "";
     if (filed) $("filed-action-title").textContent = "No action";
-    renderDecisionContext(a);
-    return;
-  }
-  if (a.withheld) {
+  } else if (a.withheld) {
     $("decide-title").textContent = "Hold — do not command";
-    $("decide-sub").textContent =
-      "EPS-17 step 4 not met. Do not inhibit or safe until a load crosses ≥2× or ops authorizes a diagnostic.";
+    $("decide-sub").textContent = model.summary;
     status.textContent = "No command";
     if (filed) {
       $("filed-action-title").textContent = "Hold — do not command";
-      $("filed-action-sub").textContent = "Threshold not met. Recorded in the library. ORBIT did not uplink.";
+      $("filed-action-sub").textContent = "Threshold not met. Saved with this case. ORBIT did not uplink a command.";
     }
-    renderDecisionContext(a);
-    return;
+  } else {
+    $("decide-title").textContent = "Keep reading";
+    $("decide-sub").textContent = model.summary;
+    status.textContent = "";
+    if (filed) $("filed-action-title").textContent = "Keep reading";
   }
-  $("decide-title").textContent = "Keep reading";
-  $("decide-sub").textContent = "No load is ≥2× healthy.";
-  status.textContent = "";
-  if (filed) $("filed-action-title").textContent = "Keep reading";
+  renderResultSummary(a);
   renderDecisionContext(a);
+  renderCaseNext();
 }
 
 function renderFindings() {
@@ -3791,7 +4048,7 @@ function renderFindings() {
         const block = raw.trim();
         const title = sectionTitle(block);
         if (/^timeline$/i.test(title)) return renderTimelineFinding(block);
-        return `<article class="finding md">${renderMd(block)}</article>`;
+        return `<article class="finding md"><p class="finding-section-kicker">Investigation findings</p>${renderMd(block)}</article>`;
       })
       .join("");
     return;
@@ -3801,7 +4058,7 @@ function renderFindings() {
     return;
   }
   body.innerHTML = `<div class="investigation-empty">
-    <p>Run investigation to stamp this case with a source-tagged report.</p>
+    <p>Run investigation to generate a source-tagged report. The recommendation will appear in the Recommendation panel once complete.</p>
   </div>`;
 }
 
@@ -3821,12 +4078,13 @@ function renderCase() {
 async function openIncident(incidentId, jump) {
   try {
     await loadIncident(incidentId);
+    const ready = hasSuccessfulInvestigation();
     if (jump === "closeout") {
       openDoc(incidentId);
+    } else if (jump === "action" || (ready && jump !== "investigation" && jump !== "findings" && jump !== "evidence" && jump !== "procedure" && jump !== "knowledge")) {
+      $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (jump === "findings" || jump === "investigation") {
       $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if (jump === "action") {
-      $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (jump === "evidence") {
       state.evidenceOpen = true;
       syncEvidenceBundle();
@@ -3839,6 +4097,10 @@ async function openIncident(incidentId, jump) {
       state.knowledgeOpen = true;
       syncKnowledgeBundle();
       $("knowledge")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (!jump && ready) {
+      $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if (!jump) {
+      $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
   } catch (err) {
     const lede = $("alarm-lede");
@@ -3875,6 +4137,7 @@ async function loadIncident(incidentId) {
     }
   }
   state.knowledgeOpen = false;
+  state.procedureOpen = false;
   state.runId = state.workspace.run_id;
   const a = analysis();
   const seed = a?.warn?.time_s ?? a?.heaterCmd?.time_s ?? null;
@@ -3903,28 +4166,17 @@ async function runInvestigation(incidentId) {
 
 async function assemble() {
   if (!state.incidentId || state.investigating) return;
+  const previousReport = state.report;
   state.investigating = true;
   state.report = null;
   renderFindings();
   renderDecision(analysis());
-  let data = null;
-  let error = null;
-  const apiPromise = fetch(apiUrl(`/incidents/${encodeURIComponent(state.incidentId)}/investigate`), {
-    method: "POST",
-  })
-    .then(async (res) => {
-      if (!res.ok) throw new Error(`investigate ${res.status}`);
-      return res.json();
-    })
-    .then((payload) => {
-      data = payload;
-    })
-    .catch((err) => {
-      error = err;
-    });
-  await Promise.all([apiPromise, startInvestigationAnimation()]);
   try {
-    if (error) throw error;
+    const res = await fetch(apiUrl(`/incidents/${encodeURIComponent(state.incidentId)}/investigate`), {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error(`investigate ${res.status}`);
+    const data = await res.json();
     state.report = data.report;
     applyIncidentPatch(state.incidentId, {
       status: data.status || "recommended",
@@ -3935,15 +4187,29 @@ async function assemble() {
     renderIncidents();
     renderAlarm(analysis());
     renderDecision(analysis());
+    announceLive("Investigation complete. Recommendation ready for review.");
   } catch (err) {
-    state.report = `# Could not investigate\n\n${err.message}`;
+    state.report = previousReport
+      ? previousReport
+      : `# Could not investigate\n\n${err.message}`;
+    if (previousReport) {
+      announceLive(`Investigation failed. Previous report remains available. ${err.message}`);
+      window.alert(`Investigation failed. The previous report remains on screen.\n\n${err.message}`);
+    } else {
+      state.report = `# Could not investigate\n\n${err.message}`;
+      announceLive(`Investigation failed. ${err.message}`);
+    }
   } finally {
     stopInvestigationAnimation();
     state.investigating = false;
     renderFindings();
     renderDecision(analysis());
+    renderCompare(analysis());
+    renderTimeline(analysis());
+    renderProc(analysis());
     syncCaseFolds();
-    $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const target = hasSuccessfulInvestigation() ? $("action") : $("investigation");
+    target?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 }
 
@@ -3992,7 +4258,7 @@ async function fileIncident(ev) {
   state.filing = true;
   const confirmBtn = $("confirm-file");
   confirmBtn.disabled = true;
-  confirmBtn.textContent = "Filing…";
+  confirmBtn.textContent = "Recording…";
   try {
     const res = await fetch(apiUrl(`/incidents/${encodeURIComponent(state.incidentId)}/file`), {
       method: "POST",
@@ -4019,7 +4285,7 @@ async function fileIncident(ev) {
   } finally {
     state.filing = false;
     confirmBtn.disabled = false;
-    confirmBtn.textContent = "File decision";
+    confirmBtn.textContent = "Record assessment";
     renderDecision(analysis());
   }
 }
@@ -4256,7 +4522,7 @@ function knowledgeCard(doc, opts = {}) {
   const on = doc.id === state.openDocId ? "is-on" : "";
   const close = libraryClose(doc);
   const score = doc.score != null
-    ? `<span class="knowledge-score">${Number(doc.score).toFixed(2)}</span>`
+    ? `<span class="knowledge-score" title="Search similarity, not confidence">${Number(doc.score).toFixed(2)} · similarity</span>`
     : "";
   return `<button type="button" class="knowledge-card kind-${kind} ${on} ${opts.grounded ? "is-grounded" : ""}" data-doc="${escapeHtml(doc.id)}">
     <span class="knowledge-card-top">
@@ -4323,24 +4589,24 @@ function renderKnowledge() {
   if (title) title.textContent = knowledgeToggleSummary(ground, related);
   if (status) {
     status.textContent = state.incidentId
-      ? `${ground.length} grounded · ${related.length} related by meaning`
-      : "Open a case to ground the book";
+      ? `${ground.length} referenced · ${related.length} related (search similarity)`
+      : "Open a case to load procedures and prior incidents";
   }
 
   let html = "";
   if (ground.length) {
     html += `<div class="knowledge-group is-ground">
-      <p class="knowledge-group-kicker">Built for this case</p>
+      <p class="knowledge-group-kicker">Referenced in this investigation</p>
       <p class="knowledge-group-note">Chosen by the same analysis as the investigation — not by search rank.</p>
       <div class="knowledge-grid">${ground.map((g) => knowledgeCard(g.doc, { why: g.why, grounded: true })).join("")}</div>
     </div>`;
   } else {
-    html += `<p class="knowledge-hint">Run investigation or open a case with a matching procedure to ground the book.</p>`;
+    html += `<p class="knowledge-hint">Run investigation or open a case with a matching procedure to load referenced documents.</p>`;
   }
   if (related.length) {
     html += `<div class="knowledge-group">
-      <p class="knowledge-group-kicker">Related by meaning</p>
-      <p class="knowledge-group-note">Semantic neighbors from the local index. Useful when the grounded set is thin or you want a second opinion.</p>
+      <p class="knowledge-group-kicker">Related documents</p>
+      <p class="knowledge-group-note">Search-similarity neighbors from the local index. Related is not the same as supporting evidence.</p>
       <div class="knowledge-grid">${related.map((doc) => knowledgeCard(doc)).join("")}</div>
     </div>`;
   }
@@ -4537,6 +4803,10 @@ function bind() {
     state.knowledgeOpen = !state.knowledgeOpen;
     syncKnowledgeBundle();
   });
+  $("procedure-toggle")?.addEventListener("click", () => {
+    state.procedureOpen = !state.procedureOpen;
+    syncProcedureBundle();
+  });
   $("doc-slip-close")?.addEventListener("click", closeDocSlip);
   $("doc-slip")?.addEventListener("click", (ev) => {
     if (ev.target.id === "doc-slip") closeDocSlip();
@@ -4663,6 +4933,23 @@ function bind() {
   $("case-desk").addEventListener("click", (ev) => {
     if (ev.target.closest("[data-go-trust]")) {
       goTrust();
+      return;
+    }
+    if (ev.target.closest("[data-jump-evidence]")) {
+      state.evidenceOpen = true;
+      syncEvidenceBundle();
+      $("evidence")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    if (ev.target.closest("[data-jump-procedure]")) {
+      state.procedureOpen = true;
+      syncProcedureBundle();
+      $("procedure")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    const resultPin = ev.target.closest(".result-pin[data-t]");
+    if (resultPin) {
+      pinTape(resultPin.dataset.t, { scroll: true, source: resultPin.dataset.pinId || null });
       return;
     }
     const openCase = ev.target.closest("[data-open-case]");
