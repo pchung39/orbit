@@ -3,8 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>About ORBIT — decisions, eval, and what I left out</title>
+  <title>About ORBIT — spacecraft anomaly investigation, with evidence you can review</title>
   <meta name="color-scheme" content="light">
+  <meta
+    name="description"
+    content="ORBIT brings telemetry, command history, procedures, and prior incidents into one investigation record. Built by Paul Chung."
+  >
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link
@@ -12,7 +16,7 @@
     rel="stylesheet"
   >
   <link rel="stylesheet" href="/static/landing.css?v=33">
-  <link rel="stylesheet" href="/static/about.css?v=3">
+  <link rel="stylesheet" href="/static/about.css?v=4">
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -36,16 +40,29 @@
 
       <article class="about">
         <header class="mast">
-          <p class="kicker">About ORBIT · anomaly investigation desk for Aurora-1</p>
-          <h1>Two identical alarms. Only one of them has an answer.</h1>
-          <p class="dek">ORBIT closes spacecraft anomalies. It gives an operator a next step and gives a review board a record they can check. This page explains the choices behind it, how it is tested, and what it still cannot do.</p>
-          <p class="meta">Paul Chung · <a href="/app">Open the desk</a> · <a href="/app/trust">Trust page</a> · <a href="https://github.com/pchung39/orbit">Source</a></p>
+          <p class="kicker">About ORBIT</p>
+          <h1>Spacecraft anomaly investigation, with evidence you can review.</h1>
+          <p class="dek">ORBIT brings telemetry, command history, procedures, and prior incidents into one investigation record. It helps an operator assess a possible cause, review the supporting evidence, and decide what to do next—including when to hold for more information.</p>
+          <p class="dek">I built ORBIT to explore a product question: what would make AI-assisted investigation useful to an operator and credible to the people reviewing the decision?</p>
+          <p class="scope"><b>Current scope.</b> A prototype using five simulated spacecraft scenarios. The browser demo runs a rules-based investigator. Experimental LLM providers are available through the command line. No flight data or operator-pilot results are claimed.</p>
+          <p class="meta"><a href="/app">Open the desk</a> · <a href="/app/trust">Inspect the evaluations</a> · <a href="https://github.com/pchung39/orbit">View the source</a></p>
         </header>
 
-<!-- HERO -->
+<!-- BUILDER -->
 <section class="blk">
-  <div class="rail"><b>The case</b>Same subsystem, same shape, different verdict</div>
+  <div class="rail"><b>Built by</b>Paul Chung</div>
   <div class="body">
+    <h2>Built by Paul Chung</h2>
+    <p>My background includes spacecraft ground software and test automation at NASA JPL, followed by customer-facing software delivery. I designed and built ORBIT to explore how that experience translates into AI-assisted mission workflows.</p>
+    <p class="meta-row"><a href="/app">Open the desk</a> · <a href="/app/trust">Inspect the evaluations</a> · <a href="https://github.com/pchung39/orbit">View the source</a> · <a href="https://www.linkedin.com/in/paulchung39/">LinkedIn</a></p>
+  </div>
+</section>
+
+<!-- THE CASE -->
+<section class="blk">
+  <div class="rail"><b>The case</b>Same shape, different decision</div>
+  <div class="body">
+    <h2>Similar alarms can require different decisions</h2>
     <figure>
       <svg viewBox="0 0 720 320" role="img" aria-label="Two bus voltage traces with the same shape. INC-0204 ends in a recommended inhibit. INC-0212 ends in a hold.">
         <defs><style>
@@ -83,56 +100,43 @@
           <text class="lbl" x="0" y="274">no root cause · no fault id invented</text>
         </g>
       </svg>
-      <figcaption>The payload draws 0.96 A in science mode on both runs. A system that matches on shape answers both the same way. One number in the procedure separates them.</figcaption>
+      <figcaption>Two cases, similar voltage drops. One meets the procedure’s inhibit threshold. The other does not, so the recommendation is to hold.</figcaption>
     </figure>
-
-    <p>I built the second case first. The run where the right answer is a refusal is the reason the rest of the system looks the way it does.</p>
-
-    <ul class="claims">
-      <li><span class="k">Problem</span><span>An alarm says something broke. It does not say what caused it. The operator has minutes to find out, and has to defend the call days later.</span></li>
-      <li><span class="k">Bet</span><span>The hard part is not making the agent smarter. It is making the answer checkable. So the record is the product.</span></li>
-      <li><span class="k">Shape</span><span>Cases, not chat. Frozen evidence. A source tag on every claim. Limits taken from the procedure. Refusal treated as a real answer.</span></li>
-      <li><span class="k">Proof</span><span>55 checks across 5 scenarios, compared to an approved baseline, behind a release gate that safety failures cannot pass.</span></li>
-      <li><span class="k">Limits</span><span>No detection. No commanding. No chat. A person sends the command, always.</span></li>
-    </ul>
+    <p>The alarm’s shape alone cannot justify the same action in both cases. The investigation must account for the measurements and the procedure that governs the response.</p>
+    <p>I built the hold case first. It made the central requirement concrete: ORBIT must explain when the evidence is insufficient, even when a plausible answer is available.</p>
   </div>
 </section>
 
-<!-- THE BET -->
+<!-- RECORD -->
 <section class="blk">
-  <div class="rail"><b>Bet</b>What I think the market gets wrong</div>
+  <div class="rail"><b>Record</b>Three readers, one case</div>
   <div class="body">
-    <h2>The danger is not a wrong answer. It is an answer nobody can check.</h2>
-    <p>Ground software helps an operator pull telemetry, then stops. A general assistant will do the whole investigation and hand back smooth prose with no seams. You cannot see where the measurements end and the guessing starts. Nobody can review that, so nobody trusts it, so nobody uses it.</p>
-    <div class="callout">
-      <p>My view: models are getting capable faster than we are getting able to check them. In high-stakes work, proof is part of the product, not a step at the end. The company that ships the proof wins the category, and it will not be whoever has the best model.</p>
-    </div>
-    <p>That view sets the roadmap. If the answer has to be checkable, then the evidence has to hold still, every claim has to say where it came from, limits have to come from the procedure, and refusal has to be tested. Four requirements. Each one can be proven wrong.</p>
-  </div>
-</section>
-
-<!-- USERS -->
-<section class="blk">
-  <div class="rail"><b>Users</b>Three readers, one record</div>
-  <div class="body">
-    <h2>Who reads a case, and what makes each one walk away</h2>
+    <h2>The product is a reviewable investigation</h2>
+    <p>An operator needs a useful next step. A reviewer needs to understand why that step was recommended. The engineer maintaining the system needs to detect regressions before releasing a change.</p>
     <table class="score">
-      <tr><th>Reader</th><th>Needs</th><th>Drops it if</th></tr>
-      <tr><td>Console operator</td><td>A next step inside the response window, and a clear signal on whether the procedure allows it.</td><td>It recommends one command the procedure does not allow. One is enough.</td></tr>
-      <tr><td>Review board</td><td>To rebuild the reasoning days later from the record alone.</td><td>One claim cannot be traced to a source.</td></tr>
-      <tr><td>Engineer who owns the agent</td><td>To catch a bad change before it reaches the console.</td><td>Problems only show up in production.</td></tr>
+      <tr><th>Reader</th><th>Needs from the record</th></tr>
+      <tr><td>Operator</td><td>A useful next step, including when to hold for more information.</td></tr>
+      <tr><td>Reviewer</td><td>To understand why that step was recommended, from the record alone.</td></tr>
+      <tr><td>Maintainer</td><td>To detect regressions before releasing a change.</td></tr>
     </table>
-    <p>All three read the same object. The tagged case record is what the operator acts on, what the board audits, and what the eval grades. That is why the eval has real weight. The thing being graded is the thing being shipped.</p>
+    <p>ORBIT gives all three the same structured case record: the evidence considered, the calculations performed, the procedures cited, and the proposed conclusion.</p>
+    <p>That record is also what the evaluation suite checks. The tests inspect the output a user would actually review.</p>
   </div>
 </section>
 
-<!-- FLOW + SCOPE -->
+<!-- FLOW -->
 <section class="blk">
-  <div class="rail"><b>Scope</b>The middle of the job, and nothing else</div>
+  <div class="rail"><b>Flow</b>Evidence in, command out</div>
   <div class="body">
-    <h2>Evidence in, hypothesis out, uplink closed</h2>
+    <h2>How an investigation works</h2>
+    <ol class="steps">
+      <li><span class="k">01</span><span><b>Preserve the evidence.</b> When a case opens, ORBIT saves a fixed window of telemetry and events. The investigation works from that snapshot, so the original evidence remains available for review.</span></li>
+      <li><span class="k">02</span><span><b>Apply the relevant context.</b> The investigator uses procedures and prior incidents to interpret the measurements. Procedure thresholds provide explicit criteria for evaluating a recommendation.</span></li>
+      <li><span class="k">03</span><span><b>Separate facts from explanations.</b> The report identifies what was observed, what was calculated, what a document says, and what remains a hypothesis.</span></li>
+      <li><span class="k">04</span><span><b>Recommend a next step—or a hold.</b> The case records a proposed action or explains why the available evidence does not support one. An operator reviews the result. ORBIT cannot send spacecraft commands.</span></li>
+    </ol>
     <figure class="fig-wide">
-      <svg viewBox="0 0 720 300" role="img" aria-label="Flow: alarm, sealed window, grounding in procedure and priors, tagged report, recommendation, then a hard stop before the human command.">
+      <svg viewBox="0 0 720 300" role="img" aria-label="Flow: freeze a window of evidence, ground it in procedure and priors, write a tagged report, recommend or hold, then stop before the human command.">
         <defs><style>
           .nd{fill:none;stroke:var(--ink);stroke-width:1.5}
           .nt{font-family:var(--mono);font-size:11.5px;fill:var(--ink)}
@@ -176,163 +180,26 @@
         <text class="ns" x="622" y="256" fill="var(--held)">human keystroke</text>
         <path class="ar" d="M560 231 L608 231" marker-end="url(#a)" stroke="var(--held)" stroke-dasharray="4 4"/>
       </svg>
-      <figcaption>Detection sits upstream and is already well covered. Commanding sits downstream and is left unbuilt on purpose. ORBIT takes the middle, which today is done by a person under time pressure with twelve tabs open.</figcaption>
+      <figcaption>The investigation works from a saved snapshot. ORBIT stops before the uplink. An operator reviews the result; the system cannot send spacecraft commands.</figcaption>
     </figure>
 
-    <h3>What I left out, and why</h3>
-    <ul>
-      <li><b>Anomaly detection.</b> Real missions already solve this well. Building it would put ORBIT against flight-proven tools and delay the part nobody owns.</li>
-      <li><b>Commanding.</b> Not a later phase and not a setting. An agent that can reach the uplink is a different product with a much larger review burden. The human keystroke is what makes the rest usable at all.</li>
-      <li><b>Live archive queries and file upload.</b> Both let the evidence move. Frozen evidence is what makes a run repeatable.</li>
-      <li><b>A chat window.</b> The unit of work is a case with a record. No review board signs a chat log.</li>
-      <li><b>Support for more than one vehicle.</b> Going wide before the trust layer worked would have produced a shallow demo of a broad idea.</li>
-    </ul>
-    <p>Aurora-1 is a simulated vehicle with planted faults. No flight data is used, and none is claimed.</p>
+    <h3>Where the AI fits</h3>
+    <p>The agentic problem is deciding what evidence to seek, which tools to use, and whether the results justify a conclusion. The tools retrieve or calculate evidence; the model’s role is to use that evidence to guide an investigation.</p>
+    <p>ORBIT separates the investigation workflow from the provider that performs it. The browser demo uses explicit rules to establish repeatable reference behavior. Separate LLM providers support command-line experiments with model-assisted investigation.</p>
+    <p>The published evaluation results below cover the rules-based provider. Running the model providers through the same checks is a next step. The current score does not establish model reliability.</p>
   </div>
 </section>
 
-<!-- DECISIONS -->
+<!-- LABELS -->
 <section class="blk">
-  <div class="rail"><b>Decisions</b>Six calls · one line</div>
+  <div class="rail"><b>Labels</b>Observed to hypothesis</div>
   <div class="body">
-    <h2>Six calls that shaped ORBIT</h2>
-    <p>Read the bold line. That is the call. Open one if you want the defense: what I skipped, why, and what would make me reverse it.</p>
-
-    <ol class="choices">
-      <li>
-        <details class="choice" open>
-          <summary>
-            <span class="choice-n">01</span>
-            <span class="choice-head">
-              <h3>Freeze the tape</h3>
-              <p>Once a case opens, the evidence is locked. It cannot change while you investigate.</p>
-            </span>
-            <span class="choice-mark" aria-hidden="true"></span>
-          </summary>
-          <dl>
-            <dt>Instead of</dt>
-            <dd>Letting the agent query the live archive whenever it wants, the way an engineer would.</dd>
-            <dt>Why</dt>
-            <dd>If the data can move, you cannot audit the run or grade the agent. A second look might be a different story. If a case outgrows the window, you open a new one.</dd>
-            <dt>Reverse if</dt>
-            <dd>Operators hit the window edge in most cases. Then freeze a series of snapshots, not one pull.</dd>
-          </dl>
-        </details>
-      </li>
-      <li>
-        <details class="choice">
-          <summary>
-            <span class="choice-n">02</span>
-            <span class="choice-head">
-              <h3>Stamp every sentence</h3>
-              <p>Each line says how we know it: measured, calculated, quoted, or guessed.</p>
-            </span>
-            <span class="choice-mark" aria-hidden="true"></span>
-          </summary>
-          <dl>
-            <dt>Instead of</dt>
-            <dd>A footnote at the end of the paragraph, which is what most retrieval tools ship.</dd>
-            <dt>Why</dt>
-            <dd>A footnote proves a source exists. It does not tell a reviewer whether this sentence is a measurement or a guess. Wrong stamps are their own failure — the eval checks for that.</dd>
-            <dt>Reverse if</dt>
-            <dd>Operators stop reading the stamps. Proof nobody uses is just extra work.</dd>
-          </dl>
-        </details>
-      </li>
-      <li>
-        <details class="choice">
-          <summary>
-            <span class="choice-n">03</span>
-            <span class="choice-head">
-              <h3>Use the procedure’s limit</h3>
-              <p>The inhibit bar comes from the procedure. The model does not get to pick a new one.</p>
-            </span>
-            <span class="choice-mark" aria-hidden="true"></span>
-          </summary>
-          <dl>
-            <dt>Instead of</dt>
-            <dd>Asking the model whether a heater “looks wrong.” It will answer at any value, and it will sound sure.</dd>
-            <dt>Why</dt>
-            <dd>EPS-17 already set the bar at 2× healthy. That passed engineering review. Recalculating it at run time throws the review away. On a subsystem with no written limit, ORBIT has less to say — that is the honest answer.</dd>
-            <dt>Reverse if</dt>
-            <dd>Never for a safety limit. At most, propose one for a human to approve, tagged as a guess.</dd>
-          </dl>
-        </details>
-      </li>
-      <li>
-        <details class="choice">
-          <summary>
-            <span class="choice-n">04</span>
-            <span class="choice-head">
-              <h3>Show the case with no answer</h3>
-              <p>One of the five scenarios must be refused. It sits next to its twin on the landing page.</p>
-            </span>
-            <span class="choice-mark" aria-hidden="true"></span>
-          </summary>
-          <dl>
-            <dt>Instead of</dt>
-            <dd>Leading with the four clean closes, which is what every demo does.</dd>
-            <dt>Why</dt>
-            <dd>Anyone judging this for mission work is looking for the moment it makes things up. Handing them that case is faster to check than four wins.</dd>
-            <dt>Reverse if</dt>
-            <dd>Nothing so far. It is the first thing reviewers open.</dd>
-          </dl>
-        </details>
-      </li>
-      <li>
-        <details class="choice">
-          <summary>
-            <span class="choice-n">05</span>
-            <span class="choice-head">
-              <h3>Grade the rules first</h3>
-              <p>Scored runs use a rules engine, so the same 55 checks come back the same way every time.</p>
-            </span>
-            <span class="choice-mark" aria-hidden="true"></span>
-          </summary>
-          <dl>
-            <dt>Instead of</dt>
-            <dd>Leading with an LLM because it demos faster.</dd>
-            <dt>Why</dt>
-            <dd>If the system under test is random, a failed check has two causes and you cannot tell them apart. The rules path will not carry to a new subsystem — it is scaffolding, and I say so.</dd>
-            <dt>Reverse if</dt>
-            <dd>Not a reversal. The next step is running a model on the same 55 checks.</dd>
-          </dl>
-        </details>
-      </li>
-      <li>
-        <details class="choice">
-          <summary>
-            <span class="choice-n">06</span>
-            <span class="choice-head">
-              <h3>One safety miss blocks the ship</h3>
-              <p>A build that invents a fault ID cannot ship, even if it scored well everywhere else.</p>
-            </span>
-            <span class="choice-mark" aria-hidden="true"></span>
-          </summary>
-          <dl>
-            <dt>Instead of</dt>
-            <dd>One total score with a pass mark, which is how most eval dashboards work.</dd>
-            <dt>Why</dt>
-            <dd>A total lets a dangerous miss hide behind four good cases. These failures are not interchangeable, so the gate must not treat them as if they are.</dd>
-            <dt>Reverse if</dt>
-            <dd>The gate keeps blocking on a check that is my opinion, not the procedure’s rule. That is a bad check, not a bad rule.</dd>
-          </dl>
-        </details>
-      </li>
-    </ol>
-  </div>
-</section>
-
-<!-- PROVENANCE -->
-<section class="blk">
-  <div class="rail"><b>Model</b>Where the evidence ends</div>
-  <div class="body">
-    <h2>Four tags, one line</h2>
+    <h2>Every claim shows how it is supported</h2>
     <figure>
       <svg viewBox="0 0 720 250" role="img" aria-label="Four source tags ordered by distance from measurement, with a line before hypothesis.">
         <defs><style>
           .tg{font-family:var(--mono);font-size:12px;fill:var(--ink)}
-          .tx{font-family:var(--serif);font-size:13px;fill:var(--ink-soft)}
+          .tx{font-family:var(--sans);font-size:13px;fill:var(--ink-soft)}
           .bx{fill:none;stroke:var(--ink);stroke-width:1.5}
         </style></defs>
         <rect class="bx" x="0" y="10" width="470" height="42"/>
@@ -354,40 +221,64 @@
         <text class="tx" x="500" y="136">quoted</text>
         <text class="tx" x="500" y="218">proposed</text>
       </svg>
-      <figcaption>The tags run from closest to the measurement to furthest from it. A reviewer reads down the page and sees exactly where the record stops and the reasoning starts.</figcaption>
+      <figcaption>A reviewer reads down the page and sees where the record stops and the reasoning starts.</figcaption>
     </figure>
+    <table class="score">
+      <tr><th>Label</th><th>Meaning</th></tr>
+      <tr><td>Observed</td><td>Recorded directly in telemetry or the command log.</td></tr>
+      <tr><td>Derived</td><td>Calculated from recorded evidence.</td></tr>
+      <tr><td>Documented</td><td>Supported by a cited procedure or prior incident.</td></tr>
+      <tr><td>Hypothesis</td><td>A proposed explanation that requires interpretation.</td></tr>
+    </table>
+    <p>These labels help a reviewer distinguish measurements from conclusions. A citation establishes where a claim came from; it does not, by itself, establish that the claim is correct or applicable to this case.</p>
   </div>
 </section>
 
-<!-- EVALUATION -->
+<!-- DECISIONS -->
 <section class="blk">
-  <div class="rail"><b>Eval</b>Four families · 55 checks · one gate</div>
+  <div class="rail"><b>Design</b>Six constraints</div>
   <div class="body">
-    <h2>How do you grade an agent that is supposed to say no?</h2>
-    <p>Almost every eval framework assumes there is a right answer to compare against. The agent produced X, the answer key says Y, score the match. ORBIT is built on refusal. When the correct behavior is to hold and name what is missing, there is no Y. A framework that only compares answers marks that refusal as a miss. Anything you tune against it learns to never refuse.</p>
-    <p>So the eval had to be designed before the agent was. Two problems shaped them.</p>
+    <h2>The decisions behind the design</h2>
+    <ul class="claims">
+      <li><span class="k">Reproducible</span><span><b>Keep each case reproducible.</b> Evidence is saved with the case. A reviewer can return to the same snapshot instead of relying on a changing archive query. If more evidence is needed, the case boundary must be revisited explicitly.</span></li>
+      <li><span class="k">Thresholds</span><span><b>Take thresholds from procedures.</b> A model-generated explanation should not silently substitute a new threshold for the one specified in the procedure.</span></li>
+      <li><span class="k">Hold</span><span><b>Make a hold a complete result.</b> When the evidence is insufficient, the report should state what is missing and avoid presenting a plausible cause as an established finding.</span></li>
+      <li><span class="k">Case</span><span><b>Organize the work around a case.</b> Evidence, recommendations, and operator feedback belong in one persistent record that can be reviewed after the response window has passed.</span></li>
+      <li><span class="k">No uplink</span><span><b>Keep spacecraft commanding outside the product.</b> ORBIT supports investigation and records decisions. It has no command-uplink capability.</span></li>
+      <li><span class="k">One vehicle</span><span><b>Start with one simulated vehicle.</b> Limiting the initial scope makes it possible to inspect the behavior in detail before expanding to more varied systems and operating conditions.</span></li>
+    </ul>
+  </div>
+</section>
 
-    <h3>Problem one: where the answer key comes from</h3>
-    <p>Real anomaly closes are rare, inconsistent, and often unwritten. I built five scenarios with planted faults, so the right answer is known by construction. That buys a solid answer key and costs realism twice. Planted faults are cleaner than real flight data. Worse, a planted fault can leave a clue the agent latches onto instead of reasoning, and then the suite passes for the wrong reason.</p>
-    <p>Two things push back. Contrast cases share the alarm and the shape but need a different verdict, so shape alone cannot carry a run. And the checks read the reasoning trail, not just the final answer, so the right answer reached the wrong way still fails.</p>
+<!-- EVAL -->
+<section class="blk">
+  <div class="rail"><b>Eval</b>Five scenarios · 55 checks</div>
+  <div class="body">
+    <h2>How I evaluate the system</h2>
+    <p>The evaluation suite asks two questions: did the investigator reach the expected decision, and does the report support that decision appropriately?</p>
+    <p>For some cases, the expected result is a cause and a recommended action. For another, it is a hold, an explanation of the missing evidence, and no unsupported fault attribution. Both are testable outcomes.</p>
 
-    <h3>Problem two: what is actually being graded</h3>
-    <p>A report can name the right cause for a reason that will invent something on the next case. Grading only the conclusion rewards that. So checks assert on which evidence was pulled in, which limit was applied and where it came from, and what tag each claim carries.</p>
-
+    <h3>Five scenarios, 55 checks</h3>
+    <p>I created five simulated scenarios with known faults and decision criteria. Similar-looking cases require different recommendations, making them useful tests of whether the system applies the relevant evidence and thresholds.</p>
+    <p>The checks inspect the structured report, including evidence references, calculations, source labels, and recommendations. They do not inspect a model’s private reasoning or prove that it reasons correctly in general.</p>
     <table class="score">
-      <tr><th>Check family</th><th>What it asserts</th><th>If it fails</th></tr>
-      <tr><td>Outcome</td><td>The cause and action match the recorded close.</td><td class="mono">counts against the score</td></tr>
-      <tr><td>Refusal</td><td>When the limit is not met: no cause named, no fault ID invented, hold recommended, missing evidence stated.</td><td class="mono held">blocks the release</td></tr>
-      <tr><td>Sourcing</td><td>Every claim carries a tag. Every calculated number shows its math. Every quoted claim carries a citation. No cause language inside plain timeline facts.</td><td class="mono held">blocks the release</td></tr>
-      <tr><td>Contrast</td><td>On cases where inhibiting the heater would be wrong, the heater is left alone.</td><td class="mono held">blocks the release</td></tr>
+      <tr><th>Check family</th><th>What it tests</th></tr>
+      <tr><td>Outcome</td><td>Whether the reported cause and recommended action match the expected result.</td></tr>
+      <tr><td>Refusal</td><td>Whether the investigator holds when the threshold is unmet, explains the missing evidence, and avoids inventing a cause or fault identifier.</td></tr>
+      <tr><td>Sourcing</td><td>Whether claims have the required labels, calculations, and citations, with causal interpretations kept separate from observed events.</td></tr>
+      <tr><td>Contrast</td><td>Whether the investigator avoids recommending a heater inhibit in cases where that action is inappropriate.</td></tr>
     </table>
-    <p>Outcome checks are the family every demo shows. The other three decide whether the system is safe near a console. That is why they can block a release on their own.</p>
+    <p>For example, one check rejects a report that introduces a fault identifier absent from the case evidence and cited procedure. An invented identifier can look authoritative even when the surrounding explanation is plausible.</p>
 
-    <h3>One check, written out</h3>
-    <p><span class="mono">refusal.no_invented_fault_id</span> — on INC-0212, check that the report contains no fault ID that is not in the frozen evidence or the cited procedure. If this fails, the agent produced something that looks like a real record and is not one. That is the worst output the system can make. It survives a quick read, it sounds official, and it defeats the review that would have caught it. No amount of good scoring elsewhere clears it.</p>
+    <h3>What the current result means</h3>
+    <div class="callout">
+      <p>The rules-based provider passes all 55 checks across the five simulated scenarios and passes the release gate against the stored baseline.</p>
+    </div>
+    <p>That result demonstrates compliance with the current test suite. It does not establish performance on unseen flight data, validate an LLM provider, or demonstrate readiness for operational use.</p>
+    <p>The <a href="/app/trust">Trust page</a> exposes the individual checks and reads the same results artifact used by the release gate.</p>
 
-    <h3>A score is not a release decision</h3>
-    <p>A scorecard tells you how a build did. A gate decides whether it ships. Connecting the two turns the eval into control, and it is the part I would defend hardest.</p>
+    <h3>How the release gate works</h3>
+    <p>A candidate build is compared with the accepted baseline by check family. Designated failures in refusal, sourcing, or contrast checks block release, even if the overall score improves.</p>
     <figure class="fig-wide">
       <svg viewBox="0 0 720 330" role="img" aria-label="Release gate: candidate compared to approved baseline by family. A drop in refusal checks blocks the release even though the total score improved.">
         <defs><style>
@@ -433,65 +324,41 @@
         <text class="g-s" x="0" y="278">to answer a case it should have held. A single total score would have called that an improvement.</text>
         <text class="g-s" x="0" y="302">INSUFFICIENT_COVERAGE exists so a thin suite reports as unproven instead of green.</text>
       </svg>
-      <figcaption>New build against approved baseline, compared family by family. Safety and sourcing families can veto before any total is calculated.</figcaption>
+      <figcaption>New build against the accepted baseline, compared family by family. Refusal, sourcing, and contrast can block release even if the total improves.</figcaption>
     </figure>
+    <p>Preserving the test evidence makes these comparisons interpretable: changes in the inputs cannot silently account for changes in the result. Model-based runs will also need repeated trials to measure variation between runs.</p>
 
-    <h3>Frozen evidence is eval infrastructure</h3>
-    <p>A baseline comparison only means something if the answer key holds still. If the archive can be queried again, a red check has two possible causes: the agent got worse, or the data moved. You cannot tell which. Freezing the evidence makes every regression traceable to a change in the agent.</p>
-
-    <h3>Current results</h3>
-    <table class="score">
-      <tr><th>Rate</th><th>What it measures</th></tr>
-      <tr><td class="n met">4 / 4</td><td>Correct closes on heater, payload, and battery faults.</td></tr>
-      <tr><td class="n met">1 / 1</td><td>Held back the cause when the limit was not met.</td></tr>
-      <tr><td class="n met">3 / 3</td><td>No wrong heater inhibit on contrast cases.</td></tr>
-      <tr><td class="n met">5 / 5</td><td>Tags clean, no cause language in plain timeline facts.</td></tr>
-    </table>
-    <p>55 of 55, rules provider, gate <span class="met">PASS</span> against baseline. The Trust page reads the same file the gate reads and shows every check, so a visitor can open any one of them instead of trusting a summary.</p>
-
-    <h3>Where the eval stops</h3>
-    <p>Stated here rather than left for a reader to find, because a trust layer that will not audit itself is decoration.</p>
-    <ul>
-      <li><b>The suite is deep, not wide.</b> Five scenarios lock down the behaviors that carry the most risk: the refusal, the contrast cases, the tags. That is a regression suite by design. Breadth is the next investment, and it is a scale problem rather than a design problem.</li>
-      <li><b>The scenarios are built, not flown.</b> Planted faults give a known answer key, which is what makes grading possible at all. Real telemetry adds dropouts, clock drift, and sensors that fail mid-event. Those belong in the suite once the trust layer has proven out on clean data.</li>
-      <li><b>It grades behavior, not confidence.</b> The gate proves the agent holds back when the limit is not met. Whether its stated confidence tracks how often it is right is a separate layer, and it needs a wider suite before the number would mean anything.</li>
-    </ul>
-
-    <h3>What comes next, in order</h3>
-    <ul>
-      <li><b>Same case, small changes.</b> Shift the window, add sensor noise, rename the channel, change the units. The verdict must not move. This proves the agent is reasoning from the evidence rather than from the shape of the scenario, and it costs almost nothing to run.</li>
-      <li><b>Cases built to mislead.</b> A prior close that almost applies. A procedure that almost matches. A case with two live candidate causes and no clean winner. These are the cases where a confident system does the most damage, so they earn their place first.</li>
-      <li><b>The model provider through the same gate.</b> Same 55 checks, same baseline, same veto rules. The provider interface exists for exactly this, so the comparison is like for like and the model has to clear the bar the rules path already cleared.</li>
-    </ul>
+    <h3>What I would test next</h3>
+    <ol>
+      <li><b>Robustness to equivalent inputs.</b> Change units or channel names without changing their meaning. Where the relevant evidence is preserved, the decision should remain consistent. Changes to time windows or noise levels need their own expected outcomes because they can alter the evidence.</li>
+      <li><b>Ambiguous and misleading evidence.</b> Add near-matching procedures, misleading prior incidents, missing telemetry, and cases with multiple plausible causes.</li>
+      <li><b>Model-provider performance.</b> Run LLM providers against the same requirements, repeat the runs, and report model results separately from the rules baseline.</li>
+      <li><b>Independent scenarios and realistic data.</b> Expand beyond cases developed alongside the investigator, then evaluate against reviewed historical incidents where access and permissions allow.</li>
+    </ol>
+    <p>The current suite is a small regression suite. Broader coverage, independent cases, and realistic data are necessary to assess how well the design generalizes. Confidence calibration remains untested.</p>
   </div>
 </section>
 
-<!-- SUCCESS -->
+<!-- PILOT -->
 <section class="blk">
-  <div class="rail"><b>Success</b>What good looks like in a real pilot</div>
+  <div class="rail"><b>Pilot</b>Not yet run</div>
   <div class="body">
-    <h2>Four measures, one rule, one number I will not chase</h2>
-    <p>No real operators have used ORBIT yet, so these are commitments, not results. I would rather write them down now than pick flattering numbers after a pilot.</p>
-    <table class="score">
-      <tr><th>Measure</th><th>Why it matters</th></tr>
-      <tr><td>Cases closed without leaving the desk to hunt for evidence</td><td>Tells me whether the frozen window is the right size.</td></tr>
-      <tr><td>Time from alarm to filed decision</td><td>The operator's actual pain, measured against how long it takes today.</td></tr>
-      <tr><td>Reports accepted at review with no rework</td><td>Tests the core claim: the record still stands up days later.</td></tr>
-      <tr><td>How often operators overrule the recommendation</td><td>Near zero means they are rubber-stamping it. Very high means they do not trust it. Both are bad, and they need different fixes.</td></tr>
-    </table>
-    <p><b>The rule that ends the pilot:</b> one recommended command that a reviewer judges the procedure did not allow. Not a metric to improve. A stop condition.</p>
-    <div class="callout">
-      <p>The number I will not chase is how often ORBIT names a cause. It is the most flattering figure available and it points the wrong way. Raising it means refusing less, and refusing less is how a confident wrong command reaches a spacecraft.</p>
-    </div>
-
-    <h3>How it would get adopted, in three stages</h3>
+    <h2>How I would validate it with operators</h2>
+    <p>ORBIT has not been tested with real operators. A pilot would begin with historical cases, progress to preparing reports for review, and reach live advisory use only after those earlier stages support it.</p>
+    <p>I would measure:</p>
     <ul>
-      <li><b>Shadow.</b> Run it on closed past anomalies. Compare its output to what actually happened. Nobody depends on it and mistakes cost nothing. Move on when it holds up on real closes, not planted ones.</li>
-      <li><b>Record.</b> Write the review document after the fact, where the reader is the board and there is no clock. Move on when reports are accepted without rework.</li>
-      <li><b>Advisory.</b> Sit beside the operator during a live response, still with no path to the uplink. This is the last stage. Most agent products try to start here.</li>
+      <li><b>Time to a reviewable decision:</b> compared with the existing investigation workflow.</li>
+      <li><b>Evidence completeness:</b> how often operators need information outside the saved case.</li>
+      <li><b>Review quality:</b> whether reports are accepted without substantive corrections.</li>
+      <li><b>Recommendation quality:</b> when operators accept, reject, or revise a recommendation—and why.</li>
     </ul>
-    <p class="foot">Paul Chung · former NASA JPL, ground software and spacecraft test automation<br>
-    <a href="/app">Open the desk</a> · <a href="/app/trust">Trust page</a> · <a href="https://github.com/pchung39/orbit">Source</a> · <a href="https://www.linkedin.com/in/paulchung39/">LinkedIn</a></p>
+    <p>An override rate alone cannot distinguish trust from overreliance. I would review the underlying decisions and evidence, including whether holds were appropriate.</p>
+    <div class="callout">
+      <p>Any recommendation judged inconsistent with the governing procedure would pause the pilot for investigation. The goal is faster, better-supported decisions, with appropriate holds when the evidence is insufficient.</p>
+    </div>
+    <p class="foot">
+      <a href="/app">Open the desk</a> · <a href="/app/trust">Inspect the evaluations</a> · <a href="https://github.com/pchung39/orbit">View the source</a> · <a href="https://www.linkedin.com/in/paulchung39/">LinkedIn</a>
+    </p>
   </div>
 </section>
 
