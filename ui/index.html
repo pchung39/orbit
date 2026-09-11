@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=pin39" />
+    <link rel="stylesheet" href="/static/styles.css?v=pin48" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -48,8 +48,9 @@
       <main class="stage" id="stage">
         <section class="home" id="home">
           <p class="home-board-lede" id="home-lede" hidden></p>
-          <header class="home-craft home-craft-compact" id="home-craft">
+          <header class="home-craft" id="home-craft">
             <div class="home-craft-copy">
+              <p class="home-craft-eyebrow">Mission overview</p>
               <div class="home-bar-id">
                 <svg class="logo-aurora home-bar-logo" viewBox="0 0 48 48" aria-hidden="true">
                   <circle cx="24" cy="24" r="22.5" fill="#0c1922" />
@@ -61,24 +62,54 @@
                   <rect x="22.6" y="18.6" width="2.8" height="5.2" rx="0.5" fill="#0c1922" />
                   <circle cx="24" cy="26.4" r="1.2" fill="#c45c12" />
                 </svg>
-                <div>
-                  <p class="home-bar-kicker">Spacecraft</p>
-                  <p class="home-bar-name">Aurora-1</p>
+                <div class="home-craft-title-block">
+                  <div class="home-craft-title-row">
+                    <h1 class="home-bar-name">Aurora-1</h1>
+                    <span class="home-craft-badge">Simulated mission</span>
+                  </div>
                 </div>
               </div>
-              <div class="home-brief" id="home-brief" aria-label="Mission context"></div>
-              <div class="home-craft-readouts" aria-label="Orbit context">
-                <div class="home-craft-read">
-                  <p class="home-craft-read-k">Illumination</p>
-                  <p class="home-bar-tag" id="home-illum">—</p>
-                </div>
-                <div class="home-craft-read">
-                  <p class="home-craft-read-k">Period</p>
-                  <p class="home-bar-quiet" id="home-orbit-meta">—</p>
-                </div>
-              </div>
+              <p class="home-craft-purpose">Investigate spacecraft anomalies.</p>
+              <p class="home-craft-desc">
+                Examine telemetry, procedures, and prior incidents to build an evidence-backed assessment for human review.
+              </p>
             </div>
-            <div class="orbit-wrap home-craft-orbit" id="home-orbit" aria-hidden="true"></div>
+            <div class="home-craft-visual" aria-hidden="true">
+              <svg class="home-craft-motif" viewBox="0 0 420 240" focusable="false">
+                <defs>
+                  <linearGradient id="home-motif-wash" x1="12%" y1="18%" x2="88%" y2="82%">
+                    <stop offset="0%" stop-color="#2ad3a8" stop-opacity="0.12" />
+                    <stop offset="55%" stop-color="#5f9dff" stop-opacity="0.06" />
+                    <stop offset="100%" stop-color="#5f9dff" stop-opacity="0" />
+                  </linearGradient>
+                </defs>
+                <rect x="48" y="28" width="168" height="168" fill="url(#home-motif-wash)" />
+                <g fill="none" stroke-linecap="square" stroke-linejoin="miter">
+                  <rect x="48" y="28" width="168" height="168" stroke="#1e2b38" stroke-width="1" />
+                  <rect x="78" y="58" width="108" height="108" stroke="#253544" stroke-width="1" />
+                  <rect x="108" y="88" width="48" height="48" stroke="rgba(42,211,168,0.45)" stroke-width="1.2" />
+                  <path d="M48 28 L216 196" stroke="#1e2b38" stroke-width="1" />
+                  <path d="M216 28 L48 196" stroke="#253544" stroke-width="1" />
+                  <circle cx="132" cy="112" r="34" stroke="rgba(95,157,255,0.35)" stroke-width="1.1" />
+                  <path d="M132 78 L161 129 L103 129 Z" stroke="rgba(127,240,212,0.55)" stroke-width="1.2" />
+                  <rect x="236" y="44" width="120" height="86" stroke="#1e2b38" stroke-width="1" />
+                  <rect x="256" y="64" width="80" height="46" stroke="#253544" stroke-width="1" />
+                  <path d="M236 130 L356 130 L356 196 L236 196 Z" stroke="rgba(42,211,168,0.28)" stroke-width="1.1" />
+                  <path d="M268 130 L268 196" stroke="#1e2b38" stroke-width="1" />
+                  <path d="M300 130 L300 196" stroke="#1e2b38" stroke-width="1" />
+                  <path d="M332 130 L332 196" stroke="#1e2b38" stroke-width="1" />
+                  <path d="M236 152 L356 152" stroke="#253544" stroke-width="1" />
+                  <path d="M236 174 L356 174" stroke="#253544" stroke-width="1" />
+                  <circle cx="296" cy="87" r="10" stroke="rgba(127,240,212,0.5)" stroke-width="1.2" />
+                  <path d="M296 77 L296 97 M286 87 L306 87" stroke="rgba(127,240,212,0.45)" stroke-width="1" />
+                  <path d="M370 52 L392 74 L370 96 L348 74 Z" stroke="rgba(95,157,255,0.4)" stroke-width="1.1" />
+                  <path d="M64 208 L196 208" stroke="#253544" stroke-width="1" stroke-dasharray="4 6" />
+                  <path d="M64 216 L148 216" stroke="rgba(42,211,168,0.35)" stroke-width="1.2" />
+                </g>
+                <rect x="118" y="98" width="28" height="28" fill="rgba(42,211,168,0.08)" />
+                <rect x="276" y="74" width="40" height="26" fill="rgba(95,157,255,0.06)" />
+              </svg>
+            </div>
           </header>
           <section class="home-start" id="home-start" aria-label="Featured investigation"></section>
           <section class="home-desk" id="home-desk" aria-label="Incident queue"></section>
@@ -453,7 +484,7 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=pin39" type="module"></script>
+    <script src="/static/app.js?v=pin48" type="module"></script>
 
     <div class="slip-wrap" id="doc-slip" hidden>
       <div class="slip doc-slip" role="dialog" aria-modal="true" aria-labelledby="doc-slip-title">

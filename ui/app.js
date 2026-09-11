@@ -3447,73 +3447,6 @@ function updateInvestigationChrome() {
   syncCaseFolds();
 }
 
-function orbitSvg(orbit) {
-  const o = orbit || { phase: 0.18, illumination: "sun", period_min: 94 };
-  const theta = Number(o.phase || 0) * Math.PI * 2;
-  const cx = 158;
-  const cy = 70;
-  const rx = 112;
-  const ry = 40;
-  const x = (cx + rx * Math.cos(theta)).toFixed(1);
-  const y = (cy + ry * Math.sin(theta)).toFixed(1);
-  const sun = o.illumination === "sun";
-  const mark = sun ? "#7ff0d4" : "#f2a33c";
-  return `<svg class="orbit-map" viewBox="0 0 320 148" aria-hidden="true">
-    <defs>
-      <radialGradient id="orbit-sun">
-        <stop offset="0%" stop-color="#ffe08a" stop-opacity="0.85" />
-        <stop offset="55%" stop-color="#ffe08a" stop-opacity="0.22" />
-        <stop offset="100%" stop-color="#ffe08a" stop-opacity="0" />
-      </radialGradient>
-      <radialGradient id="orbit-earth" cx="34%" cy="30%">
-        <stop offset="0%" stop-color="#2d4a63" />
-        <stop offset="100%" stop-color="#0b141d" />
-      </radialGradient>
-    </defs>
-    <circle cx="${cx}" cy="${cy}" r="46" fill="url(#orbit-sun)" />
-    <circle cx="${cx}" cy="${cy}" r="8" fill="#ffe08a" opacity="0.95" />
-    <g transform="rotate(-20 ${cx} ${cy})">
-      <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="#22323f" stroke-width="1.2" />
-      <ellipse cx="${cx}" cy="${cy}" rx="${rx}" ry="${ry}" fill="none" stroke="rgba(127,240,212,0.45)"
-        stroke-width="1.6" stroke-dasharray="252 253" stroke-dashoffset="126" />
-      <circle cx="${x}" cy="${y}" r="9" fill="none" stroke="${mark}" stroke-width="1" opacity="0.35" />
-      <circle cx="${x}" cy="${y}" r="4" fill="${mark}" />
-    </g>
-    <circle cx="${cx}" cy="${cy}" r="16" fill="url(#orbit-earth)" stroke="#22323f" stroke-width="1" />
-    <text x="14" y="136" fill="#66798c" font-size="9" font-family="IBM Plex Mono,monospace" letter-spacing="1.8">ECLIPSE</text>
-    <text x="306" y="136" text-anchor="end" fill="#66798c" font-size="9" font-family="IBM Plex Mono,monospace" letter-spacing="1.8">SUNLIT</text>
-  </svg>`;
-}
-
-function renderHomeCraft() {
-  const craft = $("home-craft");
-  const orbit = state.desk?.orbit;
-  if (craft) {
-    craft.classList.toggle("is-sun", orbit?.illumination === "sun");
-    craft.classList.toggle("is-eclipse", Boolean(orbit) && orbit.illumination !== "sun");
-  }
-  if ($("home-illum")) {
-    const illum = orbit?.illumination === "sun" ? "Sunlit" : orbit ? "Eclipse" : "Orbit";
-    $("home-illum").textContent = illum;
-  }
-  if ($("home-orbit-meta")) {
-    $("home-orbit-meta").textContent = orbit?.period_min ? `${orbit.period_min} min` : "LEO";
-  }
-  if ($("home-orbit")) $("home-orbit").innerHTML = orbitSvg(orbit);
-}
-
-function renderHomeBrief() {
-  const root = $("home-brief");
-  if (!root) return;
-  root.innerHTML = `
-    <p class="home-brief-eyebrow">Investigation workbench</p>
-    <p class="home-brief-lede">
-      Review sealed telemetry, procedures, and prior incidents for Aurora-1 anomalies —
-      then stop at a human decision. Recording an assessment never uplinks a command.
-    </p>
-    <p class="home-context-line">Simulated mission</p>`;
-}
-
 function renderHomeStart() {
   const root = $("home-start");
   if (!root) return;
@@ -3654,8 +3587,6 @@ function renderHomeProof() {
 }
 
 function renderHome() {
-  renderHomeCraft();
-  renderHomeBrief();
   renderHomeStart();
   renderHomeDesk();
   renderHomeProof();
@@ -3667,7 +3598,6 @@ async function loadDesk(runId) {
   if (!res.ok) throw new Error(`desk ${res.status}`);
   state.desk = await res.json();
   state.deskRunId = state.desk.run_id || wanted;
-  if (state.view === "home") renderHomeCraft();
 }
 
 async function goHome() {
@@ -4338,17 +4268,24 @@ function renderFindings() {
   if (state.report) {
     const sections = state.report.split(/\n(?=## )/);
     body.innerHTML = sections
+      .map((raw) => raw.trim())
       .filter((block) => {
-        const trimmed = block.trim();
-        const title = sectionTitle(trimmed);
-        if (/^#\s+Investigation\b/i.test(trimmed)) return false;
-        return !/^tool log$/i.test(title) && !/^hypothesis$/i.test(title) && !/recommended human decision/i.test(title);
+        if (!block) return false;
+        const title = sectionTitle(block);
+        if (/^tool log$/i.test(title) || /^hypothesis$/i.test(title) || /recommended human decision/i.test(title)) {
+          return false;
+        }
+        // Keep the Investigation heading block when it has body copy (scope bullets
+        // or short no-crossing reports). Empty H1-only stubs before ## Timeline stay hidden.
+        if (/^#\s+Investigation\b/i.test(block)) {
+          return block.replace(/^#[^\n]*\n*/, "").trim().length > 0;
+        }
+        return true;
       })
-      .map((raw) => {
-        const block = raw.trim();
+      .map((block) => {
         const title = sectionTitle(block);
         if (/^timeline$/i.test(title)) return renderTimelineFinding(block);
-        return `<article class="finding md"><p class="finding-section-kicker">Investigation findings</p>${renderMd(block)}</article>`;
+        return `<article class="finding md"><p class="finding-section-kicker">Investigation findings</p>${renderMd(block, { skipTitle: true })}</article>`;
       })
       .join("");
     return;
