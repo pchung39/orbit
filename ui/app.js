@@ -434,7 +434,7 @@ function hypothesisContextHtml(a, g) {
   return `<dl class="hyp-context">
     <div><dt>Suspect load</dt><dd>${escapeHtml(g.suspect)}</dd></div>
     <div><dt>Last command</dt><dd>${escapeHtml(lastLabel)}</dd></div>
-    <div class="is-act"><dt>Recommend</dt><dd>${escapeHtml(g.recommend)} <i>not sent</i></dd></div>
+    <div class="is-act"><dt>Recommend</dt><dd>${escapeHtml(g.recommend)}</dd></div>
   </dl>`;
 }
 
@@ -543,29 +543,6 @@ function tracesToDraw() {
   return TRACE_CATALOG.map((ch) => ({ ...ch, primary: ch.id === alarm }));
 }
 
-const DEMO_STORY = [
-  {
-    id: "INC-0204",
-    n: "1",
-    title: "Run an investigation",
-    blurb: "Open INC-0204 and inspect the recommendation.",
-    primary: true,
-  },
-  {
-    id: "INC-0212",
-    n: "2",
-    title: "Compare a hold case",
-    blurb: "Open INC-0212 to see what happens when the evidence does not meet the procedure’s threshold.",
-  },
-  {
-    id: null,
-    n: "3",
-    title: "Inspect the evaluations",
-    blurb: "Review the checks behind the published results.",
-    trust: true,
-  },
-];
-
 const state = {
   view: "home",
   runs: [],
@@ -582,7 +559,6 @@ const state = {
   incidentTape: "all",
   incidentSort: "opened_desc",
   incidentQuery: "",
-  pathExpanded: false,
   window: "focus",
   pinT: null,
   pinSource: null,
@@ -3535,43 +3511,7 @@ function renderHomeBrief() {
       Review sealed telemetry, procedures, and prior incidents for Aurora-1 anomalies —
       then stop at a human decision. Recording an assessment never uplinks a command.
     </p>
-    <p class="home-context-line">Simulated mission · Rules-based investigator · No spacecraft commands</p>
-    <p class="home-credit">
-      <a href="https://www.linkedin.com/in/paulchung39/" target="_blank" rel="noopener noreferrer">Built by Paul Chung</a>
-      <span aria-hidden="true"> · </span>
-      <a href="/about">Design decisions</a>
-    </p>`;
-}
-
-function renderHomePath() {
-  const root = $("home-path");
-  if (!root) return;
-  root.classList.remove("is-collapsed");
-  const steps = DEMO_STORY.map((beat) => {
-    const primary = beat.primary ? " is-primary" : "";
-    let action = "";
-    if (beat.trust) {
-      action = `<button type="button" class="home-demo-link" data-go-trust>Inspect evaluation results</button>`;
-    } else if (beat.id) {
-      action = `<button type="button" class="home-demo-link" data-open-case="${escapeHtml(beat.id)}" data-jump="investigation">Open ${escapeHtml(beat.id)}</button>`;
-    }
-    return `<li class="home-demo-step${primary}">
-          <span class="home-demo-n" aria-hidden="true">${escapeHtml(beat.n)}</span>
-          <div class="home-demo-body">
-            <p class="home-demo-title">${escapeHtml(beat.title)}</p>
-            <p class="home-demo-copy">${escapeHtml(beat.blurb)}</p>
-            ${action}
-          </div>
-        </li>`;
-  }).join("");
-
-  root.innerHTML = `
-    <div class="home-path-head">
-      <p class="home-path-label">Demo guide</p>
-    </div>
-    <div class="home-path-body" id="home-path-body">
-      <ol class="home-demo-steps">${steps}</ol>
-    </div>`;
+    <p class="home-context-line">Simulated mission</p>`;
 }
 
 function renderHomeStart() {
@@ -3718,7 +3658,6 @@ function renderHome() {
   renderHomeBrief();
   renderHomeStart();
   renderHomeDesk();
-  renderHomePath();
   renderHomeProof();
 }
 
@@ -4087,7 +4026,21 @@ function renderProc(a) {
 
 function resultEvidencePin(t, label) {
   if (t == null) return "";
-  return `<button type="button" class="result-pin" data-t="${t}" data-pin-id="result:${t}">${escapeHtml(label)}</button>`;
+  return `<button type="button" class="result-link result-pin" data-t="${t}" data-pin-id="result:${t}">${escapeHtml(label)}</button>`;
+}
+
+function resultProvenanceLabel(tag) {
+  if (!tag) return "";
+  return String(tag)
+    .split(/\s*\/\s*/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      const cls = tagClass(part);
+      const title = TAG_MEANING[cls] || "";
+      return `<span class="result-prov is-${cls}" title="${escapeHtml(title)}" tabindex="0">${escapeHtml(part.toUpperCase())}</span>`;
+    })
+    .join("");
 }
 
 function buildResultSummary(a) {
@@ -4113,6 +4066,7 @@ function buildResultSummary(a) {
           t: null,
           tag: "DOCUMENTED",
           action: "procedure",
+          actionLabel: "Read EPS-17",
         },
         {
           html: `Payload: <strong>${fmt(a.payloadA, 2)} A</strong> at the warning, near the expected science-mode current (~${fmt(a.payloadHealthy, 1)} A).`,
@@ -4140,6 +4094,7 @@ function buildResultSummary(a) {
           t: null,
           tag: "DOCUMENTED",
           action: "procedure",
+          actionLabel: "Read EPS-17",
         },
         {
           html: a.science
@@ -4203,9 +4158,6 @@ function buildResultSummary(a) {
 function renderResultSummary(a) {
   const root = $("result-summary");
   if (!root) return;
-  if (!hasSuccessfulInvestigation() || !a || state.incident?.status === "filed") {
-    // Still show for filed? Show compact. Actually show for ready and filed.
-  }
   if (!hasSuccessfulInvestigation() || !a) {
     root.hidden = true;
     root.innerHTML = "";
@@ -4217,34 +4169,41 @@ function renderResultSummary(a) {
     root.innerHTML = "";
     return;
   }
-  const evidence = (model.evidence || [])
-    .map((row) => {
-      const tag = row.tag
-        ? `<span class="tag tag-${tagClass(row.tag)}" title="${escapeHtml(TAG_MEANING[tagClass(row.tag)] || "")}" tabindex="0">${escapeHtml(row.tag)}</span>`
-        : "";
+  const rows = model.evidence || [];
+  const evidence = rows
+    .map((row, i) => {
       let action = "";
       if (row.action === "procedure") {
-        action = `<button type="button" class="text-btn result-jump" data-jump-procedure>Review procedure</button>`;
+        action = `<button type="button" class="result-link" data-jump-procedure>${escapeHtml(row.actionLabel || "Read procedure")}</button>`;
       } else if (row.t != null) {
-        action = resultEvidencePin(row.t, "Inspect supporting evidence");
+        action = resultEvidencePin(row.t, `View at ${clock(row.t)}`);
       }
-      return `<li class="result-evidence-item">
-        <div class="result-evidence-main">${row.html} ${tag}</div>
-        ${action ? `<div class="result-evidence-actions">${action}</div>` : ""}
+      return `<li class="result-beat">
+        <span class="result-beat-n" aria-hidden="true">${String(i + 1).padStart(2, "0")}</span>
+        <div class="result-beat-body">
+          <p class="result-beat-copy">${row.html}</p>
+          <div class="result-beat-meta">
+            ${resultProvenanceLabel(row.tag)}
+            ${action}
+          </div>
+        </div>
       </li>`;
     })
     .join("");
   root.hidden = false;
   root.innerHTML = `
-    ${evidence ? `<ul class="result-evidence">${evidence}</ul>` : ""}
-    <div class="result-uncertainty">
-      <h3>${escapeHtml(model.uncertaintyTitle)}</h3>
-      <p>${escapeHtml(model.uncertainty)}</p>
-    </div>
-    <p class="result-boundary">Recommendation only. ORBIT cannot send spacecraft commands.</p>
-    <div class="result-quick-actions">
-      <button type="button" class="text-btn" data-jump-evidence>Inspect supporting evidence</button>
-      <button type="button" class="text-btn" data-jump-procedure>Review procedure</button>
+    <div class="result-brief">
+      <p class="result-brief-kicker">Why this recommendation</p>
+      ${
+        evidence
+          ? `<ol class="result-beats" aria-label="Supporting evidence">${evidence}</ol>`
+          : `<p class="result-brief-empty">No decisive measurements were attached to this summary.</p>`
+      }
+      <aside class="result-open">
+        <p class="result-open-kicker">${escapeHtml(model.uncertaintyTitle)}</p>
+        <p class="result-open-copy">${escapeHtml(model.uncertainty)}</p>
+      </aside>
+      <p class="result-boundary">Recommendation only.</p>
     </div>`;
 }
 
@@ -4324,7 +4283,7 @@ function renderDecision(a) {
   if (a.suspect) {
     $("decide-title").textContent = "Inhibit Heater B";
     $("decide-sub").textContent = model.summary;
-    status.textContent = "Not sent";
+    status.textContent = "";
     if (filed) {
       $("filed-action-title").textContent = "Inhibit Heater B";
       $("filed-action-sub").textContent = "Saved with this case. ORBIT did not uplink a command. Recording does not confirm that the physical anomaly is resolved.";
@@ -4332,7 +4291,7 @@ function renderDecision(a) {
   } else if (a.payloadSuspect) {
     $("decide-title").textContent = "Safe payload to STANDBY";
     $("decide-sub").textContent = model.summary;
-    status.textContent = "Not sent";
+    status.textContent = "";
     if (filed) {
       $("filed-action-title").textContent = "Safe payload to STANDBY";
       $("filed-action-sub").textContent = "Saved with this case. ORBIT did not uplink a command.";
@@ -4340,7 +4299,7 @@ function renderDecision(a) {
   } else if (a.batterySuspect) {
     $("decide-title").textContent = "Continue EPS-09";
     $("decide-sub").textContent = model.summary;
-    status.textContent = "Not sent";
+    status.textContent = "";
     if (filed) {
       $("filed-action-title").textContent = "Continue EPS-09";
       $("filed-action-sub").textContent = "Saved with this case. ORBIT did not uplink a command.";
@@ -5036,11 +4995,6 @@ function bind() {
   $("back-incidents").addEventListener("click", () => goIncidents());
   $("go-home-brand").addEventListener("click", () => goHome());
   $("home").addEventListener("click", (ev) => {
-    if (ev.target.closest("#home-path-toggle")) {
-      state.pathExpanded = !state.pathExpanded;
-      renderHomePath();
-      return;
-    }
     if (ev.target.closest("[data-go-incidents]")) {
       goIncidents();
       return;
@@ -5325,12 +5279,6 @@ function bind() {
   $("case-desk").addEventListener("click", (ev) => {
     if (ev.target.closest("[data-go-trust]")) {
       goTrust();
-      return;
-    }
-    if (ev.target.closest("[data-jump-evidence]")) {
-      state.evidenceOpen = true;
-      syncEvidenceBundle();
-      $("evidence")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     if (ev.target.closest("[data-jump-procedure]")) {
