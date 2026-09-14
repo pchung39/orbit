@@ -15,8 +15,8 @@
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   >
-  <link rel="stylesheet" href="/static/landing.css?v=34">
-  <link rel="stylesheet" href="/static/about.css?v=4">
+  <link rel="stylesheet" href="/static/landing.css?v=35">
+  <link rel="stylesheet" href="/static/about.css?v=5">
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -187,6 +187,111 @@
     <p>The agentic problem is deciding what evidence to seek, which tools to use, and whether the results justify a conclusion. The tools retrieve or calculate evidence; the model’s role is to use that evidence to guide an investigation.</p>
     <p>ORBIT separates the investigation workflow from the provider that performs it. The browser demo uses explicit rules to establish repeatable reference behavior. Separate LLM providers support command-line experiments with model-assisted investigation.</p>
     <p>The published evaluation results below cover the rules-based provider. Running the model providers through the same checks is a next step. The current score does not establish model reliability.</p>
+  </div>
+</section>
+
+<!-- ONTOLOGY -->
+<section class="blk">
+  <div class="rail"><b>Ontology</b>What the record knows</div>
+  <div class="body">
+    <h2>ORBIT’s working ontology</h2>
+    <p>ORBIT is built around a small, explicit set of kinds. The ontology is not a formal knowledge graph. It is the shared vocabulary that keeps telemetry, documents, claims, and decisions from collapsing into one undifferentiated narrative.</p>
+    <p>If two statements look similar in prose, the ontology still asks: what kind of thing is being asserted, what evidence object supports it, and what decision object it is allowed to change?</p>
+
+    <h3>Mission world</h3>
+    <p>The simulated vehicle is described once, in a canonical mission model. Downstream tools reuse that model instead of inventing parallel channel names or limits.</p>
+    <table class="score">
+      <tr><th>Kind</th><th>Role in ORBIT</th></tr>
+      <tr><td>Mission</td><td>The simulated craft and operating context—here, Aurora-1.</td></tr>
+      <tr><td>Subsystem</td><td>A functional grouping such as EPS, thermal, or payload.</td></tr>
+      <tr><td>Channel</td><td>A named measurable quantity with units, nominal range, and warn/critical limits.</td></tr>
+      <tr><td>Limit</td><td>A threshold belonging to a channel or procedure, not a free-floating opinion.</td></tr>
+      <tr><td>Fault / mode</td><td>A named physical or operational condition used by the simulator and scenarios. A recommendation may cite one; it must not invent one absent from evidence and procedure.</td></tr>
+    </table>
+
+    <h3>Evidence objects</h3>
+    <p>ORBIT distinguishes the upstream archive from the evidence attached to a case. That distinction is what makes later review possible.</p>
+    <table class="score">
+      <tr><th>Kind</th><th>Role in ORBIT</th></tr>
+      <tr><td>Archive tape</td><td>An upstream telemetry dataset. It remains outside the case unless a window is sealed from it.</td></tr>
+      <tr><td>Sealed snapshot</td><td>The fixed window of telemetry and events preserved with a case. Investigation reads this package, not a live archive query.</td></tr>
+      <tr><td>Sample</td><td>A channel value at a time in the sealed window.</td></tr>
+      <tr><td>Event / command</td><td>A discrete logged action or mode change used to establish sequence.</td></tr>
+      <tr><td>Procedure</td><td>An authored response document with explicit criteria, such as EPS-17’s ≥2× healthy-load bar.</td></tr>
+      <tr><td>Prior incident</td><td>A past close-out used as context. Similarity in search is not the same as applicability to this case.</td></tr>
+    </table>
+
+    <h3>Investigation objects</h3>
+    <p>The case is the durable unit of work. Everything an operator or reviewer needs should hang from it.</p>
+    <table class="score">
+      <tr><th>Kind</th><th>Role in ORBIT</th></tr>
+      <tr><td>Alarm</td><td>The entry condition that opened the case—channel, time, and limit that crossed.</td></tr>
+      <tr><td>Case / incident</td><td>The persistent record tying snapshot, report, recommendation, and operator feedback together.</td></tr>
+      <tr><td>Claim</td><td>A statement in the report about evidence or interpretation. Every claim carries a source label.</td></tr>
+      <tr><td>Recommendation</td><td>The proposed next step, or a hold when the governing threshold is unmet.</td></tr>
+      <tr><td>Assessment</td><td>The operator’s recorded agreement or disagreement. It stores judgment; it does not uplink a command.</td></tr>
+    </table>
+
+    <figure class="fig-wide">
+      <svg viewBox="0 0 720 290" role="img" aria-label="Ontology map: mission model and archive feed a sealed case snapshot; procedures and priors ground claims; claims support a recommendation or hold; assessment closes the record before any uplink.">
+        <defs><style>
+          .o-b{fill:none;stroke:var(--ink);stroke-width:1.5}
+          .o-d{fill:none;stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 4}
+          .o-t{font-family:var(--mono);font-size:11.5px;fill:var(--ink)}
+          .o-s{font-family:var(--mono);font-size:10px;fill:var(--ink-soft)}
+          .o-a{stroke:var(--ink);stroke-width:1.5;fill:none}
+        </style>
+        <marker id="oa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+          <path d="M0 0 L10 5 L0 10 z" fill="var(--ink)"/></marker>
+        </defs>
+        <rect class="o-d" x="0" y="18" width="150" height="52"/>
+        <text class="o-t" x="12" y="40">mission model</text>
+        <text class="o-s" x="12" y="56">channels · limits</text>
+        <rect class="o-d" x="0" y="90" width="150" height="52"/>
+        <text class="o-t" x="12" y="112">archive tape</text>
+        <text class="o-s" x="12" y="128">stays upstream</text>
+        <path class="o-a" d="M150 44 L196 44" marker-end="url(#oa)"/>
+        <path class="o-a" d="M150 116 L176 116 L176 60 L196 60" marker-end="url(#oa)"/>
+        <rect class="o-b" x="200" y="18" width="170" height="78"/>
+        <text class="o-t" x="212" y="40">case</text>
+        <text class="o-s" x="212" y="56">alarm · sealed snapshot</text>
+        <text class="o-s" x="212" y="72">samples · events</text>
+        <rect class="o-d" x="0" y="176" width="150" height="52"/>
+        <text class="o-t" x="12" y="198">procedures</text>
+        <text class="o-s" x="12" y="214">priors · index</text>
+        <path class="o-a" d="M150 202 L196 202 L196 120 L200 120" marker-end="url(#oa)"/>
+        <path class="o-a" d="M285 96 L285 128" marker-end="url(#oa)"/>
+        <rect class="o-b" x="200" y="132" width="170" height="66"/>
+        <text class="o-t" x="212" y="154">tagged claims</text>
+        <text class="o-s" x="212" y="170">observed · derived</text>
+        <text class="o-s" x="212" y="184">documented · hypothesis</text>
+        <path class="o-a" d="M370 165 L416 165" marker-end="url(#oa)"/>
+        <rect class="o-b" x="420" y="132" width="160" height="66"/>
+        <text class="o-t" x="432" y="154">recommendation</text>
+        <text class="o-s" x="432" y="170">or hold + why</text>
+        <text class="o-s" x="432" y="184">not an uplink</text>
+        <path class="o-a" d="M500 198 L500 230" marker-end="url(#oa)"/>
+        <rect class="o-b" x="420" y="234" width="160" height="42"/>
+        <text class="o-t" x="432" y="260">assessment</text>
+        <text class="o-s" x="532" y="260">filed</text>
+        <line x1="610" y1="20" x2="610" y2="270" stroke="var(--held)" stroke-width="2"/>
+        <text class="o-s" x="622" y="150" fill="var(--held)">ORBIT stops</text>
+        <text class="o-s" x="622" y="166" fill="var(--held)">before command</text>
+        <rect class="o-d" x="622" y="184" width="98" height="42" stroke="var(--held)"/>
+        <text class="o-t" x="632" y="204" fill="var(--held)">uplink</text>
+        <text class="o-s" x="632" y="218" fill="var(--held)">outside ontology</text>
+      </svg>
+      <figcaption>Kinds and relationships in the case record. Command uplink sits outside the ontology on purpose.</figcaption>
+    </figure>
+
+    <h3>What the ontology is for</h3>
+    <ul class="claims">
+      <li><span class="k">Review</span><span><b>Keep kinds separable in the report.</b> A reviewer should be able to tell whether a sentence is a sealed measurement, a calculation, a cited procedure step, or a proposed cause.</span></li>
+      <li><span class="k">Hold</span><span><b>Make missing evidence nameable.</b> A hold is not a vague failure. It points at a missing kind—often a load that never cleared a documented threshold.</span></li>
+      <li><span class="k">Eval</span><span><b>Give tests stable targets.</b> Outcome, refusal, and sourcing checks inspect these objects in the report a human would read, not private model reasoning.</span></li>
+      <li><span class="k">Boundary</span><span><b>Keep commanding out of scope.</b> Recommendation and assessment are first-class. Spacecraft uplink is not an ORBIT object.</span></li>
+    </ul>
+    <p>The next section covers the four source labels that stamp each claim. Those labels are the epistemic layer on top of this ontology—how far a statement sits from measurement.</p>
   </div>
 </section>
 
