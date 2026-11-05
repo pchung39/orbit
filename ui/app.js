@@ -1440,6 +1440,31 @@ function groupIncidentsByTape(rows) {
   }));
 }
 
+function renderSideRecent() {
+  const root = $("side-recent");
+  if (!root) return;
+  const recent = [...state.incidents]
+    .sort((a, b) => String(b.opened_at || "").localeCompare(String(a.opened_at || "")) || String(b.id).localeCompare(String(a.id)))
+    .slice(0, 6);
+  root.hidden = !recent.length;
+  if (!recent.length) {
+    root.innerHTML = "";
+    return;
+  }
+  const current = state.view === "case" ? state.incidentId : null;
+  root.innerHTML = `<p class="side-recent-label">Recent cases</p>${recent
+    .map((item) => {
+      const tone = item.status === "recommended" ? "ready" : item.status === "filed" ? "filed" : "open";
+      const on = item.id === current ? " is-on" : "";
+      return `<button type="button" class="side-case tone-${tone}${on}" data-open-case="${escapeHtml(item.id)}" title="${escapeHtml(`${item.id} · ${statusLabel(item.status)}`)}">
+        <i aria-hidden="true"></i>
+        <span class="side-case-id">${escapeHtml(item.id)}</span>
+        <span class="side-case-title">${escapeHtml(caseHeadline(item))}</span>
+      </button>`;
+    })
+    .join("")}`;
+}
+
 function renderIncidents() {
   const all = [...state.incidents];
   const count = (id) => all.filter(INC_FILTERS.find((f) => f.id === id).match).length;
@@ -1450,6 +1475,7 @@ function renderIncidents() {
 
   const tabN = $("tab-incidents-n");
   if (tabN) tabN.textContent = nOpen + nReady ? String(nOpen + nReady) : "";
+  renderSideRecent();
 
   const hero = $("inc-head");
   if (hero) {
@@ -1468,23 +1494,6 @@ function renderIncidents() {
       </div>`;
   }
   renderIncFilters(all, { nOpen, nReady, nFiled, nAll: all.length });
-
-  const meta = $("inc-meta");
-  if (meta) {
-    const q = (state.incidentQuery || "").trim();
-    const notes = [];
-    if (state.incidentFilter !== "all") {
-      notes.push(INC_FILTERS.find((f) => f.id === state.incidentFilter)?.label || "");
-    }
-    if (state.incidentFamily && state.incidentFamily !== "all") {
-      notes.push(INC_CATEGORY_LABELS[state.incidentFamily] || state.incidentFamily);
-    }
-    if (state.incidentTape && state.incidentTape !== "all") {
-      notes.push(tapeGroupLabel(state.incidentTape));
-    }
-    const note = notes.filter(Boolean).join(" · ");
-    meta.textContent = `${rows.length} case${rows.length === 1 ? "" : "s"}${q ? ` matching “${q}”` : ""}${note ? ` · ${note}` : ""}`;
-  }
 
   renderIncidentList(rows, all);
 }
@@ -1506,7 +1515,7 @@ function renderIncidentList(rows, all) {
     ? `${cols}${rows.map((item) => incRow(item, all)).join("")}`
     : grouped
         .map(
-          (group) => `<section class="inc-group tone-${incidentTone(group.items[0] || {})}">
+          (group) => `<section class="inc-group tape-${escapeHtml(String(group.key).replace(/[^a-z0-9_-]/gi, ""))}">
         <header class="inc-group-head">
           <h2 class="inc-group-title">${escapeHtml(group.label)}</h2>
           <span class="inc-group-n">${group.items.length} case${group.items.length === 1 ? "" : "s"}</span>
@@ -3223,6 +3232,7 @@ function setView(view) {
   $("tab-home")?.classList.toggle("is-on", view === "home");
   $("tab-incidents")?.classList.toggle("is-on", view === "incidents");
   $("tab-trust")?.classList.toggle("is-on", view === "trust");
+  renderSideRecent();
   const skip = $("skip");
   if (skip) {
     skip.href =
@@ -4237,10 +4247,11 @@ async function openIncident(incidentId, jump) {
   try {
     await loadIncident(incidentId);
     const ready = hasSuccessfulInvestigation();
+    const actionInRail = window.matchMedia("(min-width: 1360px)").matches;
     if (jump === "closeout") {
       openDoc(incidentId);
     } else if (jump === "action" || (ready && jump !== "investigation" && jump !== "findings" && jump !== "evidence" && jump !== "procedure" && jump !== "knowledge")) {
-      $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (!actionInRail) $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (jump === "findings" || jump === "investigation") {
       $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (jump === "evidence") {
@@ -4256,7 +4267,7 @@ async function openIncident(incidentId, jump) {
       syncKnowledgeBundle();
       $("knowledge")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (!jump && ready) {
-      $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (!actionInRail) $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (!jump) {
       $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -4852,6 +4863,10 @@ function bind() {
   $("tab-trust").addEventListener("click", () => goTrust());
   $("back-incidents").addEventListener("click", () => goIncidents());
   $("go-home-brand").addEventListener("click", () => goHome());
+  $("side-recent")?.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-open-case]");
+    if (btn) openIncident(btn.dataset.openCase);
+  });
   $("home").addEventListener("click", (ev) => {
     const goInc = ev.target.closest("[data-go-incidents]");
     if (goInc) {

@@ -2383,17 +2383,6 @@ details.eval-flight > summary:hover {
 .inc-clear:hover { color: var(--text); }
 .inc-clear[hidden] { display: none; }
 
-.inc-meta {
-  margin: 0;
-  flex-shrink: 0;
-  margin-left: auto;
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-3);
-  white-space: nowrap;
-}
 
 .inc-group { border-top: 1px solid var(--line); }
 .inc-group:first-child { border-top: 0; }
@@ -4863,7 +4852,6 @@ body.is-filed .panel-decide .panel-kicker { color: var(--signal); }
   .inc-filters { width: 100%; }
   .inc-select { flex: 1 1 140px; }
   .inc-select select { max-width: none; width: 100%; }
-  .inc-meta { margin-left: 0; }
   .inc-cols { display: none; }
   .inc-row { display: block; padding: 14px 16px; }
   .inc-row .id, .inc-detail, .inc-cta { display: block; margin-top: 4px; }

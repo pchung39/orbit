@@ -317,6 +317,36 @@ body.view-case:not(.has-report) #case-desk #investigation { display: none; }
 body.is-investigating #case-desk #investigation { order: 0; }
 body.is-investigating #case-desk #action { display: none; }
 
+/* ── Wide screens: recommendation rides in a sticky right column ── */
+@media (min-width: 1360px) {
+  #case-desk { max-width: 1240px; }
+  #case-desk .case-panels {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(340px, 380px);
+    column-gap: var(--c-gap);
+    row-gap: 0;
+    align-items: start;
+  }
+  #case-desk .case-panels > .panel { grid-column: 1; margin-bottom: var(--c-gap); }
+  #case-desk .case-panels > #action {
+    grid-column: 2;
+    grid-row: 1 / span 6;
+    position: sticky;
+    top: 16px;
+    max-height: calc(100vh - 32px);
+    margin-bottom: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    --c-pad: 24px;
+  }
+  body.is-investigating #case-desk .case-panels { grid-template-columns: minmax(0, 1fr); }
+  #case-desk #action h2 { font-size: 22px; }
+  #case-desk #action .decide-verdict .lede { font-size: 14px; }
+  #case-desk #action .hyp-context { flex-direction: column; align-items: stretch; }
+  #case-desk #action .hyp-context > div { border-radius: 10px; }
+  #case-desk #action .result-beat-copy { font-size: 13.5px; }
+}
+
 /* ── Recommendation ─────────────────────────────────────────────── */
 #case-desk #action.panel-decide,
 body.is-filed #case-desk #action.panel-decide {
