@@ -11,8 +11,8 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/static/styles.css?v=pin76" />
-    <link rel="stylesheet" href="/static/case.css?v=pin83" />
-    <link rel="stylesheet" href="/static/pages.css?v=pin83" />
+    <link rel="stylesheet" href="/static/case.css?v=pin87" />
+    <link rel="stylesheet" href="/static/pages.css?v=pin86" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -401,26 +401,32 @@
       <div class="slip" role="dialog" aria-modal="true" aria-labelledby="slip-title">
         <aside class="slip-stub">
           <div>
-            <p class="eyebrow" id="slip-title">Open</p>
+            <p class="eyebrow" id="slip-title"><span class="live-dot" aria-hidden="true"></span>New case</p>
             <p class="slip-id" id="slip-id">INC-····</p>
           </div>
-          <p class="slip-stub-note">You already have the alarm. ORBIT fetches a time window from the upstream archive and seals it — it does not detect.</p>
+          <p class="slip-stub-note">Pick the alarm and an archive tape. ORBIT seals that telemetry window for investigation. It doesn't detect anomalies.</p>
         </aside>
         <form class="slip-body" id="new-incident">
-          <p class="pick-label">Alarm</p>
           <input type="hidden" name="alarm" id="incident-alarm-value" value="" />
           <input type="hidden" name="run_id" id="incident-run-value" value="" />
-          <div class="picks picks-alarms" id="incident-alarm"></div>
-          <label class="slip-title-field">Alarm time <span class="opt">UTC clock</span>
-            <input name="alarm_time" id="incident-alarm-time" type="text" inputmode="numeric" placeholder="14:32:00" autocomplete="off" spellcheck="false" />
-          </label>
-          <p class="pick-label">Archive tape</p>
-          <p class="pick-hint" id="incident-bind-preview" aria-live="polite"></p>
-          <div class="picks picks-tapes" id="incident-run"></div>
-          <div class="slip-foot">
-            <label class="slip-title-field">Headline <span class="opt">auto-filled — edit to override</span>
+          <section class="slip-step">
+            <p class="pick-label">Alarm</p>
+            <div class="picks picks-alarms" id="incident-alarm"></div>
+            <label class="slip-title-field">Alarm time <span class="opt">UTC clock</span>
+              <input name="alarm_time" id="incident-alarm-time" type="text" inputmode="numeric" placeholder="14:32:00" autocomplete="off" spellcheck="false" />
+            </label>
+          </section>
+          <section class="slip-step">
+            <p class="pick-label">Archive tape</p>
+            <p class="pick-hint" id="incident-bind-preview" aria-live="polite"></p>
+            <div class="picks picks-tapes" id="incident-run"></div>
+          </section>
+          <section class="slip-step">
+            <label class="slip-title-field">Headline <span class="opt">auto-filled, edit to override</span>
               <input name="title" placeholder="Heater only · Bus voltage" autocomplete="off" />
             </label>
+          </section>
+          <div class="slip-foot">
             <div class="form-actions">
               <button type="button" class="text-btn" id="cancel-incident">Cancel</button>
               <button type="submit" class="btn">Open case</button>
@@ -480,7 +486,7 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=pin81" type="module"></script>
+    <script src="/static/app.js?v=pin85" type="module"></script>
 
     <div class="slip-wrap" id="doc-slip" hidden>
       <div class="slip doc-slip" role="dialog" aria-modal="true" aria-labelledby="doc-slip-title">

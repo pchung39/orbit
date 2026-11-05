@@ -219,6 +219,99 @@ body.is-filed #case-desk #alarm { --head-accent: var(--signal); }
 #case-desk #procedure { order: 4; }
 #case-desk #knowledge { order: 5; }
 
+/* ── Section headings: each card gets its own tone, icon and top accent ── */
+#case-desk #investigation {
+  --sec: var(--info);
+  --sec-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 1.8h5.5L12.5 5v9.2H4z'/%3E%3Cpath d='M6.5 8h4M6.5 11h4M9.5 1.8V5h3'/%3E%3C/svg%3E");
+}
+#case-desk #action {
+  --sec: var(--signal);
+  --sec-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='8' cy='8' r='6.2'/%3E%3Cpath d='m5.4 8.2 1.8 1.8 3.5-3.7'/%3E%3C/svg%3E");
+}
+#case-desk #evidence {
+  --sec: var(--warn);
+  --sec-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 8.5h2.8l1.9-5 3.2 9 2-4h3.1'/%3E%3C/svg%3E");
+}
+#case-desk #procedure {
+  --sec: var(--documented);
+  --sec-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m2.2 4 1.2 1.2L5.6 3M2.2 10.5l1.2 1.2 2.2-2.2M8.2 4.2h5.6M8.2 10.7h5.6'/%3E%3C/svg%3E");
+}
+#case-desk #knowledge {
+  --sec: color-mix(in srgb, var(--crit) 55%, var(--violet));
+  --sec-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 12.2V3.6c0-1 .8-1.8 1.8-1.8H13v9.6H4.8c-1 0-1.8.8-1.8 1.8s.8 1.8 1.8 1.8H13'/%3E%3C/svg%3E");
+}
+#case-desk .case-panels > .panel:is(#investigation, #action, #evidence, #procedure, #knowledge),
+body.is-filed #case-desk #action.panel-decide {
+  background:
+    linear-gradient(90deg, var(--sec), color-mix(in srgb, var(--sec) 0%, transparent) 70%) top / 100% 3px no-repeat,
+    radial-gradient(360px 120px at 0% 0%, color-mix(in srgb, var(--sec) 6%, transparent), transparent 70%),
+    var(--surface);
+}
+#case-desk :is(
+  #investigation .report-head .panel-kicker,
+  #decide-open .decide-verdict-top .panel-kicker,
+  #decide-filed > .panel-kicker,
+  #evidence .evidence-head .panel-kicker,
+  #procedure .evidence-toggle-main .panel-kicker,
+  #knowledge .evidence-toggle-main .panel-kicker
+) {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  margin: 0 0 10px;
+  padding-left: 40px;
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  color: var(--text);
+}
+#case-desk :is(
+  #investigation .report-head .panel-kicker,
+  #decide-open .decide-verdict-top .panel-kicker,
+  #decide-filed > .panel-kicker,
+  #evidence .evidence-head .panel-kicker,
+  #procedure .evidence-toggle-main .panel-kicker,
+  #knowledge .evidence-toggle-main .panel-kicker
+)::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 30px;
+  height: 30px;
+  margin-top: -15px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--sec) 14%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sec) 24%, transparent);
+}
+#case-desk :is(
+  #investigation .report-head .panel-kicker,
+  #decide-open .decide-verdict-top .panel-kicker,
+  #decide-filed > .panel-kicker,
+  #evidence .evidence-head .panel-kicker,
+  #procedure .evidence-toggle-main .panel-kicker,
+  #knowledge .evidence-toggle-main .panel-kicker
+)::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
+  background: var(--sec);
+  -webkit-mask: var(--sec-icon) center / contain no-repeat;
+  mask: var(--sec-icon) center / contain no-repeat;
+}
+#case-desk #decide-open .decide-verdict-top .panel-kicker { margin-bottom: 0; }
+#case-desk #procedure .evidence-toggle-main .panel-kicker,
+#case-desk #knowledge .evidence-toggle-main .panel-kicker { margin: 0 0 6px; }
+#case-desk #procedure .evidence-toggle-title,
+#case-desk #knowledge .evidence-toggle-title { padding-left: 40px; font-weight: 500; color: var(--text-2); }
+#case-desk .evidence-head .evidence-toggle-title { font-size: 22px; }
+#case-desk .evidence-toggle { padding-top: 22px; padding-bottom: 20px; }
+
 /* The report card only exists once there is something to read. While it runs, it leads. */
 body.view-case:not(.has-report) #case-desk #investigation { display: none; }
 body.is-investigating #case-desk #investigation { order: 0; }
@@ -396,14 +489,131 @@ body.is-filed #case-desk #action.panel-decide {
 #case-desk .finding { padding: 18px 0 4px; }
 #case-desk .finding:first-child { padding-top: 0; }
 #case-desk .finding h3 { font-size: 15px; font-weight: 600; }
-#case-desk .ev { margin-top: 12px; display: grid; gap: 2px; }
-#case-desk .ev-item { border-left: 0; }
-#case-desk .ev-main,
-#case-desk .ev-kid { border-radius: var(--c-radius-sm); padding: 10px 12px; }
+/* Event timeline: a rail with tone-coloured nodes and tinted event cards */
+#case-desk .finding.evidence > h3 { font-size: 16px; }
+#case-desk .ev {
+  display: grid;
+  gap: 4px;
+  margin-top: 16px;
+}
+#case-desk .ev-item {
+  --ev: var(--observed);
+  position: relative;
+  margin: 0;
+  padding-left: 46px;
+  border-left: 0;
+}
+#case-desk .ev-item + .ev-item { margin-top: 0; }
+#case-desk .ev-warn { --ev: var(--warn); }
+#case-desk .ev-derived { --ev: var(--derived); }
+#case-desk .ev-documented { --ev: var(--documented); }
+#case-desk .ev-item::before {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 0;
+  bottom: -4px;
+  width: 2px;
+  background: linear-gradient(var(--ev), color-mix(in srgb, var(--ev) 25%, var(--line)));
+  opacity: 0.5;
+}
+#case-desk .ev-item:first-child::before { top: 16px; }
+#case-desk .ev-item:last-child::before { bottom: auto; height: 16px; }
+#case-desk .ev-item:only-child::before { display: none; }
+#case-desk .ev-main {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas: "clock tags" "copy copy";
+  gap: 8px 12px;
+  align-items: center;
+  padding: 10px 14px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+#case-desk .ev-main:hover { background: var(--surface-2); }
 #case-desk .ev-main.is-on,
-#case-desk .ev-kid.is-on { box-shadow: none; }
-#case-desk .ev-n { font-size: 12px; }
-#case-desk .ev-clock { font-size: 12px; }
+#case-desk .ev-item.is-on .ev-main {
+  background: var(--surface-2);
+  box-shadow: none;
+}
+#case-desk .ev-n {
+  position: absolute;
+  left: 0;
+  top: 6px;
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 11.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ev);
+  background: var(--surface);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ev) 55%, transparent), 0 0 0 4px var(--surface);
+}
+#case-desk .ev-warn .ev-n {
+  color: #fff;
+  background: var(--warn);
+  box-shadow: 0 0 0 4px var(--surface), 0 0 0 8px color-mix(in srgb, var(--warn) 22%, transparent);
+}
+#case-desk .ev-main .ev-clock {
+  grid-area: clock;
+  justify-self: start;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ev);
+  background: color-mix(in srgb, var(--ev) 14%, transparent);
+}
+#case-desk .ev-main .ev-clock:empty { display: none; }
+#case-desk .ev-main.is-on .ev-clock { color: var(--ev); }
+#case-desk .ev-copy {
+  grid-area: copy;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text);
+}
+#case-desk .ev-tags { grid-area: tags; justify-self: end; justify-content: flex-end; padding: 0; }
+#case-desk .ev-copy code { border-radius: 5px; }
+#case-desk .ev-item.is-on .ev-n { color: #fff; background: var(--ev); }
+#case-desk .ev-kids {
+  display: grid;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0 0 0 16px;
+  border-left: 2px dashed color-mix(in srgb, var(--ev) 30%, var(--line));
+  margin-left: 16px;
+}
+#case-desk .ev-kid {
+  position: relative;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--text-2);
+  background: transparent;
+}
+#case-desk .ev-kid::before {
+  content: "";
+  position: absolute;
+  left: -22px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--ev);
+  box-shadow: 0 0 0 3px var(--surface);
+}
+#case-desk .ev-kid:hover,
+#case-desk .ev-kid.is-on { background: var(--surface-2); box-shadow: none; }
+#case-desk .ev-kid .ev-clock { font-size: 12px; font-weight: 600; color: var(--text-3); }
 #case-desk .investigation-synth,
 #case-desk .investigation-progress {
   border: 0;
@@ -423,10 +633,9 @@ body.is-filed #case-desk #action.panel-decide {
 #case-desk .evidence-toggle:hover { background: var(--surface-2); }
 #case-desk .evidence-bundle.is-collapsed .evidence-toggle { border-bottom-color: transparent; }
 #case-desk .evidence-toggle-main { gap: 2px; }
-#case-desk .evidence-toggle-main .panel-kicker,
-#case-desk #procedure .evidence-toggle-main .panel-kicker,
-#case-desk #knowledge .evidence-toggle-main .panel-kicker { margin: 0; color: var(--text-3); }
 #case-desk .evidence-toggle-title { font-size: 15px; font-weight: 600; color: var(--text); }
+#case-desk #procedure .evidence-toggle-title,
+#case-desk #knowledge .evidence-toggle-title { font-size: 14px; font-weight: 500; color: var(--text-3); }
 #case-desk .evidence-toggle-state { font-size: 13px; font-weight: 500; color: var(--text-3); }
 #case-desk .evidence-chevron { width: 7px; height: 7px; border-width: 1.5px; }
 #case-desk #procedure .evidence-panel,

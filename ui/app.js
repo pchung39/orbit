@@ -1069,7 +1069,7 @@ function renderTimelineFinding(block) {
       return `<li class="ev-item ev-${kind}${on}">
         <button type="button" class="ev-main${on}"${pin}>
           <span class="ev-n">${String(item.n).padStart(2, "0")}</span>
-          <span class="ev-clock">${clockTime || "—"}</span>
+          <span class="ev-clock">${clockTime || ""}</span>
           <span class="ev-copy">${inlineMd(text)}</span>
           <span class="ev-tags">${tagsHtml(tags)}</span>
         </button>
@@ -1677,8 +1677,9 @@ function fillCreateForm() {
   $("incident-alarm").innerHTML = state.alarms
     .map(
       (ch) => `<button type="button" class="pick pick-alarm" data-pick="alarm" data-value="${escapeHtml(ch.id)}">
+        <span class="title">${escapeHtml(readableChannel(ch.id))}</span>
         <span class="k">${escapeHtml(ch.id)}</span>
-        <span class="note">warn ${ch.warn_limit} ${ch.unit || ""}</span>
+        <span class="note">Warn at ${escapeHtml(String(ch.warn_limit))} ${escapeHtml((ch.unit || "").replace(/^degC$/, "°C"))}</span>
       </button>`
     )
     .join("");
