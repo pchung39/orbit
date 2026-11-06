@@ -34,23 +34,18 @@ from storage.sources import (
 from eval.bundle import PromoteError, promote_candidate_to_baseline
 from eval.compare import run_compare
 from eval.explorer import build_explorer_case_detail, build_explorer_index
+from storage.evidence import list_runs, query_channel, query_events
 from storage.store import (
     connect,
     create_incident,
     ensure_demo_incident,
     file_incident,
-    get_document,
     get_hypothesis_feedback,
     get_incident,
     init_schema,
-    list_documents,
     list_incidents,
-    list_runs,
     reset_demo_incidents,
     save_investigation,
-    query_channel,
-    query_events,
-    search_documents,
     store_trust_snapshot,
     upsert_hypothesis_feedback,
     _load_eval_baseline,
@@ -414,7 +409,7 @@ def desk(run_id: str | None = Query(default=None)) -> dict[str, Any]:
     spec = load_and_validate()
     with _conn() as conn:
         ensure_demo_incident(conn)
-        runs = list_runs(conn)
+        runs = list_runs()
         if not runs:
             return {
                 "run_id": None,
@@ -433,11 +428,11 @@ def desk(run_id: str | None = Query(default=None)) -> dict[str, Any]:
             chosen = runs[0]["id"]
         run = next(row for row in runs if row["id"] == chosen)
         channels = [
-            _desk_channel(spec, name, [_row(item) for item in query_channel(conn, chosen, name)])
+            _desk_channel(spec, name, [_row(item) for item in query_channel(chosen, name)])
             for name in DESK_CHANNELS
             if name in spec["channels"]
         ]
-        events = [_row(item) for item in query_events(conn, chosen)]
+        events = [_row(item) for item in query_events(chosen)]
     last_t = max((ch.get("time_s") or 0) for ch in channels) if channels else None
     period_min = float(spec["constants"]["orbital_period_min"])
     period_s = period_min * 60.0
@@ -496,16 +491,15 @@ def open_incident(body: IncidentIn) -> dict[str, Any]:
 
 @api.get("/sources")
 def sources() -> dict[str, Any]:
-    """Upstream archive catalog + library index. Cases fetch-on-seal — not a live feed."""
+    """Upstream archive catalog. Cases fetch-on-seal — not a live feed."""
     with _conn() as conn:
         ensure_demo_incident(conn)
         connectors = list_connectors(conn)
     return {
         "adapters": "demo-local",
         "note": (
-            "Mission archive stays upstream. Opening a case fetches a time window and stores "
-            "only the sealed package in ORBIT. Library rebuilds the search index on demand. "
-            "ORBIT does not detect or command."
+            "Mission archive stays upstream. Opening a case fetches a time window and writes "
+            "only that sealed file. ORBIT does not detect or command."
         ),
         "connectors": connectors,
         "activity": list_activity(),
@@ -560,14 +554,13 @@ def incident_workspace(incident_id: str) -> dict[str, Any]:
         needed = list(WORKSPACE_CHANNELS)
         if row["alarm"] not in needed:
             needed.append(row["alarm"])
-        events = [_row(item) for item in query_events(conn, run_id)]
+        events = [_row(item) for item in query_events(run_id)]
         telemetry = {
-            channel: [_row(item) for item in query_channel(conn, run_id, channel)]
+            channel: [_row(item) for item in query_channel(run_id, channel)]
             for channel in needed
         }
-        documents = [dict(item) for item in list_documents(conn)]
         fb = get_hypothesis_feedback(conn, incident_id)
-    data = workspace_payload(spec, run_id, events, telemetry, documents, extra_channels=[row["alarm"]])
+    data = workspace_payload(spec, run_id, events, telemetry, extra_channels=[row["alarm"]])
     data["incident"] = dict(row)
     if fb:
         data["incident"]["feedback"] = dict(fb)
@@ -580,7 +573,6 @@ def workspace_payload(
     run_id: str,
     events: list[dict[str, Any]],
     telemetry: dict[str, Any],
-    documents: list[dict[str, Any]],
     extra_channels: list[str] | None = None,
 ) -> dict[str, Any]:
     names = list(WORKSPACE_CHANNELS)
@@ -592,7 +584,6 @@ def workspace_payload(
         "scope": "assemble evidence and recommend a human decision. does not command the spacecraft.",
         "events": events,
         "telemetry": telemetry,
-        "documents": documents,
         "channels": {name: _channel_card(spec, name) for name in names if name in spec["channels"]},
     }
 
@@ -700,40 +691,35 @@ def file_open_incident(incident_id: str, body: FileIn | None = None) -> dict[str
         raise HTTPException(409, str(exc)) from exc
     return {
         "incident": filed,
-        "document_id": filed["id"],
         "status": filed["status"],
     }
 
 
 @api.get("/runs")
 def runs() -> list[dict[str, Any]]:
-    with _conn() as conn:
-        return [_row(row) for row in list_runs(conn)]
+    return [_row(row) for row in list_runs()]
 
 
 @api.get("/runs/{run_id}/events")
 def events(run_id: str) -> list[dict[str, Any]]:
-    with _conn() as conn:
-        rows = query_events(conn, run_id)
-        if not rows and not any(r["id"] == run_id for r in list_runs(conn)):
-            raise HTTPException(404, f"unknown run {run_id}")
-        return [_row(row) for row in rows]
+    rows = query_events(run_id)
+    if not rows and not any(r["id"] == run_id for r in list_runs()):
+        raise HTTPException(404, f"unknown run {run_id}")
+    return [_row(row) for row in rows]
 
 
 @api.get("/runs/{run_id}/workspace")
 def workspace(run_id: str) -> dict[str, Any]:
-    """One payload for the console: events, traces, channel limits, documents."""
+    """One payload for the console: events, traces, and channel limits."""
     spec = load_and_validate()
-    with _conn() as conn:
-        if not any(row["id"] == run_id for row in list_runs(conn)):
-            raise HTTPException(404, f"unknown run {run_id}")
-        events = [_row(row) for row in query_events(conn, run_id)]
-        telemetry = {
-            channel: [_row(row) for row in query_channel(conn, run_id, channel)]
-            for channel in WORKSPACE_CHANNELS
-        }
-        documents = [dict(row) for row in list_documents(conn)]
-    return workspace_payload(spec, run_id, events, telemetry, documents)
+    if not any(row["id"] == run_id for row in list_runs()):
+        raise HTTPException(404, f"unknown run {run_id}")
+    events = [_row(row) for row in query_events(run_id)]
+    telemetry = {
+        channel: [_row(row) for row in query_channel(run_id, channel)]
+        for channel in WORKSPACE_CHANNELS
+    }
+    return workspace_payload(spec, run_id, events, telemetry)
 
 
 @api.get("/runs/{run_id}/channels/{channel}")
@@ -745,11 +731,10 @@ def channel(
 ) -> list[dict[str, Any]]:
     start = clock_to_s(from_clock) if from_clock else None
     end = clock_to_s(to_clock) if to_clock else None
-    with _conn() as conn:
-        rows = query_channel(conn, run_id, channel, start, end)
-        if not rows and not any(r["id"] == run_id for r in list_runs(conn)):
-            raise HTTPException(404, f"unknown run {run_id}")
-        return [_row(row) for row in rows]
+    rows = query_channel(run_id, channel, start, end)
+    if not rows and not any(r["id"] == run_id for r in list_runs()):
+        raise HTTPException(404, f"unknown run {run_id}")
+    return [_row(row) for row in rows]
 
 
 @api.get("/runs/{run_id}/inspect")
@@ -766,13 +751,13 @@ def inspect_tape(
         raise HTTPException(400, f"unknown channel {channel}")
     alarm_ch = alarm if alarm and alarm in spec["channels"] else channel
     with _conn() as conn:
-        if not any(row["id"] == run_id for row in list_runs(conn)):
+        if not any(row["id"] == run_id for row in list_runs()):
             raise HTTPException(404, f"unknown run {run_id}")
         tools = Tools(conn, spec)
         crossing_row = tools.first_warn(run_id, alarm_ch)
         pin_s = clock_to_s(pin_clock) if pin_clock else None
 
-        all_rows = query_channel(conn, run_id, channel)
+        all_rows = query_channel(run_id, channel)
         if not all_rows:
             raise HTTPException(404, f"no telemetry for {run_id} {channel}")
         t0_full = float(all_rows[0]["time_s"])
@@ -790,10 +775,10 @@ def inspect_tape(
             start_s = max(t0_full, anchor - INSPECT_FOCUS_PAD_S)
             end_s = min(t1_full, anchor + INSPECT_FOCUS_PAD_S)
 
-        samples = [_row(row) for row in query_channel(conn, run_id, channel, start_s, end_s)]
+        samples = [_row(row) for row in query_channel(run_id, channel, start_s, end_s)]
         events = [
             _row(row)
-            for row in query_events(conn, run_id)
+            for row in query_events(run_id)
             if start_s <= float(row["time_s"]) <= end_s
         ]
 
@@ -838,39 +823,8 @@ def inspect_tape(
         "samples": samples,
         "events": events,
         "channels": channel_options,
-        "scope": "Ingested telemetry replay. ORBIT does not downlink or detect.",
+        "scope": "Tape file replay. ORBIT does not downlink or detect.",
     }
-
-
-@api.get("/documents")
-def documents() -> list[dict[str, Any]]:
-    with _conn() as conn:
-        return [dict(row) for row in list_documents(conn)]
-
-
-@api.get("/documents/{doc_id}")
-def document(doc_id: str) -> dict[str, Any]:
-    with _conn() as conn:
-        row = get_document(conn, doc_id)
-        if row is None:
-            raise HTTPException(404, f"unknown document {doc_id}")
-        return {
-            "id": row["id"],
-            "kind": row["kind"],
-            "title": row["title"],
-            "path": row["path"],
-            "body": row["body"],
-        }
-
-
-@api.get("/search")
-def search(
-    q: str = Query(..., min_length=1),
-    limit: int = Query(default=20, ge=1, le=40),
-) -> list[dict[str, Any]]:
-    """Semantic library search. Local embeddings, not a paid model."""
-    with _conn() as conn:
-        return [_row(row) for row in search_documents(conn, q, limit=limit)]
 
 
 @api.post("/investigate/{run_id}")

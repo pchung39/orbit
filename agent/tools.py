@@ -1,8 +1,9 @@
 """Agent tools: the only way the investigator is allowed to see the world.
 
-Each call is logged so a report can show that numbers came from Postgres,
-not from a canned narrative. Telemetry/events are OBSERVED. Documents are
-DOCUMENTED. Ratios and limit checks are computed in the investigator (DERIVED).
+Each call is logged so a report can show that numbers came from the tape file,
+not from a canned narrative. Telemetry/events are OBSERVED. A named procedure
+or prior is DOCUMENTED. Ratios and limit checks are computed in the
+investigator (DERIVED).
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ import psycopg
 
 from agent.tracing import log_to_span, span
 from simulator.scenarios import clock_to_s, format_clock
-from storage.store import get_document, query_channel, query_events, search_documents
+from storage.evidence import get_document, query_channel, query_events
 
 
 class Tools:
@@ -31,7 +32,7 @@ class Tools:
             span_type="tool",
             input={"run_id": run_id, "channel": channel, "clock": format_clock(time_s)},
         ) as sp:
-            rows = query_channel(self.conn, run_id, channel, time_s - 5, time_s + 5)
+            rows = query_channel(run_id, channel, time_s - 5, time_s + 5)
             if not rows:
                 self._note(f"sample {run_id} {channel} @ {format_clock(time_s)} → none")
                 log_to_span(sp, output=None)
@@ -54,7 +55,7 @@ class Tools:
             meta = self.spec["channels"][channel]
             limit = meta.get("warn_limit")
             direction = meta.get("limit_direction")
-            rows = query_channel(self.conn, run_id, channel)
+            rows = query_channel(run_id, channel)
             hit = None
             for row in rows:
                 value = row["value_num"]
@@ -85,7 +86,7 @@ class Tools:
         ) as sp:
             rows = [
                 row
-                for row in query_events(self.conn, run_id)
+                for row in query_events(run_id)
                 if deadline_s - window_s <= row["time_s"] <= deadline_s
             ]
             self._note(
@@ -97,7 +98,7 @@ class Tools:
 
     def get_doc(self, doc_id: str) -> dict[str, Any] | None:
         with span("get_doc", span_type="tool", input={"doc_id": doc_id}) as sp:
-            row = get_document(self.conn, doc_id)
+            row = get_document(doc_id)
             self._note(f"get_doc {doc_id} → {'hit' if row else 'miss'}")
             if row is None:
                 log_to_span(sp, output=None)
@@ -107,17 +108,6 @@ class Tools:
                     output={"id": row.get("id"), "kind": row.get("kind"), "title": row.get("title")},
                 )
             return row
-
-    def search_docs(self, query: str) -> list[dict[str, Any]]:
-        with span("search_docs", span_type="tool", input={"query": query}) as sp:
-            rows = search_documents(self.conn, query)
-            shown = []
-            for row in rows:
-                score = row.get("score")
-                shown.append(f"{row['id']}" + (f":{float(score):.2f}" if score is not None else ""))
-            self._note(f"search_docs {query!r} → {shown}")
-            log_to_span(sp, output={"hits": shown})
-            return rows
 
     def sample_at_clock(self, run_id: str, channel: str, clock: str) -> dict[str, Any] | None:
         return self.sample(run_id, channel, clock_to_s(clock))

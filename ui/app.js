@@ -574,19 +574,9 @@ const state = {
   investigating: false,
   evidenceOpen: true,
   procedureOpen: false,
-  knowledgeOpen: false,
   filing: false,
   feedback: null,
   feedbackSaving: false,
-  docs: [],
-  libraryQuery: "",
-  libraryHits: null,
-  librarySearching: false,
-  libraryKind: "all",
-  libraryFamily: "all",
-  libraryVisibleIds: [],
-  openDocId: null,
-  openDoc: null,
   trust: null,
   trustLoading: false,
   trustSub: "overview",
@@ -601,7 +591,6 @@ const state = {
   archiveCatalog: [],
   sourceExplorer: {
     category: "datasets",
-    docFilter: "all",
     selectedId: null,
     listScroll: 0,
     detailOpen: false,
@@ -1814,7 +1803,7 @@ async function syncSource(connectorId) {
   state.sourcesSyncing = connectorId;
   state.maintStatus = {
     tone: "loading",
-    message: connectorId === "telemetry" ? "Refreshing dataset catalog…" : "Rebuilding document search index…",
+    message: "Refreshing dataset catalog…",
   };
   renderTrust();
   try {
@@ -1834,10 +1823,7 @@ async function syncSource(connectorId) {
     }
     state.maintStatus = {
       tone: "ok",
-      message:
-        connectorId === "telemetry"
-          ? "Dataset catalog refreshed. Saved snapshots and cases were not changed."
-          : "Document search index rebuilt. Sealed snapshots and reports were not rewritten.",
+      message: "Dataset catalog refreshed. Saved snapshots and cases were not changed.",
     };
     await loadTrust();
     await loadBootstrapLists();
@@ -1898,24 +1884,6 @@ function formatMissionSpan(start, end) {
   return `${start || end} UTC`;
 }
 
-function documentOriginLabel(doc) {
-  const path = String(doc?.path || "");
-  if (path.startsWith("filed:")) return "Filed investigation";
-  if (/\/procedures\//.test(path) || path.includes("procedures/")) return "Local procedure";
-  if (/\/incidents\//.test(path) || path.includes("incidents/")) return "Prior incident record";
-  if (doc?.kind === "procedure") return "Local procedure";
-  if (doc?.kind === "incident") return "Prior incident record";
-  return null;
-}
-
-function documentShortDescription(doc) {
-  const use = libraryUse(doc);
-  if (use && use !== doc.id) return use;
-  const title = String(doc?.title || "").trim();
-  if (title && title !== doc.id) return title;
-  return "";
-}
-
 function incidentsForRun(runId) {
   return (state.incidents || []).filter((item) => item.run_id === runId);
 }
@@ -1937,22 +1905,10 @@ function explorerSnapshots() {
   return [...sealed].sort((a, b) => String(a.id).localeCompare(String(b.id)));
 }
 
-function explorerDocuments() {
-  const docs = state.trust?.documents || state.docs || [];
-  const filter = state.sourceExplorer.docFilter;
-  return docs.filter((doc) => {
-    if (filter === "procedures") return doc.kind === "procedure";
-    if (filter === "incidents") return doc.kind === "incident";
-    return true;
-  });
-}
-
 function explorerCounts() {
-  const docs = state.trust?.documents || state.docs || [];
   return {
     datasets: explorerDatasets().length,
     snapshots: explorerSnapshots().length,
-    documents: docs.length,
   };
 }
 
@@ -1972,18 +1928,6 @@ function setExplorerCategory(category) {
   state.sourceExplorer.category = category;
   state.sourceExplorer.selectedId = null;
   state.sourceExplorer.detailOpen = false;
-  state.sourceExplorer.listScroll = 0;
-  renderSourceExplorer();
-}
-
-function setExplorerDocFilter(filter) {
-  rememberExplorerListScroll();
-  state.sourceExplorer.docFilter = filter;
-  const stillVisible = explorerDocuments().some((doc) => doc.id === state.sourceExplorer.selectedId);
-  if (!stillVisible) {
-    state.sourceExplorer.selectedId = null;
-    state.sourceExplorer.detailOpen = false;
-  }
   state.sourceExplorer.listScroll = 0;
   renderSourceExplorer();
 }
@@ -2031,27 +1975,19 @@ function renderMaintenance() {
   const connectors = state.sources?.connectors || [];
   const byId = Object.fromEntries(connectors.map((c) => [c.id, c]));
   const telemetry = byId.telemetry;
-  const library = byId.library;
   const syncing = state.sourcesSyncing;
   const telemetryBusy = syncing === "telemetry";
-  const libraryBusy = syncing === "library";
   const anyBusy = Boolean(syncing);
 
   const telemetryLabel = telemetryBusy
     ? "Refreshing…"
     : "Refresh dataset catalog";
-  const libraryLabel = libraryBusy ? "Rebuilding…" : "Rebuild document search index";
 
   actions.innerHTML = `
     <div class="source-maint-item">
       <button type="button" class="text-btn" data-source-sync="telemetry" ${anyBusy || !telemetry ? "disabled" : ""}>${escapeHtml(telemetryLabel)}</button>
       <p>Re-checks which upstream telemetry datasets are available for opening cases. Does not replace saved snapshots or change existing cases or reports.</p>
       ${telemetry?.stats?.label ? `<p class="source-maint-meta">${escapeHtml(telemetry.stats.label)}${telemetry.last_sync_at ? ` · last ${escapeHtml(formatSyncAt(telemetry.last_sync_at))}` : ""}</p>` : ""}
-    </div>
-    <div class="source-maint-item">
-      <button type="button" class="text-btn" data-source-sync="library" ${anyBusy || !library ? "disabled" : ""}>${escapeHtml(libraryLabel)}</button>
-      <p>Re-embeds procedures and prior incidents for search. Does not rewrite sealed snapshots, case reports, or recorded assessments.</p>
-      ${library?.stats?.label ? `<p class="source-maint-meta">${escapeHtml(library.stats.label)}${library.last_sync_at ? ` · last ${escapeHtml(formatSyncAt(library.last_sync_at))}` : ""}</p>` : ""}
     </div>`;
 
   if (status) {
@@ -2072,7 +2008,7 @@ function renderMaintenance() {
       .slice(0, 6)
       .map(
         (ev) => `<li><span class="when">${escapeHtml(formatSyncAt(ev.at))}</span>
-          <span class="conn">${escapeHtml(ev.connector === "telemetry" ? "datasets" : ev.connector === "library" ? "documents" : ev.connector || "")}</span>
+          <span class="conn">${escapeHtml(ev.connector === "telemetry" ? "datasets" : ev.connector || "")}</span>
           <span class="msg">${escapeHtml(ev.message || "")}</span></li>`
       )
       .join("");
@@ -2117,7 +2053,7 @@ function renderExplorerSnapshotDetail(run) {
   const linked = incidentsForRun(run.id);
   const values =
     run.samples != null
-      ? `${Number(run.samples).toLocaleString()} channel values`
+      ? `${Number(run.samples).toLocaleString()} time steps`
       : "—";
   const linkedHtml = linked.length
     ? `<ul class="source-linked-cases">${linked
@@ -2134,39 +2070,13 @@ function renderExplorerSnapshotDetail(run) {
     </div>
     <dl class="source-detail-facts">
       <div><dt>Saved window</dt><dd>${escapeHtml(span)}</dd></div>
-      <div><dt>Stored values</dt><dd>${escapeHtml(values)} <span class="source-detail-hint">one row per channel at each time step</span></dd></div>
+      <div><dt>Stored window</dt><dd>${escapeHtml(values)} <span class="source-detail-hint">time steps in the sealed file</span></dd></div>
       <div><dt>Source dataset</dt><dd><code>${escapeHtml(sourceRunId(run.id, run.notes) || "—")}</code></dd></div>
       <div><dt>Linked incident</dt><dd>${linked.length ? escapeHtml(linked.map((i) => i.id).join(", ")) : "None recorded"}</dd></div>
     </dl>
     <div class="source-detail-actions">
       <button type="button" class="btn" data-explorer-inspect-snapshot="${escapeHtml(run.id)}">Inspect samples</button>
       ${linkedHtml}
-    </div>`;
-}
-
-function renderExplorerDocumentDetail(doc) {
-  const origin = documentOriginLabel(doc);
-  const desc = documentShortDescription(doc);
-  const typeLabel = doc.kind === "procedure" ? "Procedure" : doc.kind === "incident" ? "Prior incident" : doc.kind || "Document";
-  return `
-    <div class="source-detail-head">
-      <p class="source-detail-kicker">Reference document</p>
-      <h3>${escapeHtml(doc.title || doc.id)}</h3>
-      <p class="source-detail-id"><code>${escapeHtml(doc.id)}</code></p>
-    </div>
-    <dl class="source-detail-facts">
-      <div><dt>Type</dt><dd>${escapeHtml(typeLabel)}</dd></div>
-      ${origin ? `<div><dt>Origin</dt><dd>${escapeHtml(origin)}</dd></div>` : ""}
-      ${desc ? `<div><dt>Summary</dt><dd>${escapeHtml(desc)}</dd></div>` : ""}
-    </dl>
-    ${
-      doc.path
-        ? `<details class="source-tech-details"><summary>Technical details</summary><p class="source-detail-path"><code>${escapeHtml(doc.path)}</code></p></details>`
-        : ""
-    }
-    <p class="source-detail-hint">Library membership does not mean this document was used in every report.</p>
-    <div class="source-detail-actions">
-      <button type="button" class="btn" data-explorer-read-doc="${escapeHtml(doc.id)}">Read document</button>
     </div>`;
 }
 
@@ -2186,7 +2096,7 @@ function renderSourceExplorer() {
   }
 
   const counts = explorerCounts();
-  const category = state.sourceExplorer.category;
+  const category = state.sourceExplorer.category === "snapshots" ? "snapshots" : "datasets";
   const selectedId = state.sourceExplorer.selectedId;
   const detailOpen = state.sourceExplorer.detailOpen;
 
@@ -2195,44 +2105,25 @@ function renderSourceExplorer() {
   if (category === "datasets") {
     records = explorerDatasets();
     intro = "Source telemetry available for creating an investigation.";
-  } else if (category === "snapshots") {
+  } else {
     records = explorerSnapshots();
     intro = "Saved telemetry windows available for investigation and review.";
-  } else {
-    records = explorerDocuments();
-    intro =
-      "Procedures and prior incidents available as investigation context. Library membership does not mean a document was used in every report.";
   }
 
-  const selected =
-    category === "documents"
-      ? records.find((doc) => doc.id === selectedId) || null
-      : records.find((run) => run.id === selectedId) || null;
+  const selected = records.find((run) => run.id === selectedId) || null;
 
   const tabs = `
     <div class="source-cats" role="tablist" aria-label="Source categories">
       <button type="button" role="tab" id="source-cat-datasets" aria-selected="${category === "datasets"}" class="source-cat ${category === "datasets" ? "is-on" : ""}" data-explorer-cat="datasets">Datasets <span class="source-cat-count">${counts.datasets}</span></button>
       <button type="button" role="tab" id="source-cat-snapshots" aria-selected="${category === "snapshots"}" class="source-cat ${category === "snapshots" ? "is-on" : ""}" data-explorer-cat="snapshots">Saved snapshots <span class="source-cat-count">${counts.snapshots}</span></button>
-      <button type="button" role="tab" id="source-cat-documents" aria-selected="${category === "documents"}" class="source-cat ${category === "documents" ? "is-on" : ""}" data-explorer-cat="documents">Reference documents <span class="source-cat-count">${counts.documents}</span></button>
     </div>`;
-
-  const docFilters =
-    category === "documents"
-      ? `<div class="source-doc-filters" role="group" aria-label="Document type">
-          <button type="button" class="source-filter ${state.sourceExplorer.docFilter === "all" ? "is-on" : ""}" data-explorer-doc-filter="all">All</button>
-          <button type="button" class="source-filter ${state.sourceExplorer.docFilter === "procedures" ? "is-on" : ""}" data-explorer-doc-filter="procedures">Procedures</button>
-          <button type="button" class="source-filter ${state.sourceExplorer.docFilter === "incidents" ? "is-on" : ""}" data-explorer-doc-filter="incidents">Prior incidents</button>
-        </div>`
-      : "";
 
   let listHtml = "";
   if (!records.length) {
     listHtml =
       category === "datasets"
         ? `<p class="trust-empty">No datasets in the catalog yet. Refresh the dataset catalog under Data maintenance.</p>`
-        : category === "snapshots"
-          ? `<p class="trust-empty">No saved snapshots yet. Opening a case saves a telemetry window here.</p>`
-          : `<p class="trust-empty">No reference documents indexed. Rebuild the document search index under Data maintenance.</p>`;
+        : `<p class="trust-empty">No saved snapshots yet. Opening a case saves a telemetry window here.</p>`;
   } else if (category === "datasets") {
     listHtml = `<div class="source-list-head source-list-head-datasets" aria-hidden="true"><span>Name</span><span>Range</span><span>Time steps</span></div>
       ${records
@@ -2250,7 +2141,7 @@ function renderSourceExplorer() {
         })
         .join("")}`;
   } else if (category === "snapshots") {
-    listHtml = `<div class="source-list-head source-list-head-snapshots" aria-hidden="true"><span>Source</span><span>Saved window</span><span>Values</span></div>
+    listHtml = `<div class="source-list-head source-list-head-snapshots" aria-hidden="true"><span>Source</span><span>Saved window</span><span>Time steps</span></div>
       ${records
         .map((run) => {
           const copy = tapeCopy(run);
@@ -2263,28 +2154,10 @@ function renderSourceExplorer() {
               ${linked.length ? `<span class="source-row-link">${escapeHtml(linked.map((i) => i.id).join(", "))}</span>` : `<span class="source-row-link is-muted">No linked case recorded</span>`}
             </span>
             <span class="source-row-meta">${escapeHtml(formatMissionSpan(run.clock_start, run.clock_end))}</span>
-            <span class="source-row-count" title="Channel values stored for this snapshot">${run.samples != null ? Number(run.samples).toLocaleString() : "—"}</span>
+            <span class="source-row-count" title="Time steps in the sealed window">${run.samples != null ? Number(run.samples).toLocaleString() : "—"}</span>
           </button>`;
         })
         .join("")}`;
-  } else {
-    listHtml = records
-      .map((doc) => {
-        const on = doc.id === selectedId ? "is-on" : "";
-        const origin = documentOriginLabel(doc);
-        const desc = documentShortDescription(doc);
-        const typeLabel = doc.kind === "procedure" ? "Procedure" : "Prior incident";
-        return `<button type="button" class="source-row source-row-doc kind-${escapeHtml(doc.kind || "doc")} ${on}" data-explorer-select="${escapeHtml(doc.id)}" aria-pressed="${doc.id === selectedId}">
-          <span class="source-row-main">
-            <span class="source-row-type">${escapeHtml(typeLabel)}</span>
-            <strong>${escapeHtml(doc.title || doc.id)}</strong>
-            <code class="source-row-id">${escapeHtml(doc.id)}</code>
-            ${desc ? `<span class="source-row-desc">${escapeHtml(desc)}</span>` : ""}
-            ${origin ? `<span class="source-row-origin">${escapeHtml(origin)}</span>` : ""}
-          </span>
-        </button>`;
-      })
-      .join("");
   }
 
   let detailHtml = "";
@@ -2292,19 +2165,16 @@ function renderSourceExplorer() {
     detailHtml = `<div class="source-detail-empty"><p>Select a source to inspect its contents and metadata.</p></div>`;
   } else if (category === "datasets") {
     detailHtml = renderExplorerDatasetDetail(selected);
-  } else if (category === "snapshots") {
-    detailHtml = renderExplorerSnapshotDetail(selected);
   } else {
-    detailHtml = renderExplorerDocumentDetail(selected);
+    detailHtml = renderExplorerSnapshotDetail(selected);
   }
 
   root.innerHTML = `
     ${tabs}
     <p class="source-intro">${escapeHtml(intro)}</p>
-    ${docFilters}
     <div class="source-browser ${detailOpen && selected ? "is-detail-open" : ""}">
       <div class="source-list" id="source-explorer-list" role="listbox" aria-label="${escapeHtml(category)}">${listHtml}</div>
-      <aside class="source-detail ${category === "documents" ? "is-docs" : category === "snapshots" ? "is-snap" : "is-data"}" id="source-explorer-detail" aria-live="polite">
+      <aside class="source-detail ${category === "snapshots" ? "is-snap" : "is-data"}" id="source-explorer-detail" aria-live="polite">
         <button type="button" class="source-detail-back text-btn" data-explorer-detail-back ${detailOpen && selected ? "" : "hidden"}>Back to list</button>
         ${detailHtml}
       </aside>
@@ -2680,9 +2550,7 @@ function renderTrust() {
   }
 
   const storeTone = trustTone(t.store?.linked);
-  const libraryTone = trustTone(t.library?.ready, t.library?.documents > 0 && !t.library?.ready);
   const archiveLabel = t.store?.linked ? "Archive linked" : "Archive unlinked";
-  const libraryLabel = t.library?.ready ? "Library ready" : "Library not ready";
   const investigatorLabel = `Investigator: ${t.investigator?.provider_ui || "rules"}`;
 
   head.innerHTML = `
@@ -2691,7 +2559,6 @@ function renderTrust() {
     <p class="trust-head-lede">Every recommendation is built from a sealed telemetry window, with each claim tagged by source and a human making the final call. ORBIT never sends commands.</p>
     <div class="trust-summary">
       <span class="trust-pill is-${storeTone}"><span class="dot"></span>${escapeHtml(archiveLabel)}</span>
-      <span class="trust-pill is-${libraryTone}"><span class="dot"></span>${escapeHtml(libraryLabel)}</span>
       <span class="trust-pill is-ok"><span class="dot"></span>${escapeHtml(investigatorLabel)}</span>
       <span class="trust-pill is-ok"><span class="dot"></span>${escapeHtml(t.mission || "Aurora-1")}</span>
     </div>`;
@@ -3161,7 +3028,7 @@ function renderInspector() {
   );
   if (ins.savedChannelValues != null && savedSpan) {
     parts.push(
-      `<span class="inspector-window-line is-muted">${Number(ins.savedChannelValues).toLocaleString()} channel values in the saved package</span>`
+      `<span class="inspector-window-line is-muted">${Number(ins.savedChannelValues).toLocaleString()} time steps in the saved package</span>`
     );
   }
   if (data.crossing) {
@@ -3401,14 +3268,19 @@ function syncProcedureBundle() {
   syncFold("procedure", state.procedureOpen, "procedure-toggle", "procedure-toggle-state");
 }
 
-function syncKnowledgeBundle() {
-  syncFold("knowledge", state.knowledgeOpen, "knowledge-toggle", "knowledge-toggle-state");
-}
-
 function syncCaseFolds() {
   syncEvidenceBundle();
   syncProcedureBundle();
-  syncKnowledgeBundle();
+}
+
+function showProcedure() {
+  state.procedureOpen = true;
+  syncProcedureBundle();
+  $("procedure")?.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function showReport() {
+  $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
 function investigationFailed() {
@@ -3531,7 +3403,7 @@ function renderHomeDesk() {
     <div class="home-stats">
       ${stat("ready", "ready", readyN, "Ready for review", readyN ? "Recommendations waiting on you" : "Nothing waiting")}
       ${stat("open", "open", openN, "Not investigated", openN ? "Run an investigation to start" : "All caught up")}
-      ${stat("filed", "filed", filedN, "Recorded", "Assessments saved to the library")}
+      ${stat("filed", "filed", filedN, "Recorded", "Assessments saved with the case")}
     </div>
     <div class="home-queue">
       <div class="home-desk-head">
@@ -4240,7 +4112,6 @@ function renderCase() {
   renderProc(a);
   renderDecision(a);
   renderFindings();
-  renderKnowledge();
 }
 
 async function openIncident(incidentId, jump) {
@@ -4249,8 +4120,8 @@ async function openIncident(incidentId, jump) {
     const ready = hasSuccessfulInvestigation();
     const actionInRail = window.matchMedia("(min-width: 1360px)").matches;
     if (jump === "closeout") {
-      openDoc(incidentId);
-    } else if (jump === "action" || (ready && jump !== "investigation" && jump !== "findings" && jump !== "evidence" && jump !== "procedure" && jump !== "knowledge")) {
+      showReport();
+    } else if (jump === "action" || (ready && jump !== "investigation" && jump !== "findings" && jump !== "evidence" && jump !== "procedure")) {
       if (!actionInRail) $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (jump === "findings" || jump === "investigation") {
       $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -4259,13 +4130,7 @@ async function openIncident(incidentId, jump) {
       syncEvidenceBundle();
       $("evidence")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (jump === "procedure") {
-      state.procedureOpen = true;
-      syncProcedureBundle();
-      $("procedure")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if (jump === "knowledge") {
-      state.knowledgeOpen = true;
-      syncKnowledgeBundle();
-      $("knowledge")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      showProcedure();
     } else if (!jump && ready) {
       if (!actionInRail) $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else if (!jump) {
@@ -4305,7 +4170,6 @@ async function loadIncident(incidentId) {
       state.report = inc.closeout;
     }
   }
-  state.knowledgeOpen = false;
   state.procedureOpen = false;
   state.runId = state.workspace.run_id;
   const a = analysis();
@@ -4314,9 +4178,6 @@ async function loadIncident(incidentId) {
   state.pinSource = null;
   renderCase();
   syncCaseFolds();
-  const input = $("knowledge-q");
-  if (input) input.value = "";
-  await searchLibrary(likeThisQuery(), { grounded: true });
 }
 
 async function runInvestigation(incidentId) {
@@ -4352,7 +4213,6 @@ async function assemble() {
       investigation_report: data.report,
       investigated_at: data.investigated_at || null,
     });
-    state.knowledgeOpen = false;
     renderIncidents();
     renderAlarm(analysis());
     renderDecision(analysis());
@@ -4446,10 +4306,6 @@ async function fileIncident(ev) {
     renderIncidents();
     renderAlarm(analysis());
     renderDecision(analysis());
-    await refreshDocs();
-    const input = $("knowledge-q");
-    if (input) input.value = "";
-    await searchLibrary(likeThisQuery(), { grounded: true });
     $("alarm").scrollIntoView({ behavior: "smooth", block: "start" });
   } finally {
     state.filing = false;
@@ -4459,398 +4315,6 @@ async function fileIncident(ev) {
   }
 }
 
-function fillDocReader(doc, why) {
-  const kind = libraryKind(doc);
-  const close = libraryClose(doc);
-  const whyText = why || (close ? `${libraryUse(doc)} · ${close}` : libraryUse(doc));
-  return { kind, whyText };
-}
-
-async function openDoc(id, opts = {}) {
-  const res = await fetch(apiUrl(`/documents/${encodeURIComponent(id)}`));
-  if (!res.ok) return;
-  const doc = await res.json();
-  state.openDocId = doc.id;
-  state.openDoc = doc;
-  const grounded = groundedDocs().find((g) => g.doc.id === doc.id);
-  const { whyText } = fillDocReader(doc, opts.why || grounded?.why);
-
-  const onCase = state.view === "case" && state.incidentId;
-  if (onCase || opts.forceCase) {
-    if (state.view !== "case" && state.incidentId) enterCase();
-    state.knowledgeOpen = true;
-    syncKnowledgeBundle();
-    $("reader-kind").textContent = libraryKindLabel(doc);
-    $("reader-title").textContent = doc.title;
-    $("reader-why").textContent = whyText;
-    $("reader-body").innerHTML = renderMd(doc.body, { skipTitle: true });
-    const actions = $("reader-actions");
-    if (actions) {
-      const listed = state.incidents.find((item) => item.id === doc.id);
-      actions.innerHTML = listed && listed.id !== state.incidentId
-        ? `<button type="button" class="btn-bar" data-open-listed="${escapeHtml(doc.id)}">Open case ${escapeHtml(doc.id)}</button>`
-        : "";
-    }
-    const reader = $("knowledge-reader");
-    if (reader) {
-      reader.hidden = false;
-      reader.className = `knowledge-reader kind-${libraryKind(doc)}`;
-    }
-    renderKnowledge();
-    $("knowledge")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    reader?.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    return;
-  }
-
-  openDocSlip(doc, whyText);
-}
-
-function openDocSlip(doc, whyText) {
-  const slip = $("doc-slip");
-  if (!slip) return;
-  $("doc-slip-kind").textContent = libraryKindLabel(doc);
-  $("doc-slip-title").textContent = doc.title;
-  $("doc-slip-why").textContent = whyText || libraryUse(doc);
-  $("doc-slip-body").innerHTML = renderMd(doc.body, { skipTitle: true });
-  slip.hidden = false;
-}
-
-function closeDocSlip() {
-  const slip = $("doc-slip");
-  if (slip) slip.hidden = true;
-}
-
-function closeReader() {
-  state.openDocId = null;
-  state.openDoc = null;
-  const reader = $("knowledge-reader");
-  if (reader) {
-    reader.hidden = true;
-    reader.className = "knowledge-reader";
-  }
-  closeDocSlip();
-  renderKnowledge();
-}
-
-function tidySnippet(s) {
-  return String(s || "")
-    .replace(/^#+\s*/, "")
-    .replace(/\*+/g, "")
-    .replace(/\s*\|\s*/g, " · ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function libraryKind(doc) {
-  if (String(doc.path || "").startsWith("filed:")) return "filed";
-  if (doc.kind === "procedure") return "procedure";
-  return "history";
-}
-
-function libraryKindLabel(doc) {
-  const kind = libraryKind(doc);
-  if (kind === "filed") return "filed";
-  if (kind === "procedure") return "procedure";
-  return "similar case";
-}
-
-function libraryUse(doc) {
-  if (LIB_COPY[doc.id]?.use) return LIB_COPY[doc.id].use;
-  if (libraryKind(doc) === "filed") return "Already stamped on this craft. The recommended command was not sent.";
-  return tidySnippet(doc.snippet || doc.title || "");
-}
-
-function libraryClose(doc) {
-  if (LIB_COPY[doc.id]?.close) return LIB_COPY[doc.id].close;
-  if (libraryKind(doc) === "filed") return "In the library · not uplinked";
-  return "";
-}
-
-function libraryFamily(doc) {
-  if (LIB_COPY[doc.id]?.family) return LIB_COPY[doc.id].family;
-  const inc = state.incidents.find((item) => item.id === doc.id);
-  if (inc?.alarm === "PAY.payload_current") return "payload";
-  if (inc?.alarm === "EPS.battery_voltage") return "battery";
-  if (inc?.alarm === "EPS.bus_voltage") return "heater";
-  if (doc.id === "EPS-09") return "battery";
-  if (String(doc.id).startsWith("PAY")) return "payload";
-  if (String(doc.id).startsWith("EPS")) return "heater";
-  return "other";
-}
-
-function likeThisQuery() {
-  const inc = state.incident;
-  const a = analysis();
-  const parts = [];
-  if (inc?.alarm) parts.push(inc.alarm);
-  if (inc?.title) parts.push(inc.title);
-  if (a?.suspect) parts.push("Heater B overcurrent 3× EPS-17 INC-0187 do not close on payload");
-  else if (a?.payloadSuspect) parts.push("payload power spike SCIENCE_MODE PAY-04 INC-0191 do not inhibit heater");
-  else if (a?.batterySuspect) parts.push("battery internal resistance eclipse EPS-09 INC-0162 healthy heater");
-  else parts.push("similar incident procedure close-out");
-  return parts.join(" ");
-}
-
-const LIB_KINDS = [
-  { id: "all", label: "All" },
-  { id: "procedure", label: "Procedures" },
-  { id: "history", label: "Cases" },
-  { id: "filed", label: "Filed" },
-];
-
-const LIB_FAMILIES = [
-  { id: "all", label: "All signatures" },
-  { id: "heater", label: "Heater" },
-  { id: "payload", label: "Payload" },
-  { id: "battery", label: "Pack" },
-];
-
-const LIB_SUGGEST = [
-  { q: "heater 3× overcurrent EPS-17", label: "Heater 3×" },
-  { q: "SCIENCE_MODE payload current", label: "Science mode" },
-  { q: "battery internal resistance eclipse", label: "Pack IR" },
-  { q: "EPS-17 low voltage load", label: "EPS-17" },
-];
-
-const KIND_RANK = { procedure: 0, history: 1, filed: 2 };
-
-function escapeRx(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function highlightTerms(text, query) {
-  const safe = escapeHtml(text);
-  const terms = String(query || "")
-    .split(/[^\w.-]+/)
-    .filter((t) => t.length > 2);
-  if (!terms.length) return safe;
-  const rx = new RegExp(`(${terms.map(escapeRx).join("|")})`, "gi");
-  return safe.replace(rx, "<mark>$1</mark>");
-}
-
-/* The documents this case is actually built on, chosen by the same analysis that
-   drives the case — not by search ranking. Each one states why it is here. */
-function groundedDocs() {
-  if (!state.incidentId) return [];
-  const a = analysis();
-  const byId = (id) => state.docs.find((doc) => doc.id === id);
-  const out = [];
-  const proc = byId(procedureId(a));
-  if (proc) out.push({ doc: proc, why: "Procedure for this case" });
-  const priorId = a?.suspect ? "INC-0187" : a?.payloadSuspect ? "INC-0191" : a?.batterySuspect ? "INC-0162" : null;
-  const prior = priorId ? byId(priorId) : null;
-  if (prior) out.push({ doc: prior, why: "Same signature" });
-  const own = state.docs.find(
-    (doc) => doc.id === state.incidentId && String(doc.path || "").startsWith("filed:")
-  );
-  if (own) out.push({ doc: own, why: "This case, filed" });
-  return out;
-}
-
-function matchScaler(hits) {
-  const scores = hits.map((h) => Number(h.score) || 0);
-  const max = Math.max(...scores);
-  const min = Math.min(...scores);
-  const span = max - min;
-  return (hit) => (span > 1e-4 ? 18 + 82 * ((Number(hit.score) - min) / span) : 100);
-}
-
-function libItem(doc, opts = {}) {
-  const kind = libraryKind(doc);
-  const on = doc.id === state.openDocId ? "is-on" : "";
-  const close = libraryClose(doc);
-  const q = opts.query || "";
-  const match =
-    opts.match != null
-      ? `<span class="lib-match">
-          <span class="bar"><i style="width:${opts.match.toFixed(0)}%"></i></span>
-          <span class="score">${Number(doc.score || 0).toFixed(2)}</span>
-        </span>`
-      : "";
-  return `<button type="button" class="lib-item kind-${kind} ${on}" data-doc="${escapeHtml(doc.id)}">
-    <span class="lib-item-top">
-      <span class="id">${highlightTerms(doc.id, q)}</span>
-      <span class="kind-chip kind-${kind}">${escapeHtml(libraryKindLabel(doc))}</span>
-    </span>
-    <span class="use">${highlightTerms(libraryUse(doc), q)}</span>
-    ${close ? `<span class="close-line">${escapeHtml(close)}</span>` : ""}
-    ${opts.why ? `<span class="lib-why">${escapeHtml(opts.why)}</span>` : ""}
-    ${match}
-  </button>`;
-}
-
-function libGroup(title, html, extra = "") {
-  if (!html) return "";
-  return `<section class="lib-group ${extra}">
-    <p class="family-head">${escapeHtml(title)}</p>${html}
-  </section>`;
-}
-
-function knowledgeCard(doc, opts = {}) {
-  const kind = libraryKind(doc);
-  const on = doc.id === state.openDocId ? "is-on" : "";
-  const close = libraryClose(doc);
-  const score = doc.score != null
-    ? `<span class="knowledge-score" title="Search similarity, not confidence">${Number(doc.score).toFixed(2)} · similarity</span>`
-    : "";
-  return `<button type="button" class="knowledge-card kind-${kind} ${on} ${opts.grounded ? "is-grounded" : ""}" data-doc="${escapeHtml(doc.id)}">
-    <span class="knowledge-card-top">
-      <span class="kind-chip kind-${kind}">${escapeHtml(libraryKindLabel(doc))}</span>
-      <strong>${escapeHtml(doc.id)}</strong>
-      ${score}
-    </span>
-    <span class="knowledge-card-title">${escapeHtml(doc.title)}</span>
-    <span class="knowledge-card-use">${escapeHtml(opts.why || libraryUse(doc))}</span>
-    ${close ? `<span class="knowledge-card-close">${escapeHtml(close)}</span>` : ""}
-  </button>`;
-}
-
-function knowledgeToggleSummary(ground, related) {
-  const bits = [];
-  if (ground.length) bits.push(...ground.map((g) => g.doc.id));
-  else bits.push("No grounded docs");
-  if (related.length) bits.push(`${related.length} related`);
-  return bits.slice(0, 4).join(" · ");
-}
-
-function renderKnowledge() {
-  const root = $("knowledge-list");
-  const status = $("knowledge-status");
-  const clear = $("knowledge-clear");
-  const title = $("knowledge-toggle-title");
-  const reader = $("knowledge-reader");
-  if (clear) clear.hidden = !state.libraryQuery;
-  if (!root) return;
-
-  const reading = Boolean(state.openDocId && state.openDoc && reader && !reader.hidden);
-  if (reader && !state.openDocId) reader.hidden = true;
-
-  if (state.librarySearching) {
-    if (status) status.textContent = "Searching the index…";
-    root.innerHTML = `<p class="knowledge-hint">Searching…</p>`;
-    return;
-  }
-
-  const ground = groundedDocs();
-  const groundIds = new Set(ground.map((g) => g.doc.id));
-  const query = state.libraryQuery;
-
-  if (query) {
-    const hits = state.libraryHits || [];
-    if (status) {
-      status.textContent = hits.length
-        ? `${hits.length} result${hits.length === 1 ? "" : "s"} for “${query}”`
-        : `Nothing matched “${query}”`;
-    }
-    if (title) title.textContent = hits.length ? `Search · ${hits.length} hits` : "Search · no hits";
-    if (!hits.length) {
-      root.innerHTML = `<p class="knowledge-hint">No documents matched. Try a shorter phrase, or clear search to return to this case.</p>`;
-      return;
-    }
-    root.innerHTML = `<div class="knowledge-group">
-      <p class="knowledge-group-kicker">Search results</p>
-      <div class="knowledge-grid">${hits.map((doc) => knowledgeCard(doc)).join("")}</div>
-    </div>`;
-    return;
-  }
-
-  const related = (state.libraryHits || []).filter((doc) => !groundIds.has(doc.id)).slice(0, 6);
-  if (title) title.textContent = knowledgeToggleSummary(ground, related);
-  if (status) {
-    status.textContent = state.incidentId
-      ? `${ground.length} referenced · ${related.length} related (search similarity)`
-      : "Open a case to load procedures and prior incidents";
-  }
-
-  let html = "";
-  if (ground.length) {
-    html += `<div class="knowledge-group is-ground">
-      <p class="knowledge-group-kicker">Referenced in this investigation</p>
-      <p class="knowledge-group-note">Chosen by the same analysis as the investigation — not by search rank.</p>
-      <div class="knowledge-grid">${ground.map((g) => knowledgeCard(g.doc, { why: g.why, grounded: true })).join("")}</div>
-    </div>`;
-  } else {
-    html += `<p class="knowledge-hint">Run investigation or open a case with a matching procedure to load referenced documents.</p>`;
-  }
-  if (related.length) {
-    html += `<div class="knowledge-group">
-      <p class="knowledge-group-kicker">Related documents</p>
-      <p class="knowledge-group-note">Search-similarity neighbors from the local index. Related is not the same as supporting evidence.</p>
-      <div class="knowledge-grid">${related.map((doc) => knowledgeCard(doc)).join("")}</div>
-    </div>`;
-  }
-  root.innerHTML = html;
-}
-
-async function searchLibrary(query, opts = {}) {
-  const q = (query || "").trim();
-  state.libraryQuery = opts.grounded ? "" : q;
-  if (!q) {
-    state.libraryHits = null;
-    renderKnowledge();
-    return;
-  }
-  state.librarySearching = true;
-  renderKnowledge();
-  try {
-    const res = await fetch(apiUrl(`/search?q=${encodeURIComponent(q)}&limit=20`));
-    if (!res.ok) throw new Error(`search ${res.status}`);
-    state.libraryHits = await res.json();
-  } catch {
-    state.libraryHits = [];
-  } finally {
-    state.librarySearching = false;
-    renderKnowledge();
-  }
-}
-
-function resetKnowledgeToCase() {
-  const input = $("knowledge-q");
-  if (input) input.value = "";
-  state.libraryQuery = "";
-  if (!state.incidentId) {
-    state.libraryHits = null;
-    renderKnowledge();
-    return;
-  }
-  searchLibrary(likeThisQuery(), { grounded: true });
-}
-
-function focusKnowledgeSearch() {
-  if (!state.incidentId) {
-    enterIncidents();
-    return;
-  }
-  if (state.view !== "case") enterCase();
-  state.knowledgeOpen = true;
-  syncKnowledgeBundle();
-  $("knowledge")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  const input = $("knowledge-q");
-  if (input) {
-    input.focus();
-    input.select();
-  }
-}
-
-async function refreshDocs() {
-  const res = await fetch(apiUrl("/documents"));
-  if (!res.ok) return;
-  state.docs = await res.json();
-  renderKnowledge();
-}
-
-let knowledgeTimer = 0;
-function onKnowledgeTyped() {
-  window.clearTimeout(knowledgeTimer);
-  knowledgeTimer = window.setTimeout(() => {
-    const q = ($("knowledge-q")?.value || "").trim();
-    if (!q) {
-      resetKnowledgeToCase();
-      return;
-    }
-    searchLibrary(q);
-  }, 220);
-}
 
 function bind() {
   window.addEventListener("popstate", () => {
@@ -4945,47 +4409,9 @@ function bind() {
     ev.preventDefault();
     openIncident(row.dataset.openCase, row.dataset.jump);
   });
-  $("knowledge-form")?.addEventListener("submit", (ev) => {
-    ev.preventDefault();
-    window.clearTimeout(knowledgeTimer);
-    const q = ($("knowledge-q")?.value || "").trim();
-    if (!q) {
-      resetKnowledgeToCase();
-      return;
-    }
-    searchLibrary(q);
-  });
-  $("knowledge-q")?.addEventListener("input", onKnowledgeTyped);
-  $("knowledge-clear")?.addEventListener("click", () => {
-    window.clearTimeout(knowledgeTimer);
-    resetKnowledgeToCase();
-    $("knowledge-q")?.focus();
-  });
-  $("knowledge-list")?.addEventListener("click", (ev) => {
-    const listed = ev.target.closest("[data-open-listed]");
-    if (listed) {
-      openIncident(listed.dataset.openListed);
-      return;
-    }
-    const btn = ev.target.closest("[data-doc]");
-    if (btn) openDoc(btn.dataset.doc);
-  });
-  $("knowledge-reader")?.addEventListener("click", (ev) => {
-    const listed = ev.target.closest("[data-open-listed]");
-    if (listed) openIncident(listed.dataset.openListed);
-  });
-  $("knowledge-reader-close")?.addEventListener("click", closeReader);
-  $("knowledge-toggle")?.addEventListener("click", () => {
-    state.knowledgeOpen = !state.knowledgeOpen;
-    syncKnowledgeBundle();
-  });
   $("procedure-toggle")?.addEventListener("click", () => {
     state.procedureOpen = !state.procedureOpen;
     syncProcedureBundle();
-  });
-  $("doc-slip-close")?.addEventListener("click", closeDocSlip);
-  $("doc-slip")?.addEventListener("click", (ev) => {
-    if (ev.target.id === "doc-slip") closeDocSlip();
   });
   $("inc-search-form")?.addEventListener("submit", (ev) => ev.preventDefault());
   $("inc-q")?.addEventListener("input", () => {
@@ -5014,11 +4440,6 @@ function bind() {
     const cat = ev.target.closest("[data-explorer-cat]");
     if (cat) {
       setExplorerCategory(cat.dataset.explorerCat);
-      return;
-    }
-    const docFilter = ev.target.closest("[data-explorer-doc-filter]");
-    if (docFilter) {
-      setExplorerDocFilter(docFilter.dataset.explorerDocFilter);
       return;
     }
     const select = ev.target.closest("[data-explorer-select]");
@@ -5052,11 +4473,6 @@ function bind() {
       loadIncident(openIncident.dataset.explorerOpenIncident);
       return;
     }
-    const readDoc = ev.target.closest("[data-explorer-read-doc]");
-    if (readDoc) {
-      openDoc(readDoc.dataset.explorerReadDoc);
-      return;
-    }
     if (ev.target.closest("[data-trust-back]")) {
       enterTrustOverview();
       return;
@@ -5084,14 +4500,12 @@ function bind() {
       else openInspector({ runId: inspect.dataset.trustInspect });
       return;
     }
-    const doc = ev.target.closest("[data-trust-doc]");
-    if (doc) openDoc(doc.dataset.trustDoc);
   });
   $("trust-desk").addEventListener("keydown", (ev) => {
     const cat = ev.target.closest("[data-explorer-cat]");
     if (cat && (ev.key === "ArrowRight" || ev.key === "ArrowLeft")) {
       ev.preventDefault();
-      const order = ["datasets", "snapshots", "documents"];
+      const order = ["datasets", "snapshots"];
       const idx = order.indexOf(cat.dataset.explorerCat);
       const next = order[(idx + (ev.key === "ArrowRight" ? 1 : order.length - 1)) % order.length];
       setExplorerCategory(next);
@@ -5194,7 +4608,7 @@ function bind() {
     if (!jump) return;
     const where = jump.dataset.caseJump;
     if (where === "closeout") {
-      if (state.incidentId) openDoc(state.incidentId);
+      showReport();
       return;
     }
     if (where === "action") {
@@ -5215,12 +4629,6 @@ function bind() {
       state.procedureOpen = true;
       syncProcedureBundle();
       $("procedure")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    if (where === "knowledge") {
-      state.knowledgeOpen = true;
-      syncKnowledgeBundle();
-      $("knowledge")?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -5258,44 +4666,18 @@ function bind() {
   $("file-slip").addEventListener("click", (ev) => {
     if (ev.target.id === "file-slip") closeFileSlip();
   });
-  const openCloseout = () => {
-    if (state.incidentId) openDoc(state.incidentId);
-  };
+  const openCloseout = () => showReport();
   $("open-closeout").addEventListener("click", openCloseout);
   $("open-closeout-case").addEventListener("click", openCloseout);
-  $("open-proc").addEventListener("click", () => openDoc(procedureId(analysis()), { forceCase: true }));
+  $("open-proc").addEventListener("click", () => showProcedure());
   document.addEventListener("keydown", (ev) => {
-    const typing = /^(INPUT|TEXTAREA)$/.test(ev.target?.tagName || "");
-    if ((ev.key === "k" || ev.key === "K") && (ev.metaKey || ev.ctrlKey)) {
-      ev.preventDefault();
-      focusKnowledgeSearch();
-      return;
-    }
-    if (ev.key === "/" && !typing && !ev.metaKey && !ev.ctrlKey) {
-      ev.preventDefault();
-      focusKnowledgeSearch();
-      return;
-    }
     if (ev.key !== "Escape") return;
-    if ($("doc-slip") && !$("doc-slip").hidden) {
-      closeDocSlip();
-      return;
-    }
     if (!$("slip").hidden) {
       closeSlip();
       return;
     }
     if (!$("file-slip").hidden) {
       closeFileSlip();
-      return;
-    }
-    if (state.openDocId) {
-      closeReader();
-      return;
-    }
-    if (state.libraryQuery) {
-      window.clearTimeout(knowledgeTimer);
-      resetKnowledgeToCase();
     }
   });
 }
@@ -5326,16 +4708,14 @@ async function boot() {
   initTheme();
   if (DEMO_MODE) document.body.classList.add("demo-mode");
   bind();
-  const [runsRes, incidentRes, alarmRes, docsRes] = await Promise.all([
+  const [runsRes, incidentRes, alarmRes] = await Promise.all([
     fetch(apiUrl("/runs")),
     fetch(apiUrl(DEMO_MODE ? "/incidents?fresh=1" : "/incidents")),
     fetch(apiUrl("/entry-alarms")),
-    fetch(apiUrl("/documents")),
   ]);
   state.runs = await runsRes.json();
   state.incidents = await incidentRes.json();
   state.alarms = await alarmRes.json();
-  state.docs = docsRes.ok ? await docsRes.json() : [];
   await loadArchiveCatalog();
   fillCreateForm();
   renderIncidents();

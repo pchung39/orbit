@@ -26,28 +26,13 @@ def _num(row: dict | None) -> float | None:
     return row.get("value_num")
 
 
-def _similar_incident(tools: Tools, query: str, prefer_id: str | None) -> tuple[str | None, dict | None]:
-    hits = tools.search_docs(query)
-    authored: list[tuple[str, dict]] = []
-    for row in hits:
-        if row.get("kind") != "incident":
-            continue
-        doc = tools.get_doc(row["id"])
-        if not doc:
-            continue
-        if str(doc.get("path") or "").startswith("filed:"):
-            continue
-        authored.append((row["id"], doc))
-    for doc_id, doc in authored:
-        if prefer_id and doc_id == prefer_id:
-            return doc_id, doc
-    if prefer_id:
-        doc = tools.get_doc(prefer_id)
-        if doc and not str(doc.get("path") or "").startswith("filed:"):
-            return prefer_id, doc
-    if authored:
-        return authored[0]
-    return None, None
+def _similar_incident(tools: Tools, prefer_id: str | None) -> tuple[str | None, dict | None]:
+    if not prefer_id:
+        return None, None
+    doc = tools.get_doc(prefer_id)
+    if doc is None:
+        return None, None
+    return prefer_id, doc
 
 
 def investigate_rules(run_id: str, alarm_channel: str = "EPS.bus_voltage") -> str:
@@ -120,29 +105,29 @@ def _investigate_rules_body(run_id: str, alarm_channel: str = "EPS.bus_voltage")
     if heater_guilty:
         procedure_id = "EPS-17"
         family = "heater"
-        similar_query, prefer = "heater overcurrent", "INC-0187"
+        prefer = "INC-0187"
     elif payload_guilty:
         procedure_id = "PAY-04"
         family = "payload"
-        similar_query, prefer = "payload power spike SCIENCE_MODE", "INC-0191"
+        prefer = "INC-0191"
     elif battery_family:
         procedure_id = "EPS-09"
         family = "battery"
-        similar_query, prefer = "battery internal resistance eclipse", "INC-0162"
+        prefer = "INC-0162"
     elif events and (heater_marginal or payload_marginal):
         procedure_id = "EPS-17"
         family = "withheld"
-        similar_query, prefer = "heater overcurrent", "INC-0187"
+        prefer = "INC-0187"
     else:
         procedure_id = "EPS-17"
         family = "open"
-        similar_query, prefer = "overcurrent", "INC-0187"
+        prefer = "INC-0187"
 
     procedure = tools.get_doc(procedure_id)
     if procedure is None:
-        raise SystemExit(f"{procedure_id} is not in the store — run: python -m storage ingest")
+        raise SystemExit(f"{procedure_id} is not on disk — expected the procedure file from the mission spec")
 
-    similar_id, similar = _similar_incident(tools, similar_query, prefer)
+    similar_id, similar = _similar_incident(tools, prefer)
     prior_heater = tools.sample("inc0187", "THM.heater_b_current", 1 * 3600 + 52 * 60) if similar_id == "INC-0187" else None
     prior_payload = tools.sample("inc0191", "PAY.payload_current", 8 * 3600 + 14 * 60) if similar_id == "INC-0191" else None
     prior_batt = tools.sample("inc0162", "EPS.battery_voltage", 18 * 60) if similar_id == "INC-0162" else None

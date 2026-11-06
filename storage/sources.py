@@ -1,14 +1,12 @@
-"""Demo-local archive adapter + library index.
+"""Demo-local archive adapter.
 
 Upstream archive = catalog of full tapes (CSV stand-in). Opening a case
-*fetches* a time window from that archive and stores only the sealed
-package in ORBIT. Library sync rebuilds the search index.
-ORBIT does not downlink, detect, or keep the full archive as its store.
+fetches a time window from that archive and writes a sealed file.
+ORBIT does not downlink, detect, or keep the full archive in Postgres.
 """
 
 from __future__ import annotations
 
-import secrets
 from datetime import datetime, timezone
 from typing import Any
 
@@ -16,14 +14,11 @@ import pandas as pd
 
 from simulator.scenarios import clock_to_s, format_clock
 from simulator.simulate import SPEC_PATH, load_and_validate
-from storage.store import (
-    ROOT,
-    SPEC_CHANNELS,
-    events_for_run,
-    ingest_documents,
-    list_documents,
+from storage.evidence import (
+    ARCHIVE as _TELEMETRY_CATALOG,
+    ensure_archive_csv,
     list_runs,
-    _ensure_run_csv,
+    write_sealed_window,
 )
 
 ADAPTER = "demo-local"
@@ -61,18 +56,6 @@ ALARM_BIND: dict[str, dict[str, str]] = {
         "label": "healthy SCIENCE_MODE control",
     },
 }
-
-_TELEMETRY_CATALOG = (
-    ("eps204", "eps204", ROOT / "runs" / "eps204.csv", "demo: heater fault + science-mode confounder"),
-    ("fault1", "fault1", ROOT / "runs" / "fault1.csv", "heater fault only"),
-    ("marg001", "marg001", ROOT / "runs" / "marg001.csv", "decoy EPS-204: marginal heater, withhold cause"),
-    ("inc0187", "inc0187", ROOT / "runs" / "inc0187.csv", "prior incident source run"),
-    ("pay002", "pay002", ROOT / "runs" / "pay002.csv", "payload overcurrent on SCIENCE_MODE"),
-    ("inc0191", "inc0191", ROOT / "runs" / "inc0191.csv", "prior payload-spike source run"),
-    ("batt003", "batt003", ROOT / "runs" / "batt003.csv", "pack IR sag, heater healthy"),
-    ("inc0162", "inc0162", ROOT / "runs" / "inc0162.csv", "prior pack-IR source run"),
-    ("nominal", "nominal", ROOT / "runs" / "nominal.csv", "healthy SCIENCE_MODE control tape"),
-)
 
 _activity: list[dict[str, Any]] = []
 _last_sync: dict[str, str] = {}
@@ -112,10 +95,9 @@ def _catalog_tuple(run_id: str) -> tuple[str, str, Any, str] | None:
 
 def list_archive_catalog() -> list[dict[str, Any]]:
     """Upstream archive inventory (metadata). Does not require Postgres ingest."""
-    spec = load_and_validate(SPEC_PATH)
     out: list[dict[str, Any]] = []
     for run_id, scenario, path, notes in _TELEMETRY_CATALOG:
-        _ensure_run_csv(spec, run_id, path)
+        ensure_archive_csv(run_id, path)
         entry: dict[str, Any] = {
             "id": run_id,
             "scenario": scenario,
@@ -143,11 +125,11 @@ def list_archive_catalog() -> list[dict[str, Any]]:
 
 def archive_runs(conn: Any) -> list[dict[str, Any]]:
     """Legacy: archive rows still cached in Postgres (demo inspect / seeds)."""
-    return [row for row in list_runs(conn) if not is_sealed_run_id(row["id"])]
+    return [row for row in list_runs() if not is_sealed_run_id(row["id"])]
 
 
 def sealed_runs(conn: Any) -> list[dict[str, Any]]:
-    return [row for row in list_runs(conn) if is_sealed_run_id(row["id"])]
+    return [row for row in list_runs() if is_sealed_run_id(row["id"])]
 
 
 def bind_preview(alarm: str) -> dict[str, str] | None:
@@ -264,16 +246,6 @@ def _warn_crossing_time_df(df: Any, alarm: str) -> float | None:
     return None
 
 
-def _unique_sealed_id(conn: Any, source_run_id: str, center_s: float) -> str:
-    existing = {row["id"] for row in list_runs(conn)}
-    clock_part = format_clock(center_s).replace(":", "")
-    for _ in range(8):
-        candidate = f"sealed_{source_run_id}_{clock_part}_{secrets.token_hex(2)}"
-        if candidate not in existing:
-            return candidate
-    raise ValueError("could not allocate a unique sealed run id")
-
-
 def seal_run_window(
     conn: Any,
     source_run_id: str,
@@ -294,8 +266,7 @@ def seal_run_window(
     if entry is None:
         raise ValueError(f"unknown archive run {source_run_id}")
     _, scenario, path, _notes = entry
-    spec = load_and_validate(SPEC_PATH)
-    _ensure_run_csv(spec, source_run_id, path)
+    ensure_archive_csv(source_run_id, path)
     if not path.exists():
         raise ValueError(f"archive tape {source_run_id} not available upstream")
 
@@ -320,55 +291,20 @@ def seal_run_window(
             "check alarm time or refresh the archive catalog"
         )
 
-    sealed_id = _unique_sealed_id(conn, source_run_id, center)
-    started = str(window["timestamp"].iloc[0])
     notes = (
         f"sealed from {source_run_id} · {alarm} @ {format_clock(center)} · "
         f"window {format_clock(t0)}–{format_clock(t1)} · fetch-on-seal · {ADAPTER}"
     )
-    conn.execute(
-        "INSERT INTO runs (id, scenario, source_csv, started_at, notes) VALUES (%s, %s, %s, %s, %s)",
-        (sealed_id, f"sealed:{scenario}", str(path), started, notes),
+    sealed_id = write_sealed_window(
+        source_run_id,
+        scenario,
+        alarm,
+        float(center),
+        t0,
+        t1,
+        window,
+        notes,
     )
-
-    rows: list[tuple[Any, ...]] = []
-    for rec in window.to_dict(orient="records"):
-        time_s = float(rec["time_s"])
-        timestamp = str(rec["timestamp"])
-        for channel in SPEC_CHANNELS:
-            if channel not in rec:
-                continue
-            raw = rec[channel]
-            if channel == "PAY.mode":
-                rows.append((sealed_id, time_s, timestamp, channel, None, str(raw)))
-            else:
-                try:
-                    rows.append((sealed_id, time_s, timestamp, channel, float(raw), None))
-                except (TypeError, ValueError):
-                    rows.append((sealed_id, time_s, timestamp, channel, None, str(raw)))
-    with conn.cursor() as cur:
-        cur.executemany(
-            "INSERT INTO telemetry (run_id, time_s, timestamp, channel, value_num, value_text) "
-            "VALUES (%s, %s, %s, %s, %s, %s)",
-            rows,
-        )
-
-    event_rows = []
-    for time_s, event_type, channel, detail in events_for_run(spec, source_run_id):
-        if time_s < t0 or time_s > t1:
-            continue
-        idx = (window["time_s"] - time_s).abs().idxmin()
-        ts = str(window.loc[idx, "timestamp"])
-        event_rows.append((sealed_id, time_s, ts, event_type, channel, detail))
-    if event_rows:
-        with conn.cursor() as cur:
-            cur.executemany(
-                "INSERT INTO events (run_id, time_s, timestamp, event_type, channel, detail) "
-                "VALUES (%s, %s, %s, %s, %s, %s)",
-                event_rows,
-            )
-
-    conn.commit()
     n = len(window)
     _push_activity(
         "telemetry",
@@ -390,22 +326,6 @@ def sync_telemetry(conn: Any) -> dict[str, Any]:
         {"runs": [row["id"] for row in available]},
     )
     return connector_telemetry(conn)
-
-
-def sync_library(conn: Any) -> dict[str, Any]:
-    spec = load_and_validate(SPEC_PATH)
-    n_docs = ingest_documents(conn, spec)
-    at = _now_iso()
-    _last_sync["library"] = at
-    docs = list_documents(conn)
-    procedures = sum(1 for d in docs if d.get("kind") == "procedure")
-    incidents = sum(1 for d in docs if d.get("kind") == "incident")
-    _push_activity(
-        "library",
-        f"Library re-indexed · {n_docs} documents · {procedures} procedures · {incidents} priors",
-        {"documents": n_docs, "procedures": procedures, "incidents": incidents},
-    )
-    return connector_library(conn)
 
 
 def connector_telemetry(conn: Any) -> dict[str, Any]:
@@ -438,44 +358,11 @@ def connector_telemetry(conn: Any) -> dict[str, Any]:
     }
 
 
-def connector_library(conn: Any) -> dict[str, Any]:
-    docs = list_documents(conn)
-    procedures = sum(1 for d in docs if d.get("kind") == "procedure")
-    incidents = sum(1 for d in docs if d.get("kind") == "incident")
-    last = _last_sync.get("library")
-    status = "ready" if docs else "empty"
-    return {
-        "id": "library",
-        "kind": "library",
-        "role": "index",
-        "name": "Library index",
-        "description": (
-            "Procedures and prior closes the investigator searches. Re-index after the book changes. "
-            "Does not rewrite sealed cases."
-        ),
-        "adapter": ADAPTER,
-        "auto": False,
-        "status": status,
-        "last_sync_at": last,
-        "next_sync_at": None,
-        "schedule": None,
-        "action_label": "Re-index book" if docs else "Connect library",
-        "stats": {
-            "documents": len(docs),
-            "procedures": procedures,
-            "incidents": incidents,
-            "label": f"{procedures} procedures · {incidents} priors",
-        },
-    }
-
-
 def list_connectors(conn: Any) -> list[dict[str, Any]]:
-    return [connector_telemetry(conn), connector_library(conn)]
+    return [connector_telemetry(conn)]
 
 
 def sync_connector(conn: Any, connector_id: str) -> dict[str, Any]:
     if connector_id == "telemetry":
         return sync_telemetry(conn)
-    if connector_id == "library":
-        return sync_library(conn)
     raise ValueError(f"unknown connector {connector_id}")

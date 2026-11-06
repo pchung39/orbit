@@ -4,6 +4,7 @@ __pycache__/
 .venv/
 venv/
 *.csv
+runs/sealed/
 *.png
 !docs/**/*.png
 .pytest_cache/

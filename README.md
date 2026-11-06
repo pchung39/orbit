@@ -62,7 +62,7 @@ The browser console uses the rules-based investigator only (`--provider rules`).
 ### Prerequisites
 
 - Python 3.11+
-- Docker (Postgres 16 + pgvector)
+- Docker (Postgres 16)
 
 ### Install and run
 
@@ -122,7 +122,7 @@ The desk is a single-page app served from `/app`.
 | **Case** | `/app/incidents/{id}` | Investigation, knowledge, procedure, evidence, decision |
 | **Trust** | `/app/trust` | Data sources, store health, eval scorecard, tape inspector |
 
-**Open case** collects an alarm channel, alarm time, and upstream archive tape. ORBIT fetches a window (warn ± padding) and materializes a `sealed_*` run in Postgres. Pre-seeded demo incidents skip this step.
+**Open case** collects an alarm channel, alarm time, and upstream archive tape. ORBIT reads that tape, writes a sealed window file, and records the case in Postgres. Pre-seeded demo incidents point at the fixture tapes.
 
 JSON API lives under `/api`. Static assets under `/static`.
 
@@ -158,8 +158,8 @@ ORBIT is an investigation workbench, not the mission archive.
 ```
 Upstream archive          ORBIT                         Operator
 ─────────────────         ─────                         ────────
-Full scenario tapes  →    Seal window (sealed_* run)
-Procedures & priors    →    Postgres + pgvector    →    Console / API
+Tape CSV             →    Seal window file
+Named procedure file →    Case row in Postgres     →    Console / API
                           Rules investigator
                           Eval harness
 ```
@@ -168,22 +168,21 @@ Interactive diagram: [`docs/architecture.html`](docs/architecture.html)
 
 ```mermaid
 flowchart LR
-  Archive[Archive catalog]
+  Archive[Archive tape file]
   Open[Open case]
-  Seal[Seal window]
-  Case[Incident + sealed run]
-  LibSync[Library sync]
-  Index[Search index]
+  Seal[Seal window file]
+  Case[Incident row]
+  Proc[Named procedure file]
 
   Archive --> Open
   Open --> Seal --> Case
-  LibSync --> Index
-  Case --> Investigate[Rules investigator]
+  Proc --> Investigate[Rules investigator]
+  Case --> Investigate
   Investigate --> Report[Tagged report]
   Report --> Decision[Human decision]
 ```
 
-**Trust → Sources** shows the archive catalog (upstream) and library index (embeddings rebuilt on sync). Opening a case fetches from the archive; ORBIT never requires uploading a CSV per incident.
+**Trust → Sources** shows the archive catalog. Opening a case reads a tape file and writes a sealed window. ORBIT does not keep a procedure library or a vector index.
 
 ## Project structure
 
@@ -193,7 +192,7 @@ The mission spec is canonical: [`spec/aurora1_mission_model.yaml`](spec/aurora1_
 orbit/
 ├── spec/                 Mission model — channels, limits, faults, scenarios
 ├── simulator/            Physics engine and scenario CSV generation
-├── storage/              Postgres ingest, query, embeddings, seal windows
+├── storage/              Case log, tape files, sealed windows
 ├── agent/                Investigator (rules | claude | openai) + tools
 ├── api/                  FastAPI server and static console routes
 ├── ui/                   Desk SPA (overview, incidents, case, trust)
@@ -208,7 +207,7 @@ orbit/
 |---|---|
 | **Spec** | Channel definitions, warn limits, fault library, demo scripts |
 | **Simulator** | Nominal, EPS-204, fault1, pay002, batt003, marg001, priors |
-| **Store** | Runs, telemetry, events, documents, incidents, feedback |
+| **Store** | Incidents, feedback, tape files, sealed windows |
 | **Agent** | Tool-using investigator; rules provider for console/API |
 | **Console** | Case workflow UI with investigation, evidence, and filing |
 | **Eval** | Diagnosis accuracy, withhold correctness, false-inhibit checks |
@@ -218,7 +217,7 @@ orbit/
 ### Storage
 
 ```bash
-python -m storage ingest                          # Load schema, tapes, docs, demo incidents
+python -m storage ingest                          # Ensure tape files, case tables, demo incidents
 python -m storage channel eps204 THM.heater_b_current --from-clock 14:29:00 --to-clock 14:33:00
 python -m storage events eps204
 ```
@@ -317,7 +316,7 @@ Output goes to `docs/screenshots/`.
 | `GET` | `/api/incidents/{id}/workspace` | Telemetry, events, channels for a case |
 | `POST` | `/api/incidents/{id}/investigate` | Run rules investigation |
 | `POST` | `/api/incidents/{id}/file` | File close-out |
-| `GET` | `/api/trust` | Store health, library, eval snapshot |
+| `GET` | `/api/trust` | Case log health, tape catalog, eval snapshot |
 | `GET` | `/api/eval/explorer` | Eval suite index |
 
 ---

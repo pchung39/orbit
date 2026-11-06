@@ -164,15 +164,14 @@
                 <p class="panel-kicker">Data sources</p>
                 <h2 id="trust-sources-title">Explore the data behind the investigations</h2>
                 <p class="trust-panel-lede">
-                  Browse the telemetry datasets, saved evidence snapshots, and reference documents available to ORBIT.
+                  Browse the telemetry datasets and saved evidence snapshots available to ORBIT.
                 </p>
               </div>
             </header>
             <div class="source-rel" aria-label="How sources relate">
               <p class="source-rel-line"><span class="source-rel-from">Telemetry dataset</span><span class="source-rel-arrow" aria-hidden="true">→</span><span class="source-rel-to">saved case snapshot</span></p>
-              <p class="source-rel-line"><span class="source-rel-from is-doc">Procedures and prior incidents</span><span class="source-rel-arrow" aria-hidden="true">→</span><span class="source-rel-to is-doc">investigation context</span></p>
               <p class="source-rel-note">
-                Opening a case saves a window of telemetry for investigation. Procedures and prior incidents provide context for interpreting that evidence.
+                Opening a case saves a window of telemetry for investigation. The procedure for that alarm stays on the case.
               </p>
             </div>
             <div class="source-explorer" id="source-explorer" aria-live="polite"></div>
@@ -180,13 +179,12 @@
               <h3 id="source-preserve-title">What a saved snapshot preserves</h3>
               <p>
                 A saved snapshot retains the telemetry window captured for a case. Refreshing the dataset catalog does not replace that saved evidence.
-                Reference documents are browsable here, but the exact document version used by an investigation is not recorded.
               </p>
             </aside>
             <details class="source-maint" id="source-maint">
               <summary>Data maintenance</summary>
               <p class="source-maint-lede">
-                Manual catalog and index actions. They do not rewrite sealed snapshots, case reports, or recorded assessments.
+                Manual catalog actions. They do not rewrite sealed snapshots, case reports, or recorded assessments.
               </p>
               <div class="source-maint-grid" id="source-maint-actions"></div>
               <p class="source-maint-status" id="source-maint-status" hidden></p>
@@ -222,8 +220,8 @@
             <p class="lede" id="alarm-lede"></p>
             <dl class="case-facts" id="case-meta"></dl>
             <p class="case-filed" id="case-filed" hidden>
-              <span id="case-filed-copy">In the library. Command not sent.</span>
-              <button type="button" class="text-btn" id="open-closeout-case">Read close-out</button>
+              <span id="case-filed-copy">Recorded with this case. Command not sent.</span>
+              <button type="button" class="text-btn" id="open-closeout-case">Read report</button>
             </p>
             <p class="case-next" id="case-next" hidden></p>
           </header>
@@ -285,49 +283,7 @@
                   <p class="lede" id="filed-action-sub">Saved with this case. ORBIT did not uplink a command. Recording does not confirm that the physical anomaly is resolved.</p>
                   <p class="fb-badge" id="filed-feedback-badge" hidden></p>
                   <blockquote class="operator-note" id="operator-note" hidden></blockquote>
-                  <button type="button" class="text-btn" id="open-closeout">Read full close-out</button>
-                </div>
-              </section>
-
-              
-
-              <section class="panel evidence-bundle knowledge-bundle is-collapsed" id="knowledge">
-                <button type="button" class="evidence-toggle" id="knowledge-toggle" aria-expanded="false" aria-controls="knowledge-panels">
-                  <span class="evidence-toggle-main">
-                    <span class="panel-kicker">Library</span>
-                    <span class="evidence-toggle-title" id="knowledge-toggle-title">Procedures and prior incidents</span>
-                  </span>
-                  <span class="evidence-toggle-meta">
-                    <span class="evidence-toggle-state" id="knowledge-toggle-state">Show</span>
-                    <span class="evidence-chevron" aria-hidden="true"></span>
-                  </span>
-                </button>
-                <div class="evidence-panels" id="knowledge-panels">
-                  <section class="panel evidence-panel knowledge-panel">
-                    <p class="hint">Documents cited by this investigation, plus related search results. Related is ranked by similarity, not support.</p>
-                    <form class="knowledge-search" id="knowledge-form">
-                      <label class="sr-only" for="knowledge-q">Search procedures and priors</label>
-                      <svg class="lib-ico" viewBox="0 0 16 16" aria-hidden="true">
-                        <circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.5" />
-                        <path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                      </svg>
-                      <input id="knowledge-q" name="q" type="search" placeholder="Search procedures, priors, close-outs…" autocomplete="off" />
-                      <span class="kbd" id="knowledge-kbd">/</span>
-                      <button type="button" class="lib-clear" id="knowledge-clear" aria-label="Clear search" hidden>×</button>
-                    </form>
-                    <p class="knowledge-status" id="knowledge-status"></p>
-                    <div class="knowledge-list" id="knowledge-list"></div>
-                    <article class="knowledge-reader" id="knowledge-reader" hidden>
-                      <button type="button" class="text-btn" id="knowledge-reader-close">Close document</button>
-                      <header class="knowledge-reader-head">
-                        <p class="eyebrow" id="reader-kind"></p>
-                        <h2 id="reader-title"></h2>
-                        <p class="knowledge-reader-why" id="reader-why"></p>
-                        <div class="knowledge-reader-actions" id="reader-actions"></div>
-                      </header>
-                      <div class="reader-body md" id="reader-body"></div>
-                    </article>
-                  </section>
+                  <button type="button" class="text-btn" id="open-closeout">Read report</button>
                 </div>
               </section>
 
@@ -368,7 +324,7 @@
                       </dl>
                       <p class="hint">Step status reflects evidence in this case. The final step is a human command.</p>
                       <ol class="proc" id="proc"></ol>
-                      <button type="button" class="text-btn" id="open-proc">Read full procedure</button>
+                      <button type="button" class="text-btn" id="open-proc">Show procedure</button>
                     </article>
                   </section>
                 </div>
@@ -507,18 +463,6 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=pin91" type="module"></script>
-
-    <div class="slip-wrap" id="doc-slip" hidden>
-      <div class="slip doc-slip" role="dialog" aria-modal="true" aria-labelledby="doc-slip-title">
-        <div class="doc-slip-body">
-          <button type="button" class="text-btn" id="doc-slip-close">Close</button>
-          <p class="eyebrow" id="doc-slip-kind"></p>
-          <h2 id="doc-slip-title"></h2>
-          <p class="knowledge-reader-why" id="doc-slip-why"></p>
-          <div class="reader-body md" id="doc-slip-body"></div>
-        </div>
-      </div>
-    </div>
+    <script src="/static/app.js?v=pin92" type="module"></script>
   </body>
 </html>

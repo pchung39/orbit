@@ -36,7 +36,7 @@ Rules:
 - Follow procedure EPS-17: confirm the voltage warn, list commands in the prior
   10 minutes, read each load that just turned on, compare to healthy range,
   do not close on a coincidental SCIENCE_MODE without checking heater current,
-  search for a similar incident.
+  then read the similar prior with get_doc (INC-0187, INC-0191, or INC-0162).
 - A payload mode change in the same window is a confounder, not automatic proof.
 - If no load meets the procedure's ≥2× threshold, omit ## Hypothesis. Write
   ## What is ruled out and ## What would change this. Do not recommend inhibit
@@ -96,17 +96,8 @@ TOOL_PARAMS = [
         },
     },
     {
-        "name": "search_docs",
-        "description": "Semantic search over procedures and incidents. Returns id, kind, title, score.",
-        "parameters": {
-            "type": "object",
-            "properties": {"query": {"type": "string"}},
-            "required": ["query"],
-        },
-    },
-    {
         "name": "get_doc",
-        "description": "Fetch a procedure or incident by id (EPS-17, INC-0187).",
+        "description": "Read one procedure or prior incident by id (EPS-17, INC-0187).",
         "parameters": {
             "type": "object",
             "properties": {"doc_id": {"type": "string"}},
@@ -170,8 +161,6 @@ def dispatch(tools: Tools, name: str, args: dict[str, Any]) -> Any:
         return public_row(tools.sample_at_clock(args["run_id"], args["channel"], args["clock"]))
     if name == "channel_meta":
         return tools.channel_meta(args["channel"])
-    if name == "search_docs":
-        return tools.search_docs(args["query"])
     if name == "get_doc":
         row = tools.get_doc(args["doc_id"])
         if row is None:
