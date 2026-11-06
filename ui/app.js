@@ -1031,6 +1031,12 @@ function renderLeadFinding(block) {
   </article>`;
 }
 
+function evTimeCell(clockTime, pinTs, pinId, on) {
+  if (!clockTime) return `<td class="ev-time"></td>`;
+  if (pinTs == null) return `<td class="ev-time"><span class="ev-clock">${clockTime}</span></td>`;
+  return `<td class="ev-time"><button type="button" class="ev-clock" data-t="${pinTs}" data-pin-id="${pinId}" aria-pressed="${on}" title="Show ${clockTime} on the telemetry charts">${clockTime}</button></td>`;
+}
+
 function renderTimelineFinding(block) {
   const items = parseNumbered(block);
   const rows = items
@@ -1039,37 +1045,53 @@ function renderTimelineFinding(block) {
       const kind = itemKind(text, tags);
       const rowId = `ev:${item.n}`;
       const pinTs = timelinePinTime(text, item.kids);
-      const pin = pinTs != null ? ` data-t="${pinTs}" data-pin-id="${rowId}"` : "";
-      const on = isEvPinned(rowId) ? " is-on" : "";
+      const on = isEvPinned(rowId);
+      const clockTime = firstClock(text) || firstClock(item.kids[0] || "") || (pinTs != null ? clock(pinTs) : "");
+      const timed = pinTs != null;
+      const rowPin = timed ? ` data-t="${pinTs}" data-pin-id="${rowId}"` : "";
+      const cls = ["ev-row", `ev-${kind}`, timed ? "is-timed" : "", on ? "is-on" : "", item.kids.length ? "has-kids" : ""]
+        .filter(Boolean)
+        .join(" ");
+      const main = `<tr class="${cls}"${rowPin}>
+        ${evTimeCell(clockTime, pinTs, rowId, on)}
+        <td class="ev-finding">${inlineMd(text)}</td>
+        <td class="ev-source">${tagsHtml(tags)}</td>
+      </tr>`;
       const kids = item.kids
         .map((kid, kidIdx) => {
           const parsed = parseKid(kid);
           const kidId = `${rowId}:kid:${kidIdx}`;
           const kidTs = parsed.clock ? resolvePinTime(parsed.clock) : null;
+          const kidOn = isEvPinned(kidId);
+          const kidCls = ["ev-row", "ev-sub", kidTs != null ? "is-timed" : "", kidOn ? "is-on" : "", kidIdx === item.kids.length - 1 ? "is-last-sub" : ""]
+            .filter(Boolean)
+            .join(" ");
           const kidPin = kidTs != null ? ` data-t="${kidTs}" data-pin-id="${kidId}"` : "";
-          const kidOn = isEvPinned(kidId) ? " is-on" : "";
-          return `<button type="button" class="ev-kid${kidOn}"${kidPin}>
-            <span class="ev-clock">${parsed.clock || ""}</span>
-            <span>${parsed.html}</span>
-          </button>`;
+          return `<tr class="${kidCls}"${kidPin}>
+            ${evTimeCell(parsed.clock, kidTs, kidId, kidOn)}
+            <td class="ev-finding"><span class="ev-sub-mark" aria-hidden="true">↳</span>${parsed.html}</td>
+            <td class="ev-source"></td>
+          </tr>`;
         })
         .join("");
-      const clockTime = firstClock(text) || firstClock(item.kids[0] || "") || (pinTs != null ? clock(pinTs) : "");
-      return `<li class="ev-item ev-${kind}${on}">
-        <button type="button" class="ev-main${on}"${pin}>
-          <span class="ev-n">${String(item.n).padStart(2, "0")}</span>
-          <span class="ev-clock">${clockTime || ""}</span>
-          <span class="ev-copy">${inlineMd(text)}</span>
-          <span class="ev-tags">${tagsHtml(tags)}</span>
-        </button>
-        ${kids ? `<div class="ev-kids">${kids}</div>` : ""}
-      </li>`;
+      return main + kids;
     })
     .join("");
   return `<article class="finding evidence">
     <h3>Event timeline</h3>
-    <p class="hint">Select a row to pin that time on the evidence snapshot.</p>
-    <ol class="ev">${rows}</ol>
+    <p class="hint">Select a row with a time to show that moment on the telemetry charts.</p>
+    <div class="ev-wrap">
+      <table class="ev-table">
+        <thead>
+          <tr>
+            <th scope="col" class="ev-time">Time</th>
+            <th scope="col" class="ev-finding">Finding</th>
+            <th scope="col" class="ev-source">Source</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
   </article>`;
 }
 

@@ -23,8 +23,7 @@ body.view-case .stage { background: var(--void); }
 #case-desk .card .k,
 #case-desk .trace-head h3,
 #case-desk .prov-ref-label,
-#case-desk .result-beat-n,
-#case-desk .ev-n {
+#case-desk .result-beat-n {
   font-family: var(--sans);
   text-transform: none;
   letter-spacing: 0;
@@ -519,131 +518,134 @@ body.is-filed #case-desk #action.panel-decide {
 #case-desk .finding { padding: 18px 0 4px; }
 #case-desk .finding:first-child { padding-top: 0; }
 #case-desk .finding h3 { font-size: 15px; font-weight: 600; }
-/* Event timeline: a rail with tone-coloured nodes and tinted event cards */
+/* Event timeline as a table: time, finding, source. Rows with a time
+   pin that moment on the telemetry charts; the pinned row takes the
+   chart pin colour. Every cell sits on the first-line baseline. */
 #case-desk .finding.evidence > h3 { font-size: 16px; }
-#case-desk .ev {
-  display: grid;
-  gap: 4px;
-  margin-top: 16px;
+#case-desk .ev-wrap { margin-top: 14px; }
+#case-desk .ev-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 14px;
+  line-height: 1.6;
 }
-#case-desk .ev-item {
-  --ev: var(--observed);
-  position: relative;
-  margin: 0;
-  padding-left: 46px;
-  border-left: 0;
+#case-desk .ev-table th,
+#case-desk .ev-table td {
+  display: table-cell;
+  padding: 13px 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: baseline;
 }
-#case-desk .ev-item + .ev-item { margin-top: 0; }
-#case-desk .ev-warn { --ev: var(--warn); }
-#case-desk .ev-derived { --ev: var(--derived); }
-#case-desk .ev-documented { --ev: var(--documented); }
-#case-desk .ev-item::before {
-  content: "";
-  position: absolute;
-  left: 15px;
-  top: 0;
-  bottom: -4px;
-  width: 2px;
-  background: linear-gradient(var(--ev), color-mix(in srgb, var(--ev) 25%, var(--line)));
-  opacity: 0.5;
-}
-#case-desk .ev-item:first-child::before { top: 16px; }
-#case-desk .ev-item:last-child::before { bottom: auto; height: 16px; }
-#case-desk .ev-item:only-child::before { display: none; }
-#case-desk .ev-main {
-  grid-template-columns: minmax(0, 1fr) auto;
-  grid-template-areas: "clock tags" "copy copy";
-  gap: 8px 12px;
-  align-items: center;
-  padding: 10px 14px 12px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  transition: background 0.15s ease;
-}
-#case-desk .ev-main:hover { background: var(--surface-2); }
-#case-desk .ev-main.is-on,
-#case-desk .ev-item.is-on .ev-main {
-  background: var(--surface-2);
-  box-shadow: none;
-}
-#case-desk .ev-n {
-  position: absolute;
-  left: 0;
-  top: 6px;
-  display: grid;
-  place-items: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: 50%;
-  font-size: 11.5px;
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-  color: var(--ev);
-  background: var(--surface);
-  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--ev) 55%, transparent), 0 0 0 4px var(--surface);
-}
-#case-desk .ev-warn .ev-n {
-  color: #fff;
-  background: var(--warn);
-  box-shadow: 0 0 0 4px var(--surface), 0 0 0 8px color-mix(in srgb, var(--warn) 22%, transparent);
-}
-#case-desk .ev-main .ev-clock {
-  grid-area: clock;
-  justify-self: start;
-  padding: 2px 9px;
-  border-radius: 999px;
+#case-desk .ev-table th:first-child,
+#case-desk .ev-table td:first-child { padding-left: 14px; }
+#case-desk .ev-table th:last-child,
+#case-desk .ev-table td:last-child { padding-right: 14px; }
+#case-desk .ev-table thead th {
+  padding-top: 0;
+  padding-bottom: 9px;
+  font-family: var(--sans);
   font-size: 12px;
   font-weight: 600;
-  color: var(--ev);
-  background: color-mix(in srgb, var(--ev) 14%, transparent);
+  line-height: 1.4;
+  white-space: nowrap;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-3);
+  border-bottom-color: var(--line-2);
 }
-#case-desk .ev-main .ev-clock:empty { display: none; }
-#case-desk .ev-main.is-on .ev-clock { color: var(--ev); }
-#case-desk .ev-copy {
-  grid-area: copy;
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--text);
-}
-#case-desk .ev-tags { grid-area: tags; justify-self: end; justify-content: flex-end; padding: 0; }
-#case-desk .ev-copy code { border-radius: 5px; }
-#case-desk .ev-item.is-on .ev-n { color: #fff; background: var(--ev); }
-#case-desk .ev-kids {
-  display: grid;
-  gap: 4px;
-  margin: 8px 0 0;
-  padding: 0 0 0 16px;
-  border-left: 2px dashed color-mix(in srgb, var(--ev) 30%, var(--line));
-  margin-left: 16px;
-}
-#case-desk .ev-kid {
-  position: relative;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-  padding: 6px 12px;
-  border-radius: 8px;
+#case-desk .ev-table .ev-time { width: 96px; }
+#case-desk .ev-table .ev-source { width: 196px; }
+
+#case-desk .ev-row td { transition: background 0.15s ease; }
+#case-desk .ev-row.is-timed { cursor: pointer; }
+#case-desk .ev-row.is-timed:hover td { background: var(--surface-2); }
+#case-desk .ev-row.is-on td { background: color-mix(in srgb, var(--signal) 7%, transparent); }
+#case-desk .ev-row.is-on td:first-child { box-shadow: inset 2px 0 0 var(--signal); }
+
+#case-desk .ev-time .ev-clock {
+  display: inline;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: none;
+  font-family: var(--mono);
   font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: inherit;
   color: var(--text-2);
-  background: transparent;
+  cursor: inherit;
 }
-#case-desk .ev-kid::before {
-  content: "";
-  position: absolute;
-  left: -22px;
-  top: 50%;
-  width: 8px;
-  height: 8px;
-  margin-top: -4px;
-  border-radius: 50%;
-  background: var(--ev);
-  box-shadow: 0 0 0 3px var(--surface);
+#case-desk .ev-time button.ev-clock { text-decoration: underline dotted transparent; text-underline-offset: 3px; }
+#case-desk .ev-row.is-timed:hover button.ev-clock { color: var(--text); text-decoration-color: var(--text-3); }
+#case-desk .ev-time button.ev-clock:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+  border-radius: 3px;
 }
-#case-desk .ev-kid:hover,
-#case-desk .ev-kid.is-on { background: var(--surface-2); box-shadow: none; }
-#case-desk .ev-kid .ev-clock { font-size: 12px; font-weight: 600; color: var(--text-3); }
+#case-desk .ev-warn .ev-time .ev-clock { color: var(--warn); font-weight: 600; }
+#case-desk .ev-row.is-on .ev-time .ev-clock { color: var(--signal); font-weight: 600; }
+
+#case-desk td.ev-finding {
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+#case-desk td.ev-finding strong { font-weight: 600; }
+#case-desk td.ev-finding code { border-radius: 4px; }
+#case-desk td.ev-source { white-space: nowrap; }
+#case-desk td.ev-source .tag { margin: 0 4px 0 0; vertical-align: baseline; }
+
+/* Command sub-rows sit under their finding, without their own rule above. */
+#case-desk .ev-row.has-kids td { border-bottom-color: transparent; padding-bottom: 6px; }
+#case-desk .ev-sub td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  border-bottom-color: transparent;
+  font-size: 13px;
+  line-height: 1.5;
+}
+#case-desk .ev-sub.is-last-sub td { padding-bottom: 13px; border-bottom-color: var(--line); }
+#case-desk .ev-sub .ev-time .ev-clock { font-size: 12px; color: var(--text-3); }
+#case-desk .ev-sub td.ev-finding { color: var(--text-2); }
+#case-desk .ev-sub-mark { margin-right: 8px; color: var(--text-3); }
+
+@media (max-width: 720px) {
+  #case-desk .ev-table,
+  #case-desk .ev-table tbody,
+  #case-desk .ev-table tr,
+  #case-desk .ev-table td { display: block; width: auto; }
+  #case-desk .ev-table thead { display: none; }
+  #case-desk .ev-table tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "time tags" "copy copy";
+    align-items: baseline;
+    gap: 4px 10px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  #case-desk .ev-table td { padding: 0; border: 0; }
+  #case-desk .ev-table td:first-child { padding-left: 0; }
+  #case-desk td.ev-time { grid-area: time; }
+  #case-desk td.ev-source { grid-area: tags; justify-self: end; }
+  #case-desk td.ev-finding { grid-area: copy; }
+  #case-desk .ev-row.has-kids { border-bottom-color: transparent; padding-bottom: 4px; }
+  #case-desk .ev-sub {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas: "time copy";
+    padding: 2px 14px 2px 28px;
+    border-bottom-color: transparent;
+  }
+  #case-desk .ev-sub.is-last-sub { padding-bottom: 12px; border-bottom-color: var(--line); }
+  #case-desk .ev-sub td.ev-source { display: none; }
+  #case-desk .ev-row.is-on td { background: none; }
+  #case-desk .ev-row.is-on { background: color-mix(in srgb, var(--signal) 7%, transparent); box-shadow: inset 2px 0 0 var(--signal); }
+  #case-desk .ev-row.is-on td:first-child { box-shadow: none; }
+}
 #case-desk .investigation-synth,
 #case-desk .investigation-progress {
   border: 0;
