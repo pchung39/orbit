@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/landing.css?v=34" />
+    <link rel="stylesheet" href="/static/landing.css?v=36" />
   </head>
 
   <body>
@@ -50,9 +50,9 @@
               <p class="eyebrow">ORBIT · Spacecraft anomaly investigation</p>
               <h1 class="hero-title" id="hero-t">From spacecraft alarm to a decision you can explain.</h1>
               <p class="lede">
-                ORBIT brings telemetry, command history, procedures, and prior incidents into one
-                reviewable case. It helps operators assess what happened, examine the evidence, and
-                decide what to do next—including when to hold for more information.
+                ORBIT seals a telemetry window for the case, reads the named procedure and prior,
+                and builds a reviewable recommendation. Operators assess what happened, examine the
+                evidence, and decide what to do next—including when to hold for more information.
               </p>
               <p class="byline">
                 Designed and built by
@@ -195,15 +195,15 @@
               <li class="step">
                 <span class="step-n" aria-hidden="true">01</span>
                 <div>
-                  <h3>Preserve the evidence</h3>
-                  <p>Save a fixed window of telemetry and events so the investigation can be reviewed against the same inputs later.</p>
+                  <h3>Seal the window</h3>
+                  <p>Cut a fixed window from the archive tape and write it with the case. Later review reads that sealed file, not a live archive query.</p>
                 </div>
               </li>
               <li class="step">
                 <span class="step-n" aria-hidden="true">02</span>
                 <div>
-                  <h3>Assess it in context</h3>
-                  <p>Use procedures and prior incidents to interpret the measurements and assess whether they support a recommendation.</p>
+                  <h3>Read the named procedure</h3>
+                  <p>Fetch the one procedure that governs this alarm, and the one prior the report cites. ORBIT does not keep a searchable document library.</p>
                 </div>
               </li>
               <li class="step">
@@ -218,13 +218,13 @@
             <div class="ai-fit">
               <h3 id="ai-fit-t">Where the AI fits</h3>
               <p>
-                In this workflow, the investigator decides what evidence to examine, uses tools to
-                retrieve or calculate it, and assesses whether the results support a conclusion.
+                The investigator decides what to sample from the sealed tape, which named document
+                to read, and whether those results meet the procedure’s threshold for a recommendation.
               </p>
               <p>
-                ORBIT’s browser demo uses a rules-based investigator to establish repeatable
-                reference behavior. Experimental LLM providers are available separately through the
-                command line. The published evaluation results cover the rules-based provider.
+                The browser demo uses a rules-based investigator so the reference behavior is
+                repeatable. Experimental LLM providers are available on the command line. Published
+                evaluation results cover the rules-based provider only.
               </p>
             </div>
           </div>
@@ -246,7 +246,7 @@
                 <span class="tagchip tag-observed">Observed</span>
                 <div>
                   <p class="report-claim">Command <code>HEATER_B_ENABLE</code> at 14:29:45.</p>
-                  <p class="report-src">Command log · sealed case evidence</p>
+                  <p class="report-src">Command log · sealed window file</p>
                 </div>
               </div>
               <div class="report-row">

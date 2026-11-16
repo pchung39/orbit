@@ -15,8 +15,8 @@
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   >
-  <link rel="stylesheet" href="/static/landing.css?v=35">
-  <link rel="stylesheet" href="/static/about.css?v=5">
+  <link rel="stylesheet" href="/static/landing.css?v=36">
+  <link rel="stylesheet" href="/static/about.css?v=6">
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -33,18 +33,19 @@
           <span class="brand-text"><b>Orbit</b></span>
         </a>
         <div class="topbar-actions">
-          <a class="link-desk is-on" href="/about">About Orbit</a>
-          <a class="link-desk" href="/app">Desk →</a>
+          <a class="link-desk is-on" href="/about">Design decisions</a>
+          <a class="nav-link" href="https://github.com/pchung39/orbit" rel="noopener noreferrer" target="_blank">Source</a>
+          <a class="link-desk" href="/app">Explore demo</a>
         </div>
       </header>
 
       <article class="about">
         <header class="mast">
-          <p class="kicker">About ORBIT</p>
+          <p class="kicker">Design decisions</p>
           <h1>Spacecraft anomaly investigation, with evidence you can review.</h1>
-          <p class="dek">ORBIT brings telemetry, command history, procedures, and prior incidents into one investigation record. It helps an operator assess a possible cause, review the supporting evidence, and decide what to do next—including when to hold for more information.</p>
+          <p class="dek">ORBIT seals a telemetry window for each case, reads the named procedure and prior, and builds a reviewable recommendation. An operator assesses a possible cause, examines the evidence, and decides what to do next—including when to hold for more information.</p>
           <p class="dek">I built ORBIT to explore a product question: what would make AI-assisted investigation useful to an operator and credible to the people reviewing the decision?</p>
-          <p class="scope"><b>Current scope.</b> A prototype using five simulated spacecraft scenarios. The browser demo runs a rules-based investigator. Experimental LLM providers are available through the command line. No flight data or operator-pilot results are claimed.</p>
+          <p class="scope"><b>Current scope.</b> A prototype using five simulated spacecraft scenarios. Postgres holds only the case log; tapes and procedures stay as files. The browser demo runs a rules-based investigator. Experimental LLM providers are available on the command line. No flight data or operator-pilot results are claimed.</p>
           <p class="meta"><a href="/app">Open the desk</a> · <a href="/app/trust">Inspect the evaluations</a> · <a href="https://github.com/pchung39/orbit">View the source</a></p>
         </header>
 
@@ -130,13 +131,13 @@
   <div class="body">
     <h2>How an investigation works</h2>
     <ol class="steps">
-      <li><span class="k">01</span><span><b>Preserve the evidence.</b> When a case opens, ORBIT saves a fixed window of telemetry and events. The investigation works from that snapshot, so the original evidence remains available for review.</span></li>
-      <li><span class="k">02</span><span><b>Apply the relevant context.</b> The investigator uses procedures and prior incidents to interpret the measurements. Procedure thresholds provide explicit criteria for evaluating a recommendation.</span></li>
+      <li><span class="k">01</span><span><b>Seal the window.</b> When a case opens, ORBIT cuts a fixed window from the archive tape and writes it as a sealed file. The investigation reads that file, so later review sees the same evidence.</span></li>
+      <li><span class="k">02</span><span><b>Fetch the named procedure.</b> The investigator reads the one procedure that governs this alarm (for example EPS-17) and the one prior the report cites. Procedure thresholds are the criteria for a recommendation.</span></li>
       <li><span class="k">03</span><span><b>Separate facts from explanations.</b> The report identifies what was observed, what was calculated, what a document says, and what remains a hypothesis.</span></li>
       <li><span class="k">04</span><span><b>Recommend a next step—or a hold.</b> The case records a proposed action or explains why the available evidence does not support one. An operator reviews the result. ORBIT cannot send spacecraft commands.</span></li>
     </ol>
     <figure class="fig-wide">
-      <svg viewBox="0 0 720 300" role="img" aria-label="Flow: freeze a window of evidence, ground it in procedure and priors, write a tagged report, recommend or hold, then stop before the human command.">
+      <svg viewBox="0 0 720 300" role="img" aria-label="Flow: seal a window file, read the named procedure and prior, write a tagged report, recommend or hold, then stop before the human command.">
         <defs><style>
           .nd{fill:none;stroke:var(--ink);stroke-width:1.5}
           .nt{font-family:var(--mono);font-size:11.5px;fill:var(--ink)}
@@ -148,19 +149,19 @@
         </defs>
         <text class="ns" x="0" y="12">upstream mission archive · stays upstream</text>
         <rect class="nd" x="0" y="22" width="150" height="52" stroke-dasharray="4 4"/>
-        <text class="nt" x="12" y="44">full orbit tape</text>
+        <text class="nt" x="12" y="44">archive tape CSV</text>
         <text class="ns" x="12" y="60">not queried live</text>
         <path class="ar" d="M150 48 L196 48" marker-end="url(#a)"/>
         <rect class="nd" x="200" y="22" width="150" height="52"/>
-        <text class="nt" x="212" y="44">1 · freeze window</text>
-        <text class="ns" x="212" y="60">warn ± 8 min</text>
+        <text class="nt" x="212" y="44">1 · seal window</text>
+        <text class="ns" x="212" y="60">runs/sealed/*.csv</text>
         <path class="ar" d="M275 74 L275 106" marker-end="url(#a)"/>
         <rect class="nd" x="200" y="110" width="150" height="52"/>
-        <text class="nt" x="212" y="132">2 · ground it</text>
+        <text class="nt" x="212" y="132">2 · named docs</text>
         <text class="ns" x="212" y="148">EPS-17 · INC-0187</text>
         <rect class="nd" x="0" y="110" width="150" height="52" stroke-dasharray="4 4"/>
-        <text class="nt" x="12" y="132">local index</text>
-        <text class="ns" x="12" y="148">procedures · closes</text>
+        <text class="nt" x="12" y="132">procedure book</text>
+        <text class="ns" x="12" y="148">files · fetched by id</text>
         <path class="ar" d="M150 136 L196 136" marker-end="url(#a)"/>
         <path class="ar" d="M275 162 L275 194" marker-end="url(#a)"/>
         <rect class="nd" x="200" y="198" width="150" height="66"/>
@@ -180,11 +181,11 @@
         <text class="ns" x="622" y="256" fill="var(--held)">human keystroke</text>
         <path class="ar" d="M560 231 L608 231" marker-end="url(#a)" stroke="var(--held)" stroke-dasharray="4 4"/>
       </svg>
-      <figcaption>The investigation works from a saved snapshot. ORBIT stops before the uplink. An operator reviews the result; the system cannot send spacecraft commands.</figcaption>
+      <figcaption>The investigation works from a sealed window file and named documents. ORBIT stops before the uplink. An operator reviews the result; the system cannot send spacecraft commands.</figcaption>
     </figure>
 
     <h3>Where the AI fits</h3>
-    <p>The agentic problem is deciding what evidence to seek, which tools to use, and whether the results justify a conclusion. The tools retrieve or calculate evidence; the model’s role is to use that evidence to guide an investigation.</p>
+    <p>The agentic problem is deciding what to sample from the sealed tape, which named document to read, and whether those results meet the procedure’s threshold. The tools retrieve or calculate evidence; the model’s role is to use that evidence to guide an investigation.</p>
     <p>ORBIT separates the investigation workflow from the provider that performs it. The browser demo uses explicit rules to establish repeatable reference behavior. Separate LLM providers support command-line experiments with model-assisted investigation.</p>
     <p>The published evaluation results below cover the rules-based provider. Running the model providers through the same checks is a next step. The current score does not establish model reliability.</p>
   </div>
@@ -195,7 +196,7 @@
   <div class="rail"><b>Ontology</b>What the record knows</div>
   <div class="body">
     <h2>ORBIT’s working ontology</h2>
-    <p>ORBIT is built around a small, explicit set of kinds. The ontology is not a formal knowledge graph. It is the shared vocabulary that keeps telemetry, documents, claims, and decisions from collapsing into one undifferentiated narrative.</p>
+    <p>ORBIT is built around a small, explicit set of kinds. The ontology is not a formal knowledge graph. It is the shared vocabulary that keeps telemetry, procedures, claims, and decisions from collapsing into one undifferentiated narrative.</p>
     <p>If two statements look similar in prose, the ontology still asks: what kind of thing is being asserted, what evidence object supports it, and what decision object it is allowed to change?</p>
 
     <h3>Mission world</h3>
@@ -213,12 +214,12 @@
     <p>ORBIT distinguishes the upstream archive from the evidence attached to a case. That distinction is what makes later review possible.</p>
     <table class="score">
       <tr><th>Kind</th><th>Role in ORBIT</th></tr>
-      <tr><td>Archive tape</td><td>An upstream telemetry dataset. It remains outside the case unless a window is sealed from it.</td></tr>
-      <tr><td>Sealed snapshot</td><td>The fixed window of telemetry and events preserved with a case. Investigation reads this package, not a live archive query.</td></tr>
+      <tr><td>Archive tape</td><td>An upstream telemetry CSV. It remains outside the case unless a window is sealed from it.</td></tr>
+      <tr><td>Sealed snapshot</td><td>The fixed window written to <code>runs/sealed/</code> with the case. Investigation reads this file, not a live archive query.</td></tr>
       <tr><td>Sample</td><td>A channel value at a time in the sealed window.</td></tr>
       <tr><td>Event / command</td><td>A discrete logged action or mode change used to establish sequence.</td></tr>
-      <tr><td>Procedure</td><td>An authored response document with explicit criteria, such as EPS-17’s ≥2× healthy-load bar.</td></tr>
-      <tr><td>Prior incident</td><td>A past close-out used as context. Similarity in search is not the same as applicability to this case.</td></tr>
+      <tr><td>Procedure</td><td>An authored response file with explicit criteria, such as EPS-17’s ≥2× healthy-load bar. Fetched by id for the case.</td></tr>
+      <tr><td>Prior incident</td><td>A past close-out file used as context when the report cites it by id. Being named is not the same as being applicable.</td></tr>
     </table>
 
     <h3>Investigation objects</h3>
@@ -257,8 +258,8 @@
         <text class="o-s" x="212" y="56">alarm · sealed snapshot</text>
         <text class="o-s" x="212" y="72">samples · events</text>
         <rect class="o-d" x="0" y="176" width="150" height="52"/>
-        <text class="o-t" x="12" y="198">procedures</text>
-        <text class="o-s" x="12" y="214">priors · index</text>
+        <text class="o-t" x="12" y="198">named docs</text>
+        <text class="o-s" x="12" y="214">procedure · prior</text>
         <path class="o-a" d="M150 202 L196 202 L196 120 L200 120" marker-end="url(#oa)"/>
         <path class="o-a" d="M285 96 L285 128" marker-end="url(#oa)"/>
         <rect class="o-b" x="200" y="132" width="170" height="66"/>
@@ -345,7 +346,9 @@
   <div class="body">
     <h2>The decisions behind the design</h2>
     <ul class="claims">
-      <li><span class="k">Reproducible</span><span><b>Keep each case reproducible.</b> Evidence is saved with the case. A reviewer can return to the same snapshot instead of relying on a changing archive query. If more evidence is needed, the case boundary must be revisited explicitly.</span></li>
+      <li><span class="k">Case log</span><span><b>Keep Postgres as a case log only.</b> Incidents and hypothesis feedback live in the database. Archive tapes, sealed windows, and procedures stay as files. ORBIT does not store a searchable document library or embeddings.</span></li>
+      <li><span class="k">Reproducible</span><span><b>Keep each case reproducible.</b> Opening a case writes a sealed window file. A reviewer returns to that file instead of relying on a changing archive query. If more evidence is needed, the case boundary must be revisited explicitly.</span></li>
+      <li><span class="k">Named docs</span><span><b>Fetch the procedure the case already names.</b> The investigator reads EPS-17, PAY-04, or EPS-09 by id, and the one prior the report cites. Similarity search over a document index is out of scope.</span></li>
       <li><span class="k">Thresholds</span><span><b>Take thresholds from procedures.</b> A model-generated explanation should not silently substitute a new threshold for the one specified in the procedure.</span></li>
       <li><span class="k">Hold</span><span><b>Make a hold a complete result.</b> When the evidence is insufficient, the report should state what is missing and avoid presenting a plausible cause as an established finding.</span></li>
       <li><span class="k">Case</span><span><b>Organize the work around a case.</b> Evidence, recommendations, and operator feedback belong in one persistent record that can be reviewed after the response window has passed.</span></li>
