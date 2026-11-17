@@ -10,9 +10,9 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=p2d" />
+    <link rel="stylesheet" href="/static/styles.css?v=p5c" />
     <link rel="stylesheet" href="/static/case.css?v=p4a" />
-    <link rel="stylesheet" href="/static/pages.css?v=p2e" />
+    <link rel="stylesheet" href="/static/pages.css?v=p5d" />
     <link rel="stylesheet" href="/static/sources.css?v=p4b" />
   </head>
   <body class="view-home">
@@ -53,7 +53,6 @@
         </button>
       </nav>
 
-      <section class="side-recent" id="side-recent" aria-label="Recent cases" hidden></section>
 
       <div class="side-foot">
         <a class="side-link" href="/about" title="About Orbit">
@@ -96,10 +95,7 @@
                   </div>
                 </div>
               </div>
-              <p class="home-craft-purpose">Investigate spacecraft anomalies.</p>
-              <p class="home-craft-desc">
-                Weigh telemetry, procedures, and prior incidents, preview each option in a simulator replay, and record a decision you can check.
-              </p>
+              <div class="home-status" id="home-status" aria-live="polite"></div>
             </div>
             <div class="home-craft-visual" aria-hidden="true">
               <svg class="home-orbit" viewBox="0 0 360 240" focusable="false">
@@ -357,7 +353,7 @@
     </div>
 
     <script src="/static/case.js?v=p4c"></script>
-    <script src="/static/sources.js?v=p4b"></script>
-    <script src="/static/app.js?v=p4a"></script>
+    <script src="/static/sources.js?v=p5c"></script>
+    <script src="/static/app.js?v=p5c"></script>
   </body>
 </html>

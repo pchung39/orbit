@@ -806,3 +806,41 @@ function bindHistoryAlarms() {
     }
   });
 }
+
+/* ══ Overview: mission status card ═══════════════════════════════════
+   Replaces the old tagline: how fresh the data is, latest readings, and
+   what needs attention. */
+
+const OV_LABEL = { "EPS.bus_voltage": "Bus voltage", "EPS.battery_voltage": "Battery", "THM.heater_b_current": "Heater B", "PAY.mode": "Payload" };
+
+async function loadHomeStatus() {
+  const root = $("home-status");
+  if (!root) return;
+  if (!state.overview) root.innerHTML = `<p class="hs-loading">Reading the latest telemetry…</p>`;
+  try {
+    const res = await fetch(apiUrl("/overview"));
+    if (!res.ok) throw new Error(`overview ${res.status}`);
+    state.overview = await res.json();
+  } catch (err) {
+    root.innerHTML = `<p class="hs-loading">Couldn't read the connected history: ${escapeHtml(err.message)}</p>`;
+    return;
+  }
+  renderHomeStatus();
+}
+
+function renderHomeStatus() {
+  const root = $("home-status");
+  const o = state.overview;
+  if (!root || !o) return;
+  const through = new Date(o.data_through).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC", hour12: false });
+  const reading = (r) => {
+    let v = r.value;
+    if (r.channel === "THM.heater_b_current") v = r.value > 0.3 ? `On · ${fmt(r.value, 2)} A` : "Off";
+    else if (r.channel === "PAY.mode") v = String(r.value).replace("_MODE", "").replace("SCIENCE", "Science").replace("STANDBY", "Standby");
+    else v = `${fmt(r.value, 2)} ${r.unit}`;
+    return `<div class="hs-read s-${r.state}"><span class="k">${escapeHtml(OV_LABEL[r.channel] || r.channel)}</span><span class="v">${escapeHtml(v)}</span>${r.state !== "nominal" ? `<span class="st">${r.state === "critical" ? "Critical" : "Past warn"}</span>` : ""}</div>`;
+  };
+  root.innerHTML = `
+    <p class="hs-fresh">Data through <b>${escapeHtml(through)} UTC</b> · ${escapeHtml(o.source.name.replace(/^Aurora-1 · /, ""))} <span class="hs-kind">${escapeHtml(o.source.kind)}</span>${o.source.synthetic ? ` <span class="hs-kind dummy">Dummy data</span>` : ""}</p>
+    <div class="hs-reads">${o.readings.map(reading).join("")}</div>`;
+}

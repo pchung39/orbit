@@ -850,30 +850,6 @@ function groupIncidentsByStage(rows) {
   })).filter((group) => group.items.length);
 }
 
-function renderSideRecent() {
-  const root = $("side-recent");
-  if (!root) return;
-  const recent = [...state.incidents]
-    .sort((a, b) => String(b.opened_at || "").localeCompare(String(a.opened_at || "")) || String(b.id).localeCompare(String(a.id)))
-    .slice(0, 6);
-  root.hidden = !recent.length;
-  if (!recent.length) {
-    root.innerHTML = "";
-    return;
-  }
-  const current = state.view === "case" ? state.incidentId : null;
-  root.innerHTML = `<p class="side-recent-label">Recent cases</p>${recent
-    .map((item) => {
-      const tone = item.status === "recommended" ? "ready" : item.status === "filed" ? "filed" : "open";
-      const on = item.id === current ? " is-on" : "";
-      return `<button type="button" class="side-case tone-${tone}${on}" data-open-case="${escapeHtml(item.id)}" title="${escapeHtml(`${item.id} · ${statusLabel(item.status)}`)}">
-        <i aria-hidden="true"></i>
-        <span class="side-case-id">${escapeHtml(item.id)}</span>
-        <span class="side-case-title">${escapeHtml(caseHeadline(item))}</span>
-      </button>`;
-    })
-    .join("")}`;
-}
 
 function renderIncidents() {
   const all = [...state.incidents];
@@ -881,7 +857,6 @@ function renderIncidents() {
   const rows = sortIncidents(filterIncidents(all));
 
   renderSideStages();
-  renderSideRecent();
 
   const hero = $("inc-head");
   if (hero) {
@@ -1410,7 +1385,6 @@ function setView(view) {
   $("tab-home")?.classList.toggle("is-on", view === "home");
   $("tab-sources")?.classList.toggle("is-on", view === "sources");
   renderSideStages();
-  renderSideRecent();
   const skip = $("skip");
   if (skip) {
     skip.href =
@@ -1562,11 +1536,6 @@ function renderHomeDesk() {
   const root = $("home-desk");
   if (!root) return;
   const all = state.incidents;
-  const inStage = (id) => all.filter((item) => STAGES.find((s) => s.id === id).statuses.includes(item.status || "open")).length;
-  const decideN = inStage("decide");
-  const watchN = inStage("watching");
-  const verifyN = inStage("verifying");
-  const closedN = inStage("closed");
   const rows = deskQueueItems(8);
   const list = rows.length
     ? rows
@@ -1586,19 +1555,7 @@ function renderHomeDesk() {
         .join("")
     : `<p class="home-desk-empty">No cases yet. Open a case from an alarm you already have.</p>`;
 
-  const stat = (filter, tone, n, label, note) => `
-    <button type="button" class="home-stat tone-${tone}" data-go-incidents="${filter}">
-      <span class="home-stat-label"><i aria-hidden="true"></i>${label}</span>
-      <span class="home-stat-n">${n}</span>
-      <span class="home-stat-note">${note}</span>
-    </button>`;
   root.innerHTML = `
-    <div class="home-stats">
-      ${stat("decide", "open", decideN, "Needs decision", decideN ? "Investigate or decide" : "Nothing waiting")}
-      ${stat("watching", "ready", watchN, "Watching", watchN ? "Held until the evidence clears a bar" : "No holds")}
-      ${stat("verifying", "filed", verifyN, "Verifying", verifyN ? "Decided; ready to close" : "Nothing to verify")}
-      ${stat("closed", "closed", closedN, "Closed", "Decisions on record")}
-    </div>
     <div class="home-queue">
       <div class="home-desk-head">
         <div>
@@ -1618,6 +1575,7 @@ function renderHomeDesk() {
 function renderHome() {
   renderHomeStart();
   renderHomeDesk();
+  loadHomeStatus();
 }
 
 async function loadDesk(runId) {
@@ -1718,10 +1676,6 @@ function bind() {
   });
   $("back-incidents").addEventListener("click", () => goIncidents());
   $("go-home-brand").addEventListener("click", () => goHome());
-  $("side-recent")?.addEventListener("click", (ev) => {
-    const btn = ev.target.closest("[data-open-case]");
-    if (btn) openIncident(btn.dataset.openCase);
-  });
   $("home").addEventListener("click", (ev) => {
     const goInc = ev.target.closest("[data-go-incidents]");
     if (goInc) {

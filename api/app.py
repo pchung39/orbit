@@ -361,6 +361,35 @@ def open_incident(body: IncidentIn) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
+@api.get("/overview")
+def overview() -> dict[str, Any]:
+    """Top of the Overview page: how fresh the data is, and the latest readings."""
+    from storage.connectors import active_config, load_history
+
+    spec = load_and_validate()
+    cfg = active_config()
+    tel, _cmds, info = load_history(cfg)
+    last = tel.iloc[-1]
+    readings = []
+    for ch in ("EPS.bus_voltage", "EPS.battery_voltage", "THM.heater_b_current", "PAY.mode"):
+        if ch not in tel:
+            continue
+        meta = spec["channels"][ch]
+        value = last[ch]
+        state = "nominal"
+        if ch != "PAY.mode" and value == value:
+            warn, crit, direction = meta.get("warn_limit"), meta.get("critical_limit"), meta.get("limit_direction")
+            past = (lambda lim: value < lim) if direction == "below" else (lambda lim: value > lim)
+            state = "critical" if crit is not None and past(crit) else "warn" if warn is not None and past(warn) else "nominal"
+        readings.append({"channel": ch, "value": value if ch == "PAY.mode" else round(float(value), 2),
+                         "unit": meta.get("unit"), "warn": meta.get("warn_limit"), "state": state})
+    return {
+        "source": {"name": cfg.name, "kind": info["kind"], "synthetic": info["synthetic"]},
+        "data_through": str(last["timestamp"]),
+        "readings": readings,
+    }
+
+
 @api.get("/history/alarms")
 def history_alarms() -> dict[str, Any]:
     """Alarm episodes found in the connected history, and any case already opened on each."""
