@@ -10,7 +10,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, FastAPI, HTTPException, Query
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -527,9 +527,12 @@ def decide(incident_id: str, body: DecideIn) -> dict[str, Any]:
                   "text": "No simulator recipe for this tape. The decision is recorded without a preview."}
     else:
         clears = option["result"] == "clears"
+        borderline = option["result"] == "borderline"
         step = (
             WATCH_STEP.get(family, "Watching. Hold until the evidence clears a procedure bar.")
             if body.option == "hold"
+            else "Too close to call in the forecast. After commanding, watch the alarm channel against the warn."
+            if borderline
             else VERIFY_STEP[(body.option, clears)]
         )
         verify = {
@@ -593,6 +596,169 @@ def file_open_incident(incident_id: str, body: FileIn | None = None) -> dict[str
         "incident": _incident_out(filed),
         "status": filed["status"],
     }
+
+
+@api.get("/sources")
+def sources() -> dict[str, Any]:
+    """Connected history and the power model learned from it."""
+    from model.eps import PARAM_LABELS, datasheet, model_report
+    from storage.archive_seed import DEMO_URL, demo_ready
+    from storage.history import source_summary
+
+    history = source_summary()
+    report = model_report()
+    return {
+        "history": history,
+        "model": report,
+        # Models learned before sources were tracked came from the built-in dummy CSV.
+        "model_stale": bool(report and report.get("source_stamp", "csv:builtin") != history["stamp"]),
+        "prior": datasheet().params,
+        "param_labels": {k: {"label": v[0], "unit": v[1]} for k, v in PARAM_LABELS.items()},
+        "demo_db": {"url": DEMO_URL, "ready": demo_ready()},
+    }
+
+
+class ProbeIn(BaseModel):
+    kind: str = Field(pattern="^(postgres|csv)$")
+    url: str | None = None
+    table: str | None = None
+    layout: str | None = None
+    time_col: str | None = None
+    channel_col: str | None = None
+    value_col: str | None = None
+    text_col: str | None = None
+    command_col: str | None = None
+
+
+def _csv_path(role: str) -> str:
+    from storage.connectors import UPLOAD_DIR
+
+    path = UPLOAD_DIR / f"{role}.csv"
+    if not path.exists():
+        raise HTTPException(400, f"upload a {role} CSV first")
+    return str(path)
+
+
+@api.post("/sources/test")
+def sources_test(body: ProbeIn) -> dict[str, Any]:
+    from storage.connectors import pg_test
+
+    if not body.url:
+        raise HTTPException(400, "url required")
+    return pg_test(body.url)
+
+
+@api.post("/sources/inspect")
+def sources_inspect(body: ProbeIn) -> dict[str, Any]:
+    from storage.connectors import pg_inspect
+
+    if body.kind != "postgres" or not body.url or not body.table:
+        raise HTTPException(400, "postgres url and table required")
+    try:
+        return pg_inspect(body.url, body.table)
+    except Exception as exc:
+        raise HTTPException(400, str(exc).splitlines()[0]) from exc
+
+
+@api.post("/sources/channels")
+def sources_channels(body: ProbeIn) -> dict[str, Any]:
+    """Every channel in the chosen table with its value range, and ORBIT's suggested mapping."""
+    from storage.connectors import csv_channel_stats, pg_channel_stats, suggest_channels
+
+    try:
+        if body.kind == "postgres":
+            stats = pg_channel_stats(body.url, body.table, body.layout, body.time_col,
+                                     body.channel_col, body.value_col, body.text_col)
+        else:
+            stats = csv_channel_stats(_csv_path("telemetry"), body.layout, body.time_col,
+                                      body.channel_col, body.value_col, body.text_col)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(400, str(exc).splitlines()[0]) from exc
+    return {"stats": stats, "suggestions": suggest_channels(stats)}
+
+
+@api.post("/sources/commands")
+def sources_commands(body: ProbeIn) -> dict[str, Any]:
+    from storage.connectors import ORBIT_COMMANDS, csv_command_names, pg_command_names, suggest_commands
+
+    try:
+        if body.kind == "postgres":
+            names = pg_command_names(body.url, body.table, body.command_col)
+        else:
+            names = csv_command_names(_csv_path("commands"), body.command_col)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(400, str(exc).splitlines()[0]) from exc
+    return {"commands": suggest_commands(names), "orbit_commands": ORBIT_COMMANDS}
+
+
+@api.post("/sources/upload")
+async def sources_upload(request: Request, role: str = Query(pattern="^(telemetry|commands)$")) -> dict[str, Any]:
+    """CSV fallback: the browser sends the file as the request body."""
+    from storage.connectors import save_upload
+
+    body = await request.body()
+    if not body:
+        raise HTTPException(400, "empty file")
+    try:
+        return save_upload(role, body)
+    except Exception as exc:
+        raise HTTPException(400, f"couldn't read that CSV: {str(exc).splitlines()[0]}") from exc
+
+
+class SaveSourceIn(BaseModel):
+    kind: str = Field(pattern="^(postgres|csv)$")
+    name: str
+    url: str | None = None
+    layout: str
+    table: str | None = None
+    time_col: str
+    channel_col: str | None = None
+    value_col: str | None = None
+    text_col: str | None = None
+    channels: dict[str, dict[str, Any]]
+    commands: dict[str, Any] = Field(default_factory=dict)
+    synthetic: bool = False
+
+
+@api.post("/sources/save")
+def sources_save(body: SaveSourceIn) -> dict[str, Any]:
+    """Make this the active history source. The model is not re-learned until asked."""
+    from storage.connectors import SourceConfig, load_history, save_config
+    from storage.history import source_summary
+
+    files = {}
+    if body.kind == "csv":
+        files = {"telemetry": _csv_path("telemetry")}
+        if body.commands.get("command_col"):
+            files["commands"] = _csv_path("commands")
+    cfg = SourceConfig(**body.model_dump(), files=files)
+    try:
+        load_history(cfg)  # fail now, not later, if the mapping can't be read
+    except Exception as exc:
+        raise HTTPException(400, f"couldn't load history with that mapping: {str(exc).splitlines()[0]}") from exc
+    save_config(cfg)
+    return {"history": source_summary()}
+
+
+@api.post("/sources/reset")
+def sources_reset() -> dict[str, Any]:
+    from storage.connectors import reset_to_dummy
+    from storage.history import source_summary
+
+    reset_to_dummy()
+    return {"history": source_summary()}
+
+
+@api.post("/model/calibrate")
+def calibrate_model() -> dict[str, Any]:
+    """Re-learn the power model from history. Takes a few seconds; nothing leaves this machine."""
+    from model.eps import calibrate
+
+    return {"model": calibrate()}
 
 
 @api.get("/runs")

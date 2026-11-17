@@ -308,7 +308,13 @@ body.view-home #incidents-desk,
 body.view-incidents #home,
 body.view-incidents #case-desk,
 body.view-case #home,
-body.view-case #incidents-desk { display: none; }
+body.view-case #incidents-desk,
+body.view-home #sources-desk,
+body.view-incidents #sources-desk,
+body.view-case #sources-desk,
+body.view-sources #home,
+body.view-sources #incidents-desk,
+body.view-sources #case-desk { display: none; }
 
 /* ── Buttons ────────────────────────────────────────────────── */
 .btn {

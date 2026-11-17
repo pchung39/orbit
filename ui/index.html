@@ -10,9 +10,10 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=p2b" />
-    <link rel="stylesheet" href="/static/case.css?v=p2b" />
-    <link rel="stylesheet" href="/static/pages.css?v=p2b" />
+    <link rel="stylesheet" href="/static/styles.css?v=p2d" />
+    <link rel="stylesheet" href="/static/case.css?v=p2d" />
+    <link rel="stylesheet" href="/static/pages.css?v=p2e" />
+    <link rel="stylesheet" href="/static/sources.css?v=p3a" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -45,6 +46,11 @@
           <button type="button" class="app-tab side-stage" data-stage="verifying" title="Verifying"><i class="stage-dot tone-signal" aria-hidden="true"></i><span class="side-label">Verifying</span><span class="n" data-stage-n="verifying"></span></button>
           <button type="button" class="app-tab side-stage" data-stage="closed" title="Closed"><i class="stage-dot tone-mute" aria-hidden="true"></i><span class="side-label">Closed</span><span class="n" data-stage-n="closed"></span></button>
         </div>
+        <p class="side-group">Setup</p>
+        <button type="button" class="app-tab" id="tab-sources" title="Sources">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><ellipse cx="8" cy="3.6" rx="5" ry="1.9" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3 3.6v8.6c0 1 2.2 1.9 5 1.9s5-.9 5-1.9V3.6M3 7.9c0 1 2.2 1.9 5 1.9s5-.9 5-1.9" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>
+          <span class="side-label">Sources</span>
+        </button>
       </nav>
 
       <section class="side-recent" id="side-recent" aria-label="Recent cases" hidden></section>
@@ -148,6 +154,8 @@
           </div>
         </section>
 
+        <section class="sources-desk" id="sources-desk" aria-label="Sources"></section>
+
         <div class="case-desk" id="case-desk">
           <section class="c-card case-head" id="case-head">
             <div class="case-crumb">
@@ -222,6 +230,7 @@
                 <p class="lede" id="decide-lede"></p>
               </div>
             </div>
+            <div class="conf" id="conf" hidden></div>
             <div class="options" id="options"></div>
             <div class="viz" id="viz-preview" hidden>
               <div class="viz-title"><span>What happens next</span><span class="legend" id="preview-legend"></span></div>
@@ -231,7 +240,7 @@
               <input id="decide-note" placeholder="Reason (optional). Becomes part of the case record." autocomplete="off" />
               <button type="button" class="btn" id="approve">Approve</button>
             </div>
-            <p class="guard">Approving records your decision and replays it in the simulator to verify. A real command still goes through your normal uplink process.</p>
+            <p class="guard">Approving records your decision and checks it against the model's forecast. A real command still goes through your normal uplink process.</p>
           </section>
 
           <section class="c-card verify" id="sec-verify" hidden>
@@ -345,7 +354,8 @@
       </div>
     </div>
 
-    <script src="/static/case.js?v=p2b"></script>
-    <script src="/static/app.js?v=p2b"></script>
+    <script src="/static/case.js?v=p2e"></script>
+    <script src="/static/sources.js?v=p3d"></script>
+    <script src="/static/app.js?v=p2d"></script>
   </body>
 </html>

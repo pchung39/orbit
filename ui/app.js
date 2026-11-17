@@ -1405,7 +1405,9 @@ function setView(view) {
   document.body.classList.toggle("view-home", view === "home");
   document.body.classList.toggle("view-incidents", view === "incidents");
   document.body.classList.toggle("view-case", view === "case");
+  document.body.classList.toggle("view-sources", view === "sources");
   $("tab-home")?.classList.toggle("is-on", view === "home");
+  $("tab-sources")?.classList.toggle("is-on", view === "sources");
   renderSideStages();
   renderSideRecent();
   const skip = $("skip");
@@ -1430,6 +1432,7 @@ let syncingFromHistory = false;
 
 function pathForView(view, incidentId = state.incidentId) {
   if (view === "incidents") return appPath("/incidents");
+  if (view === "sources") return appPath("/sources");
   if (view === "case" && incidentId) return appPath(`/incidents/${encodeURIComponent(incidentId)}`);
   return appPath();
 }
@@ -1460,6 +1463,7 @@ function parsePath(pathname) {
     return { view: "case", incidentId: decodeURIComponent(caseMatch[1]) };
   }
   if (path === "/incidents") return { view: "incidents", incidentId: null };
+  if (path === "/sources") return { view: "sources", incidentId: null };
   return { view: "home", incidentId: null };
 }
 
@@ -1475,6 +1479,9 @@ async function routeFromPath(pathname, { replace = false } = {}) {
       }
     } else if (view === "incidents") {
       enterIncidents();
+    } else if (view === "sources") {
+      enterSources();
+      loadSources();
     } else {
       enterHome();
     }
@@ -1851,6 +1858,7 @@ function bind() {
     else delete input.dataset.userEdited;
   });
   bindCase();
+  bindSources();
   document.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape" && !$("slip").hidden) closeSlip();
   });
