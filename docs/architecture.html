@@ -280,8 +280,8 @@
         <h1>The machine stops at a recommendation.</h1>
         <p class="lede">
           ORBIT does not detect the alarm and does not uplink a command.
-          Opening a case seals a time window from the archive into durable evidence.
-          The console assembles tape, tools, procedure, and a similar prior so a human can decide why — then files the close.
+          Opening a case writes a sealed window file from the archive tape.
+          The console assembles that tape, the named procedure, and a cited prior so a human can decide — then files the close.
         </p>
       </div>
 
@@ -306,21 +306,21 @@
         <div class="pair">
           <div class="cell">
             <p class="kicker" style="width:auto">ARCHIVE</p>
-            <p class="name">Telemetry catalog</p>
-            <p class="note">Demo-local full runs (fault1, eps204, …). Sync refreshes the catalog on demand — not a live downlink.</p>
+            <p class="name">Tape files</p>
+            <p class="note">Demo-local CSVs under <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">runs/</span> (fault1, eps204, …). Catalog refresh checks reachability — not a live downlink.</p>
           </div>
           <div class="cell">
-            <p class="kicker" style="width:auto">LIBRARY</p>
-            <p class="name">Search index</p>
-            <p class="note">Procedures and prior close-outs. Sync rebuilds local embeddings on publish — not a live docs feed.</p>
+            <p class="kicker" style="width:auto">PROCEDURES</p>
+            <p class="name">Named markdown files</p>
+            <p class="note">EPS-17, PAY-04, EPS-09 and authored priors under <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">procedures/</span> and <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">incidents/</span>. Fetched by id — no search index.</p>
           </div>
         </div>
 
         <div class="row">
           <p class="kicker">SEAL</p>
           <div class="body">
-            <p class="name">Open case → sealed evidence package</p>
-            <p class="note">Operator picks archive tape + alarm + time. Backend copies warn crossing (or clock) ± pad into a new <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">sealed_*</span> run. The archive stays outside the case.</p>
+            <p class="name">Open case → sealed window file</p>
+            <p class="note">Operator picks archive tape + alarm + time. Backend cuts warn crossing (or clock) ± pad into <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">runs/sealed/{id}.csv</span> plus a sidecar. The archive stays outside the case.</p>
           </div>
           <p class="tag">± pad</p>
         </div>
@@ -328,10 +328,10 @@
         <div class="row wash">
           <p class="kicker">STORE</p>
           <div class="body">
-            <p class="name">Postgres + pgvector</p>
-            <p class="note">Archive runs, sealed runs, incidents, documents. The investigator never reads files — only this store, through tools.</p>
+            <p class="name">Postgres case log</p>
+            <p class="note"><span style="font-family:'IBM Plex Mono',monospace;font-size:13px">incidents</span> and <span style="font-family:'IBM Plex Mono',monospace;font-size:13px">hypothesis_feedback</span> only. Telemetry and documents are not stored in the database.</p>
           </div>
-          <p class="tag">system of work</p>
+          <p class="tag">case log</p>
         </div>
 
         <div class="ai">
@@ -341,9 +341,9 @@
           </div>
           <div class="ai-grid">
             <div class="ai-card">
-              <p class="num">01 · EMBED</p>
-              <p class="name">Local retrieval</p>
-              <p class="note">BAAI/bge-small-en-v1.5 · 384-d via fastembed. Ingest embeds procedures and incidents into pgvector. Search is cosine. No paid API.</p>
+              <p class="num">01 · FILES</p>
+              <p class="name">Tape and named docs</p>
+              <p class="note">Tools read sealed CSVs and the one procedure or prior the case already names. No embeddings. No document search API.</p>
             </div>
             <div class="ai-card">
               <p class="num">02 · TOOLS</p>
@@ -353,10 +353,9 @@
                 <li>first_warn</li>
                 <li>events_before</li>
                 <li>get_doc</li>
-                <li>search_docs</li>
                 <li>channel_meta</li>
               </ul>
-              <p class="note">Every call is logged. Telemetry is OBSERVED. Documents are DOCUMENTED.</p>
+              <p class="note">Every call is logged. Telemetry is OBSERVED. Named docs are DOCUMENTED.</p>
             </div>
             <div class="ai-card">
               <p class="num">03 · INVESTIGATE</p>
@@ -370,7 +369,7 @@
           <p class="kicker">CONSOLE</p>
           <div class="body">
             <p class="name">FastAPI + instrument UI</p>
-            <p class="note">Overview (product brief + desk), incidents, investigation-first case with contextual knowledge, Trust Sources. Run investigation hits /investigate with rules only. The browser never calls Anthropic or OpenAI.</p>
+            <p class="note">Overview, incidents by lifecycle stage, case (what happened · explanations · decide · verify · audit trail). Investigate runs rules only; decide replays options in the simulator. The browser never calls Anthropic or OpenAI.</p>
           </div>
           <p class="tag">:8000</p>
         </div>
@@ -388,13 +387,13 @@
             <p class="kicker">OUTSIDE</p>
             <p class="name">No command uplink</p>
           </div>
-          <p class="note">Eval scores the report against the matching close. Demo cases (INC-0205 → INC-0210) stay on pre-seeded runs. Rules path is the bar.</p>
+          <p class="note">Eval scores the report against the matching close. Demo cases (INC-0205 → INC-0210) stay on fixture tapes. Rules path is the bar.</p>
         </div>
       </div>
 
       <footer class="foot">
-        <span>ORBIT · sealed-tape model · demo-local</span>
-        <span>archive → seal on open → case · library index sync</span>
+        <span>ORBIT · case log · sealed files · demo-local</span>
+        <span>archive → seal on open → case · fetch named procedure</span>
       </footer>
     </article>
   </div>

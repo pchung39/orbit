@@ -10,9 +10,9 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/styles.css?v=pin90" />
-    <link rel="stylesheet" href="/static/case.css?v=pin101" />
-    <link rel="stylesheet" href="/static/pages.css?v=pin93" />
+    <link rel="stylesheet" href="/static/styles.css?v=p2b" />
+    <link rel="stylesheet" href="/static/case.css?v=p2b" />
+    <link rel="stylesheet" href="/static/pages.css?v=p2b" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -38,14 +38,13 @@
           <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 7.2 8 2.8l5.5 4.4v6H9.8V9.6H6.2v3.6H2.5z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /></svg>
           <span class="side-label">Overview</span>
         </button>
-        <button type="button" class="app-tab" id="tab-incidents" title="Incidents">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h7" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" /></svg>
-          <span class="side-label">Incidents</span><span class="n" id="tab-incidents-n"></span>
-        </button>
-        <button type="button" class="app-tab" id="tab-trust" title="Trust">
-          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.8 13.2 4v4c0 3-2.2 5.3-5.2 6.2C5 13.3 2.8 11 2.8 8V4z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" /><path d="m5.7 8 1.6 1.6 3-3.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
-          <span class="side-label">Trust</span>
-        </button>
+        <p class="side-group">Incidents</p>
+        <div class="side-stages" id="side-stages">
+          <button type="button" class="app-tab side-stage" data-stage="decide" title="Needs decision"><i class="stage-dot tone-warn" aria-hidden="true"></i><span class="side-label">Needs decision</span><span class="n" data-stage-n="decide"></span></button>
+          <button type="button" class="app-tab side-stage" data-stage="watching" title="Watching"><i class="stage-dot tone-info" aria-hidden="true"></i><span class="side-label">Watching</span><span class="n" data-stage-n="watching"></span></button>
+          <button type="button" class="app-tab side-stage" data-stage="verifying" title="Verifying"><i class="stage-dot tone-signal" aria-hidden="true"></i><span class="side-label">Verifying</span><span class="n" data-stage-n="verifying"></span></button>
+          <button type="button" class="app-tab side-stage" data-stage="closed" title="Closed"><i class="stage-dot tone-mute" aria-hidden="true"></i><span class="side-label">Closed</span><span class="n" data-stage-n="closed"></span></button>
+        </div>
       </nav>
 
       <section class="side-recent" id="side-recent" aria-label="Recent cases" hidden></section>
@@ -93,7 +92,7 @@
               </div>
               <p class="home-craft-purpose">Investigate spacecraft anomalies.</p>
               <p class="home-craft-desc">
-                Examine telemetry, procedures, and prior incidents to build an evidence-backed assessment for human review.
+                Weigh telemetry, procedures, and prior incidents, preview each option in a simulator replay, and record a decision you can check.
               </p>
             </div>
             <div class="home-craft-visual" aria-hidden="true">
@@ -126,7 +125,6 @@
           </header>
           <section class="home-start" id="home-start" hidden></section>
           <section class="home-desk" id="home-desk" aria-label="Incident queue"></section>
-          <section class="home-proof" id="home-proof" aria-label="Evaluation summary" hidden></section>
         </section>
 
         <section class="incidents-desk" id="incidents-desk">
@@ -150,225 +148,134 @@
           </div>
         </section>
 
-        <section class="trust-desk" id="trust-desk" aria-label="Trust and data sources">
-          <header class="trust-head" id="trust-head"></header>
-          <section class="trust-score-panel" id="trust-score-panel" aria-label="Eval">
-            <div id="trust-scorecard-slot"></div>
-          </section>
-          <section class="trust-release-case-panel" id="trust-release-case-panel" hidden aria-label="Eval flight">
-            <div id="trust-release-case-slot"></div>
-          </section>
-          <section class="trust-panel trust-sources-panel source-explorer-panel" id="trust-sources-panel" aria-labelledby="trust-sources-title">
-            <header class="trust-panel-head">
-              <div>
-                <p class="panel-kicker">Data sources</p>
-                <h2 id="trust-sources-title">Explore the data behind the investigations</h2>
-                <p class="trust-panel-lede">
-                  Browse the telemetry datasets and saved evidence snapshots available to ORBIT.
-                </p>
-              </div>
-            </header>
-            <div class="source-rel" aria-label="How sources relate">
-              <p class="source-rel-line"><span class="source-rel-from">Telemetry dataset</span><span class="source-rel-arrow" aria-hidden="true">→</span><span class="source-rel-to">saved case snapshot</span></p>
-              <p class="source-rel-note">
-                Opening a case saves a window of telemetry for investigation. The procedure for that alarm stays on the case.
-              </p>
-            </div>
-            <div class="source-explorer" id="source-explorer" aria-live="polite"></div>
-            <aside class="source-preserve" aria-labelledby="source-preserve-title">
-              <h3 id="source-preserve-title">What a saved snapshot preserves</h3>
-              <p>
-                A saved snapshot retains the telemetry window captured for a case. Refreshing the dataset catalog does not replace that saved evidence.
-              </p>
-            </aside>
-            <details class="source-maint" id="source-maint">
-              <summary>Data maintenance</summary>
-              <p class="source-maint-lede">
-                Manual catalog actions. They do not rewrite sealed snapshots, case reports, or recorded assessments.
-              </p>
-              <div class="source-maint-grid" id="source-maint-actions"></div>
-              <p class="source-maint-status" id="source-maint-status" hidden></p>
-              <div class="source-maint-activity" id="source-maint-activity" hidden>
-                <p class="source-maint-activity-kicker">Recent activity</p>
-                <ul class="source-maint-activity-list" id="source-maint-activity-list"></ul>
-              </div>
-            </details>
-          </section>
-        </section>
-
         <div class="case-desk" id="case-desk">
-          <p class="case-back">
-            <button type="button" class="text-btn" id="back-incidents">Incidents</button>
-          </p>
-
-          <header class="case-head" id="alarm">
-            <div class="case-head-top">
-              <div class="case-head-main">
-                <div class="kicker-row">
-                  <p class="eyebrow" id="alarm-kicker">Case</p>
-                  <span class="chip" id="status-chip" hidden></span>
-                </div>
-                <div class="case-head-title-row">
-                  <h1 id="alarm-title">Select a case</h1>
-                </div>
+          <section class="c-card case-head" id="case-head">
+            <div class="case-crumb">
+              <button type="button" class="text-btn" id="back-incidents">Incidents</button>
+              <span aria-hidden="true">/</span>
+              <span class="mono" id="case-crumb-id"></span>
+            </div>
+            <div class="head-row">
+              <div class="head-copy">
+                <h1 id="case-title">Select a case</h1>
+                <p class="lede" id="case-lede"></p>
               </div>
-              <div class="investigation-actions">
-                <button type="button" class="btn btn-report" id="assemble">Run investigation</button>
-                <button type="button" class="btn btn-ghost" id="rerun-investigation" hidden>Re-run investigation</button>
+              <div class="head-actions">
+                <span class="case-status" id="case-status"></span>
+                <button type="button" class="btn" id="case-run">Run investigation</button>
               </div>
             </div>
-            <p class="lede" id="alarm-lede"></p>
-            <dl class="case-facts" id="case-meta"></dl>
-            <p class="case-filed" id="case-filed" hidden>
-              <span id="case-filed-copy">Recorded with this case. Command not sent.</span>
-              <button type="button" class="text-btn" id="open-closeout-case">Read report</button>
-            </p>
-            <p class="case-next" id="case-next" hidden></p>
-          </header>
+            <div class="facts" id="case-facts"></div>
+            <div class="stepper" id="case-stepper" aria-label="Case lifecycle"></div>
+          </section>
 
-          <div class="case-panels">
-              <section class="panel panel-findings investigation-hero" id="investigation">
-                <div class="report-head">
-                  <div>
-                    <p class="panel-kicker">Report</p>
-                    <h2 id="investigation-heading">Full report</h2>
-                    <p class="hint" id="investigation-hint">Source-tagged findings from the rules-based investigator.</p>
-                    <p class="investigation-support" id="investigation-support" hidden></p>
-                    <p class="investigation-teaser" id="investigation-teaser" hidden></p>
-                  </div>
-                  <details class="prov-ref" id="prov-ref">
-                    <summary class="prov-ref-summary">
-                      <span class="prov-ref-label">What the tags mean</span>
-                    </summary>
-                    <ul class="prov-ref-defs" aria-label="Source tag meanings">
-                      <li><span class="tag tag-observed">OBSERVED</span><span>Recorded in the case telemetry or command log</span></li>
-                      <li><span class="tag tag-derived">DERIVED</span><span>Calculated from recorded measurements</span></li>
-                      <li><span class="tag tag-documented">DOCUMENTED</span><span>Backed by a cited procedure or prior incident</span></li>
-                      <li><span class="tag tag-hypothesis">HYPOTHESIS</span><span>A proposed explanation, still open</span></li>
-                    </ul>
-                  </details>
+          <section class="c-card" id="sec-happened">
+            <div class="sec-head">
+              <div>
+                <p class="eyebrow"><span class="num">01</span> What happened</p>
+                <h2 id="happened-title">What the sealed telemetry shows</h2>
+              </div>
+              <details class="chosen" id="chosen" hidden>
+                <summary>✦ Charts chosen for this case</summary>
+                <div class="pop">
+                  <b>Why these charts?</b>
+                  <ul id="chosen-why"></ul>
+                  <p>Drawn from the sealed window <span class="mono" id="chosen-source"></span>. Current axes start at zero, limit lines are always shown, and every caption number is computed from the same data.</p>
                 </div>
-                <div class="findings" id="findings-body">
-                  <div class="investigation-empty">
-                    <p>The full investigation report will appear here after you run the investigator.</p>
-                  </div>
-                </div>
-              </section>
-
-              <section class="panel panel-decide" id="action">
-                <div id="decide-open">
-                  <header class="decide-verdict">
-                    <div class="decide-verdict-top">
-                      <p class="panel-kicker">Recommendation</p>
-                      <span class="decide-state" id="decide-status-line">Pending</span>
-                    </div>
-                    <h2 id="decide-title">Pending investigation</h2>
-                    <p class="lede" id="decide-sub">Run the investigation to generate a recommendation with supporting evidence. ORBIT does not send commands.</p>
-                    <p class="action-status" id="decide-meta"></p>
-                    <div class="decide-hypothesis" id="decide-hypothesis" hidden></div>
-                  </header>
-                  <div class="result-summary" id="result-summary" hidden></div>
-                  <section class="decide-review" id="decide-review" hidden>
-                    <div class="decide-feedback" id="decide-feedback-root" hidden></div>
-                    <div class="form-actions action-row">
-                      <button type="button" class="btn" id="file-incident" hidden>Record assessment</button>
-                    </div>
-                  </section>
-                  <p class="case-demo-next" id="case-demo-next" hidden></p>
-                </div>
-                <div id="decide-filed" hidden>
-                  <p class="panel-kicker">Assessment recorded</p>
-                  <p class="stamp">Recorded · not sent</p>
-                  <h2 id="filed-action-title">Inhibit Heater B</h2>
-                  <p class="lede" id="filed-action-sub">Saved with this case. ORBIT did not uplink a command. Recording does not confirm that the physical anomaly is resolved.</p>
-                  <p class="fb-badge" id="filed-feedback-badge" hidden></p>
-                  <blockquote class="operator-note" id="operator-note" hidden></blockquote>
-                  <button type="button" class="text-btn" id="open-closeout">Read report</button>
-                </div>
-              </section>
-
-              <section class="panel evidence-bundle is-collapsed" id="procedure">
-                <button type="button" class="evidence-toggle" id="procedure-toggle" aria-expanded="false" aria-controls="procedure-panels">
-                  <span class="evidence-toggle-main">
-                    <span class="panel-kicker">Procedure</span>
-                    <span class="evidence-toggle-title" id="procedure-toggle-title">EPS-17 · procedure</span>
-                  </span>
-                  <span class="evidence-toggle-meta">
-                    <span class="evidence-toggle-state" id="procedure-toggle-state">Show</span>
-                    <span class="evidence-chevron" aria-hidden="true"></span>
-                  </span>
-                </button>
-                <div class="evidence-panels" id="procedure-panels">
-                  <section class="panel panel-proc evidence-panel" id="procedure-body">
-                    <article class="procedure">
-                      <header class="proc-head">
-                        <p class="proc-id" id="proc-id">EPS-17</p>
-                        <div>
-                          <h2 id="proc-title">EPS low-voltage response</h2>
-                          <p class="proc-aka" id="proc-aka">Check recently activated nonessential loads</p>
-                        </div>
-                      </header>
-                      <dl class="proc-meta">
-                        <div>
-                          <dt>Applies to</dt>
-                          <dd id="proc-applies">Aurora-1 Electrical Power System</dd>
-                        </div>
-                        <div>
-                          <dt>Entry</dt>
-                          <dd id="proc-entry"><code>EPS.bus_voltage</code> at or below warn (26.5 V)</dd>
-                        </div>
-                        <div>
-                          <dt>Goal</dt>
-                          <dd id="proc-goal">Find the load that just came on. Do not guess the payload first.</dd>
-                        </div>
-                      </dl>
-                      <p class="hint">Step status reflects evidence in this case. The final step is a human command.</p>
-                      <ol class="proc" id="proc"></ol>
-                      <button type="button" class="text-btn" id="open-proc">Show procedure</button>
-                    </article>
-                  </section>
-                </div>
-              </section>
-
-              <section class="panel evidence-bundle is-pinned" id="evidence">
-                <div class="evidence-head">
-                  <span class="evidence-toggle-main">
-                    <span class="panel-kicker">Evidence</span>
-                    <span class="evidence-toggle-title">What the telemetry shows</span>
-                  </span>
-                </div>
-                <div class="evidence-panels" id="evidence-panels">
-              <section class="panel panel-compare evidence-panel" id="compare">
-                <h2>Loads at first warning</h2>
-                <p class="hint">Each load against its healthy range.</p>
-                <div class="compare" id="compare-grid"></div>
-              </section>
-
-              <section class="panel panel-commands evidence-panel" id="commands">
-                <h2>Lead-up</h2>
-                <p class="hint">Commands and mode changes before the warning. Select one to pin it on the charts.</p>
-                <ol class="timeline lead-timeline" id="timeline"></ol>
-              </section>
-
-              <section class="panel panel-traces evidence-panel" id="traces">
-                <div class="row">
-                  <div>
-                    <h2>Telemetry</h2>
-                    <p class="hint" id="trace-caption">Same window. Dashed lines are the lead-up and the first warning.</p>
-                  </div>
-                  <div class="seg" role="group" aria-label="Time window">
-                    <button type="button" data-window="focus" class="is-on">Warn ± 8 min</button>
-                    <button type="button" data-window="full">Full run</button>
-                  </div>
-                  <button type="button" class="btn-ghost btn" id="inspect-tape-btn">Inspect samples</button>
-                </div>
-                <div class="mode-strip" id="mode-strip"></div>
-                <div class="traces" id="trace-stack"></div>
-                <p class="hover-read" id="hover-read"></p>
-              </section>
-                </div>
-              </section>
+              </details>
             </div>
+            <div class="viz" id="viz-lanes">
+              <div class="viz-title"><span>Which signal moved first</span><span class="legend" id="lanes-legend"></span></div>
+              <svg class="chart" id="chart-lanes" viewBox="0 0 1000 240"></svg>
+              <p class="viz-cap" id="lanes-cap"></p>
+            </div>
+            <div class="viz-grid">
+              <div class="viz" id="viz-breakdown" hidden>
+                <div class="viz-title"><span>Where did the power go?</span><span class="muted mono">EPS.bus_current</span></div>
+                <svg class="chart" id="chart-breakdown" viewBox="0 0 480 250"></svg>
+                <p class="viz-cap" id="breakdown-cap"></p>
+              </div>
+              <div class="viz" id="viz-leadup">
+                <div class="viz-title"><span>Lead-up</span><button type="button" class="text-btn" id="case-inspect">Inspect samples</button></div>
+                <ol class="leadup" id="leadup"></ol>
+                <p class="viz-cap muted">Commands and mode changes in the 10 minutes before the warn. Select one to pin it on the chart.</p>
+              </div>
+            </div>
+          </section>
+
+          <section class="c-card" id="sec-explain">
+            <div class="sec-head">
+              <div>
+                <p class="eyebrow"><span class="num">02</span> Competing explanations</p>
+                <h2 id="explain-title"></h2>
+                <p class="lede" id="explain-lede"></p>
+              </div>
+            </div>
+            <div class="hyps" id="hyps"></div>
+          </section>
+
+          <section class="c-card" id="sec-decide">
+            <div class="sec-head">
+              <div>
+                <p class="eyebrow"><span class="num">03</span> Decide · fix preview</p>
+                <h2 id="decide-title"></h2>
+                <p class="lede" id="decide-lede"></p>
+              </div>
+            </div>
+            <div class="options" id="options"></div>
+            <div class="viz" id="viz-preview" hidden>
+              <div class="viz-title"><span>What happens next</span><span class="legend" id="preview-legend"></span></div>
+              <svg class="chart" id="chart-preview" viewBox="0 0 1000 240"></svg>
+            </div>
+            <div class="decide-form" id="decide-form">
+              <input id="decide-note" placeholder="Reason (optional). Becomes part of the case record." autocomplete="off" />
+              <button type="button" class="btn" id="approve">Approve</button>
+            </div>
+            <p class="guard">Approving records your decision and replays it in the simulator to verify. A real command still goes through your normal uplink process.</p>
+          </section>
+
+          <section class="c-card verify" id="sec-verify" hidden>
+            <p class="eyebrow"><span class="num">04</span> <span id="verify-eyebrow">Verify</span></p>
+            <h2 id="verify-title"></h2>
+            <ul class="checks" id="verify-checks"></ul>
+            <div class="verify-actions">
+              <button type="button" class="btn" id="close-case">Close as confirmed</button>
+              <button type="button" class="btn btn-ghost" id="back-decide" hidden>Back to Decide</button>
+            </div>
+            <p class="verify-closed" id="verify-closed" hidden></p>
+          </section>
+
+          <details class="c-card drawer" id="audit">
+            <summary>
+              <span class="dr-icon" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M3 2.5h7l3 3v8H3z M10 2.5v3h3 M5.5 8h5 M5.5 10.5h5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span>
+              <span class="dr-title"><b>Audit trail</b><span>What ORBIT read, computed, and simulated to reach this page</span></span>
+              <span class="dr-stats" id="audit-stats"></span>
+              <span class="dr-chev" aria-hidden="true">▾</span>
+            </summary>
+            <div class="dr-body">
+              <div class="dr-block">
+                <p class="eyebrow">Sealed evidence</p>
+                <div class="seal" id="audit-seal"></div>
+              </div>
+              <div class="dr-block">
+                <p class="eyebrow">Tool trail <span class="muted">· in the order ORBIT ran them</span></p>
+                <ol class="trail" id="audit-trail"></ol>
+              </div>
+              <div class="dr-block">
+                <p class="eyebrow">Claims on this page, by source</p>
+                <div class="tally" id="audit-tally"></div>
+              </div>
+              <div class="dr-block" id="audit-proc" hidden>
+                <p class="eyebrow">Procedure</p>
+                <p class="proc-title" id="audit-proc-title"></p>
+                <ol class="proc-steps" id="audit-proc-steps"></ol>
+              </div>
+              <details class="dr-block report-wrap" id="audit-report-wrap">
+                <summary class="eyebrow" id="audit-report-title">Full tagged report</summary>
+                <div class="findings" id="audit-report"></div>
+              </details>
+            </div>
+          </details>
         </div>
       </main>
     </div>
@@ -413,31 +320,6 @@
       </div>
     </div>
 
-    <div class="slip-wrap" id="file-slip" hidden>
-      <div class="slip slip-file" role="dialog" aria-modal="true" aria-labelledby="file-slip-title">
-        <aside class="slip-stub">
-          <div>
-            <p class="eyebrow" id="file-slip-title">Record</p>
-            <p class="slip-id" id="file-slip-id">INC-····</p>
-          </div>
-          <p class="slip-stub-note">Saves your assessment with this case. Does not uplink a command or confirm that the physical anomaly is resolved.</p>
-        </aside>
-        <form class="slip-body" id="file-form">
-          <p class="pick-label">Recommended action</p>
-          <p class="file-action" id="file-slip-action">Inhibit Heater B</p>
-          <p class="hint">This records the investigation assessment in ORBIT. It does not send a spacecraft command.</p>
-          <label class="slip-title-field">Operator note <span class="opt">optional · stored with this case</span>
-            <textarea name="note" id="file-note" rows="4" placeholder="Why you agree or disagree with the assessment…"></textarea>
-          </label>
-          <div class="file-feedback" id="file-feedback"></div>
-          <div class="form-actions">
-            <button type="button" class="text-btn" id="cancel-file">Cancel</button>
-            <button type="submit" class="btn" id="confirm-file">Record assessment</button>
-          </div>
-        </form>
-      </div>
-    </div>
-
     <div class="tape-inspector-wrap" id="tape-inspector" hidden>
       <div class="tape-inspector" role="dialog" aria-modal="true" aria-labelledby="inspector-title">
         <header class="tape-inspector-head">
@@ -463,6 +345,7 @@
       </div>
     </div>
 
-    <script src="/static/app.js?v=pin96" type="module"></script>
+    <script src="/static/case.js?v=p2b"></script>
+    <script src="/static/app.js?v=p2b"></script>
   </body>
 </html>

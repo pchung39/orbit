@@ -1,0 +1,638 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ORBIT — Find the cause. Prove it. Then act.</title>
+<meta name="description" content="ORBIT takes a spacecraft anomaly from alarm to a decision you can check: every explanation weighed, every claim sourced, every option replayed before anyone acts. Built by Paul Chung." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root {
+  --bg: #f7f8fa; --paper: #ffffff; --tint: #f1f5f9;
+  --line: #e5e9ef; --line-2: #d5dce5;
+  --text: #0f172a; --text-2: #475569; --text-3: #8a97a8;
+  --signal: #0d9488; --signal-2: #14b8a6; --signal-soft: #e6f6f4;
+  --warn: #b45309; --warn-soft: #fdf3e6; --crit: #dc2626;
+  --heater: #dc2626; --payload: #2563eb; --bus: #0f172a; --violet: #7c3aed;
+  --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --ease: cubic-bezier(.2,.7,.2,1);
+  --shadow: 0 1px 2px rgba(15,23,42,.04), 0 12px 32px -12px rgba(15,23,42,.12);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; background: var(--bg); }
+body { margin: 0; color: var(--text); font-family: var(--sans); -webkit-font-smoothing: antialiased; overflow-x: hidden; background: var(--bg); }
+a { color: inherit; }
+code { font-family: var(--mono); font-size: .92em; }
+.wrap { width: min(1160px, calc(100% - 48px)); margin-inline: auto; }
+
+/* nav */
+.nav { position: fixed; inset: 0 0 auto; z-index: 50; transition: background .3s, border-color .3s; border-bottom: 1px solid transparent; }
+.nav.scrolled { background: rgba(247,248,250,.86); backdrop-filter: blur(12px); border-bottom-color: var(--line); }
+.nav-in { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; font-family: var(--mono); letter-spacing: .28em; font-size: 13px; font-weight: 600; }
+.brand svg { width: 24px; height: 24px; color: var(--signal); }
+.nav-links { display: flex; gap: 4px; align-items: center; }
+.nav-links a { text-decoration: none; font-size: 14px; color: var(--text-2); padding: 8px 12px; border-radius: 8px; }
+.nav-links a:hover { color: var(--text); }
+.nav-links .cta { color: #fff; background: var(--text); font-weight: 500; margin-left: 6px; }
+.nav-links .cta:hover { color: #fff; background: #1e293b; }
+
+/* hero */
+.hero { position: relative; min-height: 100vh; display: grid; align-items: center; overflow: hidden; padding: 120px 0 80px;
+  background-image: radial-gradient(rgba(15,23,42,.07) 1px, transparent 1px); background-size: 22px 22px; }
+.hero::after { content: ""; position: absolute; inset: auto 0 0; height: 200px; background: linear-gradient(transparent, var(--bg)); pointer-events: none; }
+.orbits { position: absolute; right: -220px; top: 50%; width: 1100px; height: 700px; transform: translateY(-46%); pointer-events: none; opacity: .9; }
+.orbits ellipse { fill: none; stroke: var(--line-2); stroke-width: 1; }
+.orbits .sat { fill: var(--signal); }
+.orbits .sat-halo { fill: var(--signal); opacity: .15; }
+.hero-in { position: relative; z-index: 2; display: grid; grid-template-columns: 1.05fr .95fr; gap: 56px; align-items: center; }
+.eyebrow { display: inline-flex; align-items: center; gap: 10px; font-family: var(--mono); font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--text-2); padding: 6px 12px; border: 1px solid var(--line-2); border-radius: 99px; background: var(--paper); }
+.eyebrow .live { width: 7px; height: 7px; border-radius: 50%; background: var(--signal); animation: ping 2.4s infinite; }
+@keyframes ping { 0% { box-shadow: 0 0 0 0 rgba(13,148,136,.45); } 70% { box-shadow: 0 0 0 8px rgba(13,148,136,0); } 100% { box-shadow: 0 0 0 0 rgba(13,148,136,0); } }
+h1 { margin: 26px 0 22px; font-size: clamp(46px, 6.2vw, 86px); line-height: 1; letter-spacing: -.04em; font-weight: 600; }
+h1 span { display: block; }
+h1 .accent { color: var(--signal); }
+.lede { font-size: clamp(17px, 1.45vw, 19.5px); line-height: 1.6; color: var(--text-2); max-width: 34em; }
+.lede b { color: var(--text); font-weight: 500; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 32px; }
+.btn { display: inline-flex; align-items: center; gap: 10px; padding: 13px 20px; border-radius: 10px; font-weight: 500; font-size: 15px; text-decoration: none; transition: transform .2s var(--ease), box-shadow .2s, background .2s, border-color .2s; }
+.btn.primary { background: var(--signal); color: #fff; box-shadow: 0 8px 20px -10px rgba(13,148,136,.7); }
+.btn.primary:hover { transform: translateY(-1px); background: #0f766e; }
+.btn.ghost { border: 1px solid var(--line-2); color: var(--text); background: var(--paper); }
+.btn.ghost:hover { border-color: var(--text-3); transform: translateY(-1px); }
+.byline { margin-top: 28px; font-size: 13.5px; color: var(--text-3); }
+.byline a { color: var(--text-2); }
+
+/* console */
+.console { position: relative; border-radius: 16px; padding: 18px 18px 14px; background: var(--paper); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.console-top { display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 11px; letter-spacing: .12em; color: var(--text-3); text-transform: uppercase; }
+.console-top .id { color: var(--text-2); }
+.readouts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 6px; }
+.ro { padding: 10px 12px; border-radius: 10px; background: var(--tint); border: 1px solid transparent; transition: border-color .3s, background .3s; }
+.ro .k { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; color: var(--text-3); }
+.ro .v { font-family: var(--mono); font-size: 19px; font-weight: 500; margin-top: 2px; transition: color .3s; }
+.ro.alarm { background: var(--warn-soft); border-color: rgba(180,83,9,.3); }
+.ro.alarm .v { color: var(--warn); }
+.ro.hot { border-color: rgba(220,38,38,.28); }
+.ro.hot .v { color: var(--heater); }
+#live { width: 100%; height: auto; display: block; }
+.console-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+.alarm-chip { opacity: 0; padding: 3px 9px; border-radius: 99px; color: var(--warn); background: var(--warn-soft); transition: opacity .3s; letter-spacing: .08em; }
+.alarm-chip.on { opacity: 1; }
+
+/* sections */
+section.s { position: relative; padding: 130px 0; }
+section.s.alt { background: var(--paper); border-block: 1px solid var(--line); }
+.kicker { font-family: var(--mono); font-size: 12px; letter-spacing: .18em; text-transform: uppercase; color: var(--text-3); margin: 0; }
+.kicker b { color: var(--signal); font-weight: 500; }
+h2 { font-size: clamp(34px, 4vw, 56px); line-height: 1.05; letter-spacing: -.03em; font-weight: 600; margin: 14px 0 18px; }
+h2 .dim { color: var(--text-3); }
+.sub { font-size: 18px; line-height: 1.65; color: var(--text-2); max-width: 40em; margin: 0; }
+.reveal { opacity: 0; transform: translateY(18px); transition: opacity .8s var(--ease), transform .8s var(--ease); }
+.reveal.in { opacity: 1; transform: none; }
+
+/* story */
+.story-grid { display: grid; grid-template-columns: .66fr 1.34fr; gap: 48px; }
+.steps { padding: 26vh 0 40vh; }
+.step { min-height: 70vh; display: flex; flex-direction: column; justify-content: center; opacity: .25; transition: opacity .5s; }
+.step.on { opacity: 1; }
+.step .t { font-family: var(--mono); font-size: 13px; color: var(--signal); letter-spacing: .06em; }
+.step h3 { font-size: clamp(26px, 2.6vw, 36px); line-height: 1.1; letter-spacing: -.02em; margin: 10px 0 14px; font-weight: 600; }
+.step p { font-size: 17px; line-height: 1.65; color: var(--text-2); margin: 0; max-width: 30em; }
+.step p b { color: var(--text); font-weight: 600; }
+.step .tagline { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+.tg { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; padding: 3px 8px; border-radius: 5px; border: 1px solid currentColor; background: var(--paper); }
+.tg.o { color: var(--signal); } .tg.d { color: var(--payload); } .tg.doc { color: var(--violet); } .tg.h { color: var(--warn); } .tg.s { color: var(--text-2); border-style: dashed; }
+.stage-wrap { position: relative; }
+.stage { position: sticky; top: 12vh; height: 76vh; display: flex; flex-direction: column; justify-content: center; }
+.stage-card { border-radius: 16px; border: 1px solid var(--line); background: var(--paper); padding: 18px 20px 12px; box-shadow: var(--shadow); }
+.stage-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+.stage-head .status { color: var(--warn); transition: color .3s; }
+#story-svg { width: 100%; height: auto; display: block; margin-top: 8px; overflow: visible; }
+#story-svg text { font-family: var(--mono); font-size: 14px; }
+#story-svg text:not([fill]) { fill: var(--text-3); }
+#story-svg .grid { stroke: rgba(15,23,42,.06); }
+#story-svg .ln { fill: none; stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+#story-svg .layer { opacity: 0; transition: opacity .7s var(--ease); }
+#story-svg .layer.on { opacity: 1; }
+#story-svg .draw { transition: stroke-dashoffset 1.6s var(--ease); }
+#story-svg .lane-label { font-family: var(--sans); font-size: 16px; font-weight: 600; }
+#story-svg .big { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+#story-svg .halo { paint-order: stroke; stroke: #fff; stroke-width: 6px; stroke-linejoin: round; }
+.legend-row { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--text-2); }
+.legend-row i { display: inline-block; width: 14px; height: 2px; margin-right: 6px; vertical-align: middle; }
+
+/* two answers */
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 50px; }
+.case { position: relative; border-radius: 16px; padding: 24px; border: 1px solid var(--line); background: var(--paper); box-shadow: var(--shadow); border-top: 3px solid var(--c); transition: transform .3s var(--ease); }
+.case:hover { transform: translateY(-3px); }
+.case.act { --c: var(--signal); } .case.hold { --c: var(--warn); }
+.case-top { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--mono); font-size: 12px; color: var(--text-3); }
+.case-ratio { font-size: 58px; font-weight: 600; letter-spacing: -.03em; margin: 12px 0 0; }
+.case.act .case-ratio { color: var(--heater); } .case.hold .case-ratio { color: var(--warn); }
+.case-ratio small { font-size: 16px; color: var(--text-3); font-weight: 400; letter-spacing: 0; margin-left: 8px; }
+.case svg { width: 100%; height: auto; display: block; margin: 12px 0 8px; }
+.case svg text { font-family: var(--mono); font-size: 10.5px; }
+.case svg text:not([fill]) { fill: var(--text-3); }
+.verdict { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding-top: 16px; border-top: 1px solid var(--line); }
+.verdict b { font-size: 19px; font-weight: 600; }
+.case.act .verdict b { color: var(--signal); } .case.hold .verdict b { color: var(--warn); }
+.verdict span { font-size: 13px; color: var(--text-2); text-align: right; line-height: 1.6; }
+.verdict a { font-family: var(--mono); font-size: 12px; text-decoration: none; color: var(--text); border-bottom: 1px solid var(--line-2); }
+.duo-note { margin-top: 26px; font-size: 16px; color: var(--text-2); max-width: 46em; line-height: 1.65; }
+
+/* receipts */
+.receipts { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 50px; }
+.rc { position: relative; padding: 18px 18px 16px 20px; border-radius: 14px; background: var(--paper); border: 1px solid var(--line); min-height: 200px; display: flex; flex-direction: column; gap: 12px; transition: transform .3s var(--ease), box-shadow .3s; }
+.rc:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+.rc .tg { align-self: flex-start; }
+.rc p { margin: 0; font-size: 15px; line-height: 1.5; color: var(--text); }
+.rc small { margin-top: auto; font-family: var(--mono); font-size: 11px; color: var(--text-3); line-height: 1.5; }
+.rc .rail { position: absolute; left: 0; top: 16px; bottom: 16px; width: 3px; background: var(--c); border-radius: 0 3px 3px 0; }
+.rc.o { --c: var(--signal); } .rc.d { --c: var(--payload); } .rc.doc { --c: var(--violet); } .rc.h { --c: var(--warn); } .rc.s { --c: var(--text-3); border-style: dashed; }
+.line-note { display: flex; align-items: center; gap: 14px; margin-top: 20px; font-family: var(--mono); font-size: 12px; color: var(--text-3); }
+.line-note::before, .line-note::after { content: ""; height: 1px; flex: 1; background: var(--line-2); }
+
+/* lifecycle */
+.life { margin-top: 60px; position: relative; }
+.track { position: relative; display: grid; grid-template-columns: repeat(6, 1fr); }
+.track::before { content: ""; position: absolute; left: 8%; right: 8%; top: 22px; height: 2px; background: var(--line); }
+.track .fill { position: absolute; left: 8%; top: 22px; height: 2px; width: 0; background: var(--signal); transition: width 2.4s var(--ease); }
+.life.in .track .fill { width: 84%; }
+.node { position: relative; text-align: center; padding: 0 8px; }
+.node .dot { width: 46px; height: 46px; margin: 0 auto; border-radius: 50%; display: grid; place-items: center; font-family: var(--mono); font-size: 13px; background: var(--paper); border: 1.5px solid var(--line-2); color: var(--text-3); transition: all .5s var(--ease); position: relative; z-index: 1; }
+.life.in .node .dot { border-color: var(--signal); color: #fff; background: var(--signal); }
+.life.in .node:nth-child(2) .dot { transition-delay: .3s; } .life.in .node:nth-child(3) .dot { transition-delay: .7s; }
+.life.in .node:nth-child(4) .dot { transition-delay: 1.1s; } .life.in .node:nth-child(5) .dot { transition-delay: 1.5s; }
+.life.in .node:nth-child(6) .dot { transition-delay: 1.9s; } .life.in .node:nth-child(7) .dot { transition-delay: 2.3s; }
+.node h4 { margin: 16px 0 6px; font-size: 16px; font-weight: 600; }
+.node p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--text-2); }
+.branch { margin-top: 34px; text-align: center; font-size: 15px; color: var(--text-2); }
+.branch b { color: var(--warn); font-weight: 600; }
+
+/* proof */
+.proof { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 50px; background: var(--line); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+.pf { background: var(--paper); padding: 28px 24px; }
+.pf .n { font-size: clamp(40px, 4.4vw, 58px); font-weight: 600; letter-spacing: -.03em; line-height: 1; }
+.pf .n span { color: var(--signal); }
+.pf h4 { margin: 14px 0 6px; font-size: 15px; font-weight: 600; }
+.pf p { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--text-2); }
+.honest { margin-top: 20px; font-size: 13.5px; line-height: 1.6; color: var(--text-3); max-width: 60em; }
+
+/* final */
+.final { text-align: center; padding: 140px 0 120px; }
+.final-card { padding: 72px 40px; border-radius: 24px; background: linear-gradient(180deg, var(--signal-soft), var(--paper)); border: 1px solid #cdeee9; }
+.final h2 { font-size: clamp(36px, 5vw, 64px); margin-top: 0; }
+.final .sub { margin-inline: auto; }
+.final .actions { justify-content: center; }
+.builder { margin: 48px auto 0; max-width: 620px; font-size: 15px; line-height: 1.65; color: var(--text-2); }
+.builder b { color: var(--text); font-weight: 600; }
+footer { border-top: 1px solid var(--line); padding: 26px 0; font-size: 13px; color: var(--text-3); background: var(--paper); }
+footer .wrap { display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+footer a { color: var(--text-2); text-decoration: none; margin-left: 18px; }
+
+@media (max-width: 980px) {
+  .hero-in, .story-grid, .duo { grid-template-columns: 1fr; }
+  .orbits { right: -520px; opacity: .5; }
+  .stage-wrap { order: -1; position: sticky; top: 64px; z-index: 3; background: var(--bg); padding-bottom: 8px; }
+  .stage { position: static; height: auto; }
+  .stage-card { padding: 12px 12px 8px; }
+  .legend-row { display: none; }
+  .steps { padding: 4vh 0 20vh; }
+  .step { min-height: 55vh; justify-content: flex-start; padding-top: 4vh; }
+  .nav-links a:not(.cta) { display: none; }
+  .receipts { grid-template-columns: 1fr 1fr; }
+  .proof { grid-template-columns: 1fr 1fr; }
+  .track { grid-template-columns: repeat(3, 1fr); row-gap: 34px; }
+  .track::before, .track .fill { display: none; }
+  .final-card { padding: 48px 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .reveal { opacity: 1; transform: none; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 32 32"><ellipse cx="16" cy="16" rx="13" ry="6.2" fill="none" stroke="currentColor" stroke-width="1.6" transform="rotate(-28 16 16)"/><circle cx="25.4" cy="11.2" r="2.4" fill="currentColor"/></svg>
+      ORBIT
+    </a>
+    <div class="nav-links">
+      <a href="#story">The case</a>
+      <a href="#proof">Evaluation</a>
+      <a href="/about">Design decisions</a>
+      <a href="https://github.com/pchung39/orbit" target="_blank" rel="noopener">Source</a>
+      <a class="cta" href="/app/incidents/INC-0204">Open the demo</a>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<header class="hero">
+  <svg class="orbits" viewBox="0 0 1100 700" aria-hidden="true">
+    <g transform="rotate(-14 550 350)">
+      <ellipse cx="550" cy="350" rx="520" ry="170" />
+      <ellipse cx="550" cy="350" rx="400" ry="128" />
+      <ellipse cx="550" cy="350" rx="280" ry="88" />
+      <g><circle class="sat-halo" r="14" /><circle class="sat" r="5" />
+        <animateMotion dur="30s" repeatCount="indefinite" path="M1070,350 a520,170 0 1,1 -1040,0 a520,170 0 1,1 1040,0" /></g>
+    </g>
+  </svg>
+  <div class="wrap hero-in">
+    <div>
+      <span class="eyebrow"><i class="live"></i>Spacecraft anomaly response</span>
+      <h1><span>Find the cause.</span><span class="accent">Prove it.</span><span>Then act.</span></h1>
+      <p class="lede">ORBIT takes a spacecraft alarm to <b>a decision you can check</b>. It weighs every possible cause against the procedure, sources every claim, and replays each option in a simulator, so the operator acts on evidence, not on the last thing that changed.</p>
+      <div class="actions">
+        <a class="btn primary" href="/app/incidents/INC-0204">Investigate INC-0204 →</a>
+        <a class="btn ghost" href="#story">Watch the case unfold</a>
+      </div>
+      <p class="byline">Designed and built by <a href="https://www.linkedin.com/in/paulchung39/" target="_blank" rel="noopener">Paul Chung</a> · formerly spacecraft ground software at NASA JPL</p>
+    </div>
+    <div class="console" aria-label="Telemetry replay of INC-0204">
+      <div class="console-top"><span class="id">INC-0204 · tape replay</span><span id="clock">14:26:30 UTC</span></div>
+      <div class="readouts">
+        <div class="ro" id="ro-bus"><div class="k">BUS V</div><div class="v" id="v-bus">—</div></div>
+        <div class="ro" id="ro-htr"><div class="k">HEATER B</div><div class="v" id="v-htr">—</div></div>
+        <div class="ro" id="ro-pay"><div class="k">PAYLOAD</div><div class="v" id="v-pay">—</div></div>
+      </div>
+      <svg id="live" viewBox="0 0 520 210" aria-hidden="true"></svg>
+      <div class="console-foot"><span>simulated data · real ORBIT tape</span><span class="alarm-chip" id="alarm-chip">WARN · EPS.bus_voltage</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- STORY -->
+<section class="s story alt" id="story">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="kicker"><b>01</b> · One alarm, five moves</p>
+      <h2>The payload looks guilty.<br /><span class="dim">Scroll to see why it isn't.</span></h2>
+    </div>
+    <div class="story-grid">
+      <div class="steps" id="steps">
+        <div class="step" data-step="1">
+          <span class="t">14:31:55 UTC</span>
+          <h3>The alarm.</h3>
+          <p>Bus voltage drops through its <b>26.5 V</b> warn limit. ORBIT seals this exact window of telemetry with the case, so everyone reviews the same evidence later.</p>
+          <div class="tagline"><span class="tg o">OBSERVED</span></div>
+        </div>
+        <div class="step" data-step="2">
+          <span class="t">3 seconds earlier</span>
+          <h3>The obvious suspect.</h3>
+          <p>The payload entered <b>science mode</b> at 14:31:52. It was the last thing to change, so it looks guilty. Most people would stop here.</p>
+          <div class="tagline"><span class="tg o">OBSERVED</span></div>
+        </div>
+        <div class="step" data-step="3">
+          <span class="t">2 min 8 s before that</span>
+          <h3>But the heater moved first.</h3>
+          <p>Heater B switched on at 14:29:44 and drew <b>3.74 A</b>, which is <b>3.1×</b> its healthy maximum. Procedure EPS-17 names any load at 2× or more the prime suspect. The payload added only 0.82 A of the 4.59 A jump.</p>
+          <div class="tagline"><span class="tg o">OBSERVED</span><span class="tg d">DERIVED</span><span class="tg doc">DOCUMENTED</span></div>
+        </div>
+        <div class="step" data-step="4">
+          <span class="t">What if?</span>
+          <h3>Prove it before acting.</h3>
+          <p>ORBIT replays the same window in its simulator with a healthy heater. Science mode still happens, but the bus never gets below <b>27.09 V</b>, so there is no alarm.</p>
+          <div class="tagline"><span class="tg s">SIMULATED</span></div>
+        </div>
+        <div class="step" data-step="5">
+          <span class="t">Decision at 14:33:55</span>
+          <h3>Three futures. You choose.</h3>
+          <p>Each option is replayed forward. <b style="color:var(--signal)">Turn off Heater B</b> brings the bus back to 27.86 V. Safing the payload slips back into warn. Holding stays in warn. The operator decides, and ORBIT records the decision. Nothing is sent to the spacecraft.</p>
+          <div class="tagline"><span class="tg s">SIMULATED</span><span class="tg h">OPERATOR DECIDES</span></div>
+        </div>
+      </div>
+      <div class="stage-wrap">
+        <div class="stage">
+          <div class="stage-card">
+            <div class="stage-head"><span>INC-0204 · sealed window</span><span class="status" id="stage-status">ALARM</span></div>
+            <svg id="story-svg" viewBox="0 0 900 560" role="img" aria-label="Bus voltage, payload current and heater current around the INC-0204 alarm, with a replay and three option previews."></svg>
+            <div class="legend-row" id="stage-legend"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- TWO ANSWERS -->
+<section class="s">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="kicker"><b>02</b> · The test that shaped the product</p>
+      <h2>Same alarm. Same confounder.<br /><span class="dim">Different answer.</span></h2>
+      <p class="sub">Both cases drop the bus below warn just after science mode starts. The heater line is what tells them apart: one crosses the procedure's 2× bar, the other doesn't. A good investigator has to know when to act and when to hold.</p>
+    </div>
+    <div class="duo">
+      <article class="case act reveal">
+        <div class="case-top"><span>INC-0204</span><span>heater B current</span></div>
+        <p class="case-ratio">3.1×<small>healthy draw</small></p>
+        <svg id="duo-a" viewBox="0 0 520 180" aria-hidden="true"></svg>
+        <div class="verdict"><b>Turn off Heater B</b><span>Clears EPS-17's bar.<br /><a href="/app/incidents/INC-0204">Open the case →</a></span></div>
+      </article>
+      <article class="case hold reveal">
+        <div class="case-top"><span>INC-0212</span><span>heater B current</span></div>
+        <p class="case-ratio">1.7×<small>healthy draw</small></p>
+        <svg id="duo-b" viewBox="0 0 520 180" aria-hidden="true"></svg>
+        <div class="verdict"><b>Hold</b><span>Below the bar. No fault invented.<br /><a href="/app/incidents/INC-0212">Open the case →</a></span></div>
+      </article>
+    </div>
+    <p class="duo-note reveal">I built the hold case first. Turning the heater off would lift the bus in its replay too, because shedding a 2 A load always helps, but that doesn't make the heater the cause. ORBIT holds, moves the case to <i>Watching</i>, and offers heater-off as EPS-17's isolation test, which needs operator authorization.</p>
+  </div>
+</section>
+
+<!-- RECEIPTS -->
+<section class="s alt">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="kicker"><b>03</b> · Every claim has a receipt</p>
+      <h2>Measured, computed, quoted, proposed, or modelled.<br /><span class="dim">Never blurred.</span></h2>
+      <p class="sub">Every sentence ORBIT writes carries its source. On the case page, each one opens to the proof: the moment on the chart, the calculation, the procedure step, or the replay.</p>
+    </div>
+    <div class="receipts">
+      <div class="rc o reveal"><i class="rail"></i><span class="tg o">OBSERVED</span><p><code>HEATER_B_ENABLE</code> at 14:29:44.</p><small>command log · sealed window</small></div>
+      <div class="rc d reveal"><i class="rail"></i><span class="tg d">DERIVED</span><p>Heater draw is 3.1× the healthy maximum.</p><small>3.74 A ÷ 1.2 A</small></div>
+      <div class="rc doc reveal"><i class="rail"></i><span class="tg doc">DOCUMENTED</span><p>A load at 2× healthy or more is the prime suspect.</p><small>EPS-17 step 4 · prior INC-0187</small></div>
+      <div class="rc h reveal"><i class="rail"></i><span class="tg h">HYPOTHESIS</span><p>Heater B overcurrent. Science mode is a confounder.</p><small>proposed · operator reviews</small></div>
+      <div class="rc s reveal"><i class="rail"></i><span class="tg s">SIMULATED</span><p>With a healthy heater, no alarm.</p><small>replay · evidence about the model, not the spacecraft</small></div>
+    </div>
+    <p class="line-note">left to right · from measurement to model</p>
+  </div>
+</section>
+
+<!-- LIFECYCLE -->
+<section class="s">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="kicker"><b>04</b> · The whole life of a case</p>
+      <h2>A recommendation is the middle.<br /><span class="dim">Not the end.</span></h2>
+    </div>
+    <div class="life" id="life">
+      <div class="track">
+        <span class="fill"></span>
+        <div class="node"><div class="dot">01</div><h4>Open</h4><p>Seal the telemetry window from the alarm.</p></div>
+        <div class="node"><div class="dot">02</div><h4>Investigate</h4><p>Weigh heater, payload, and battery against the procedure.</p></div>
+        <div class="node"><div class="dot">03</div><h4>Decide</h4><p>Compare three replayed futures. The operator chooses.</p></div>
+        <div class="node"><div class="dot">04</div><h4>Act</h4><p>Approved, recorded, and replayed. Never uplinked by ORBIT.</p></div>
+        <div class="node"><div class="dot">05</div><h4>Verify</h4><p>Check recovery against the procedure's last step.</p></div>
+        <div class="node"><div class="dot">06</div><h4>Close</h4><p>File the close-out with the decision and its outcome.</p></div>
+      </div>
+      <p class="branch reveal">Evidence too weak? → <b>Hold</b>, and the case stays open as <b>Watching</b>.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PROOF -->
+<section class="s alt" id="proof">
+  <div class="wrap">
+    <div class="reveal">
+      <p class="kicker"><b>05</b> · Evaluation</p>
+      <h2>Right answer, right reasons.<br /><span class="dim">Both are tested.</span></h2>
+      <p class="sub">The suite fails a report that reaches the expected conclusion with unsupported claims. Refusal, sourcing, and contrast failures block a release even if the total score goes up.</p>
+    </div>
+    <div class="proof reveal">
+      <div class="pf"><div class="n"><span data-count="55">0</span>/55</div><h4>Checks passed</h4><p>Outcome, hold behavior, sourcing, and contrast across five simulated scenarios.</p></div>
+      <div class="pf"><div class="n"><span data-count="0">0</span></div><h4>False heater inhibits</h4><p>In the three cases where turning off Heater B would be the wrong call.</p></div>
+      <div class="pf"><div class="n"><span data-count="5">0</span>/5</div><h4>Replays match their tapes</h4><p>Each simulator replay reproduces its archive tape to floating-point precision before anything is changed.</p></div>
+      <div class="pf"><div class="n"><span data-count="1">0</span></div><h4>Decision rule</h4><p>Report, case page, and decision record share one classifier, so they can't disagree.</p></div>
+    </div>
+    <p class="honest reveal">Scope, honestly: five simulated scenarios and a rules-based investigator. No flight data, no operator pilot, and no LLM results are claimed. Replays are evidence about ORBIT's model of the spacecraft. That's why they're labeled.</p>
+  </div>
+</section>
+
+<!-- FINAL -->
+<section class="s final">
+  <div class="wrap final-card">
+    <h2 class="reveal">Don't take the story's word for it.<br /><span class="dim">Check the evidence.</span></h2>
+    <p class="sub reveal">Open the case, click any line of evidence, open the replay, and approve a fix. It takes about two minutes.</p>
+    <div class="actions reveal">
+      <a class="btn primary" href="/app/incidents/INC-0204">Open INC-0204 →</a>
+      <a class="btn ghost" href="/about">Read the design decisions</a>
+      <a class="btn ghost" href="https://github.com/pchung39/orbit" target="_blank" rel="noopener">View source</a>
+    </div>
+    <p class="builder reveal"><b>Built end to end by Paul Chung</b>: product scope, case lifecycle, evidence model, simulator, application, and evaluation suite. It draws on building spacecraft ground software and test automation at NASA JPL, and explores what makes AI-assisted investigation useful, reviewable, and testable.</p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>ORBIT · Aurora-1 · simulated spacecraft data</span>
+    <span><a href="/about">Design decisions</a><a href="/app">Console</a><a href="https://github.com/pchung39/orbit" target="_blank" rel="noopener">Source</a><a href="https://www.linkedin.com/in/paulchung39/" target="_blank" rel="noopener">LinkedIn</a></span>
+  </div>
+</footer>
+
+<script>
+const D = {"t0":51990.0,"t1":53040.0,"warn":26.5,"crit":25.0,"t_warn":52315.0,"t_heater":52184.0,"t_sci":52312.0,"t_dec":52435.0,"bus":[[51990,28.393],[52005,28.442],[52020,28.493],[52035,28.488],[52050,28.459],[52065,28.43],[52080,28.424],[52095,28.37],[52110,28.422],[52125,28.339],[52140,28.391],[52155,28.439],[52170,28.419],[52185,26.727],[52200,26.73],[52215,26.709],[52230,26.665],[52245,26.691],[52260,26.649],[52275,26.623],[52290,26.647],[52305,26.633],[52320,26.164],[52335,26.224],[52350,26.245],[52365,26.15],[52380,26.258],[52395,26.196],[52410,26.182],[52425,26.206],[52440,26.207],[52455,26.169],[52470,26.124],[52485,26.174],[52500,26.07],[52515,26.159],[52530,26.105],[52545,26.058],[52560,26.034],[52575,26.05],[52590,26.147],[52605,26.11],[52620,26.046],[52635,26.034],[52650,25.934],[52665,26.044],[52680,26.02],[52695,26.02],[52710,25.912],[52725,25.91],[52740,26.028],[52755,25.958],[52770,25.913],[52785,25.926],[52800,25.907],[52815,25.83],[52830,25.806],[52845,25.903],[52860,25.848],[52875,25.912],[52890,25.874],[52905,25.874],[52920,25.825],[52935,25.79],[52950,25.76],[52965,25.747],[52980,25.781],[52995,25.779],[53010,25.809],[53025,25.748],[53040,25.666]],"heater":[[51990,0.0],[52005,0.036],[52020,0.0],[52035,0.0],[52050,0.021],[52065,0.015],[52080,0.0],[52095,0.0],[52110,0.016],[52125,0.0],[52140,0.008],[52155,0.0],[52170,0.031],[52185,3.739],[52200,3.777],[52215,3.773],[52230,3.7],[52245,3.728],[52260,3.752],[52275,3.695],[52290,3.735],[52305,3.739],[52320,3.816],[52335,3.743],[52350,3.702],[52365,3.747],[52380,3.702],[52395,3.726],[52410,3.752],[52425,3.755],[52440,3.682],[52455,3.763],[52470,3.793],[52485,3.743],[52500,3.76],[52515,3.74],[52530,3.744],[52545,3.714],[52560,3.747],[52575,3.722],[52590,3.752],[52605,3.743],[52620,3.734],[52635,3.718],[52650,3.703],[52665,3.742],[52680,3.739],[52695,3.743],[52710,3.757],[52725,3.735],[52740,3.688],[52755,3.723],[52770,3.696],[52785,3.694],[52800,3.715],[52815,3.703],[52830,3.723],[52845,3.771],[52860,3.743],[52875,3.67],[52890,3.742],[52905,3.718],[52920,3.702],[52935,3.735],[52950,3.722],[52965,3.747],[52980,3.7],[52995,3.698],[53010,3.725],[53025,3.696],[53040,3.71]],"payload":[[51990,0.053],[52005,0.1],[52020,0.084],[52035,0.072],[52050,0.071],[52065,0.047],[52080,0.082],[52095,0.07],[52110,0.096],[52125,0.095],[52140,0.075],[52155,0.093],[52170,0.091],[52185,0.053],[52200,0.079],[52215,0.053],[52230,0.083],[52245,0.055],[52260,0.085],[52275,0.044],[52290,0.07],[52305,0.074],[52320,0.884],[52335,0.906],[52350,0.87],[52365,0.93],[52380,0.879],[52395,0.875],[52410,0.904],[52425,0.898],[52440,0.915],[52455,0.885],[52470,0.865],[52485,0.884],[52500,0.893],[52515,0.913],[52530,0.896],[52545,0.896],[52560,0.865],[52575,0.939],[52590,0.932],[52605,0.927],[52620,0.9],[52635,0.908],[52650,0.912],[52665,0.914],[52680,0.909],[52695,0.938],[52710,0.879],[52725,0.881],[52740,0.888],[52755,0.903],[52770,0.865],[52785,0.901],[52800,0.899],[52815,0.908],[52830,0.902],[52845,0.891],[52860,0.921],[52875,0.882],[52890,0.917],[52905,0.918],[52920,0.92],[52935,0.886],[52950,0.912],[52965,0.909],[52980,0.945],[52995,0.896],[53010,0.894],[53025,0.905],[53040,0.935]],"healthy_bus":[[51990,28.393],[52005,28.442],[52020,28.493],[52035,28.488],[52050,28.459],[52065,28.43],[52080,28.424],[52095,28.37],[52110,28.422],[52125,28.339],[52140,28.391],[52155,28.439],[52170,28.419],[52185,27.908],[52200,27.915],[52215,27.899],[52230,27.858],[52245,27.889],[52260,27.851],[52275,27.83],[52290,27.858],[52305,27.848],[52320,27.383],[52335,27.447],[52350,27.473],[52365,27.382],[52380,27.494],[52395,27.437],[52410,27.427],[52425,27.455],[52440,27.46],[52455,27.427],[52470,27.386],[52485,27.44],[52500,27.341],[52515,27.433],[52530,27.384],[52545,27.341],[52560,27.322],[52575,27.341],[52590,27.443],[52605,27.411],[52620,27.35],[52635,27.343],[52650,27.247],[52665,27.361],[52680,27.342],[52695,27.346],[52710,27.243],[52725,27.245],[52740,27.367],[52755,27.301],[52770,27.261],[52785,27.278],[52800,27.264],[52815,27.191],[52830,27.171],[52845,27.272],[52860,27.222],[52875,27.289],[52890,27.256],[52905,27.26],[52920,27.215],[52935,27.185],[52950,27.159],[52965,27.15],[52980,27.188],[52995,27.19],[53010,27.225],[53025,27.168],[53040,27.091]],"options":{"heater_off":[[52430,26.171],[52445,27.983],[52460,27.833],[52475,27.842],[52490,27.918],[52505,27.855],[52520,27.851],[52535,27.782],[52550,27.819],[52565,27.929],[52580,27.851],[52595,27.839],[52610,27.883],[52625,27.783],[52640,27.828],[52655,27.8],[52670,27.863],[52685,27.8],[52700,27.839],[52715,27.71],[52730,27.712],[52745,27.845],[52760,27.648],[52775,27.825],[52790,27.76],[52805,27.777],[52820,27.779],[52835,27.706],[52850,27.657],[52865,27.792],[52880,27.72],[52895,27.672],[52910,27.707],[52925,27.763],[52940,27.688],[52955,27.724],[52970,27.721],[52985,27.762],[53000,27.734],[53015,27.761],[53030,27.74],[53045,27.734],[53060,27.74],[53075,27.673],[53090,27.759],[53105,27.733],[53120,27.689],[53135,27.671],[53150,27.657],[53165,27.642],[53180,27.755],[53195,27.673],[53210,27.792],[53225,27.681],[53240,27.631],[53255,27.697],[53270,27.688],[53285,27.706],[53300,27.618],[53315,27.582],[53330,27.694]],"payload_safe":[[52430,26.171],[52445,26.64],[52460,26.485],[52475,26.489],[52490,26.56],[52505,26.492],[52520,26.483],[52535,26.41],[52550,26.442],[52565,26.547],[52580,26.464],[52595,26.447],[52610,26.487],[52625,26.381],[52640,26.422],[52655,26.389],[52670,26.446],[52685,26.379],[52700,26.413],[52715,26.279],[52730,26.277],[52745,26.404],[52760,26.203],[52775,26.375],[52790,26.305],[52805,26.317],[52820,26.314],[52835,26.237],[52850,26.183],[52865,26.312],[52880,26.236],[52895,26.183],[52910,26.213],[52925,26.264],[52940,26.185],[52955,26.216],[52970,26.207],[52985,26.244],[53000,26.211],[53015,26.233],[53030,26.207],[53045,26.196],[53060,26.198],[53075,26.126],[53090,26.207],[53105,26.175],[53120,26.127],[53135,26.104],[53150,26.085],[53165,26.065],[53180,26.174],[53195,26.087],[53210,26.201],[53225,26.085],[53240,26.03],[53255,26.091],[53270,26.078],[53285,26.09],[53300,25.998],[53315,25.957],[53330,26.064]],"hold":[[52430,26.171],[52445,26.262],[52460,26.106],[52475,26.108],[52490,26.178],[52505,26.109],[52520,26.099],[52535,26.023],[52550,26.054],[52565,26.158],[52580,26.074],[52595,26.055],[52610,26.093],[52625,25.987],[52640,26.026],[52655,25.992],[52670,26.048],[52685,25.979],[52700,26.012],[52715,25.876],[52730,25.873],[52745,25.999],[52760,25.796],[52775,25.966],[52790,25.896],[52805,25.906],[52820,25.902],[52835,25.823],[52850,25.768],[52865,25.896],[52880,25.819],[52895,25.763],[52910,25.792],[52925,25.842],[52940,25.762],[52955,25.791],[52970,25.781],[52985,25.816],[53000,25.782],[53015,25.803],[53030,25.776],[53045,25.763],[53060,25.764],[53075,25.691],[53090,25.77],[53105,25.737],[53120,25.688],[53135,25.663],[53150,25.643],[53165,25.622],[53180,25.729],[53195,25.64],[53210,25.753],[53225,25.636],[53240,25.58],[53255,25.64],[53270,25.624],[53285,25.636],[53300,25.542],[53315,25.5],[53330,25.605]]},"option_text":{"heater_off":{"label":"Turn off Heater B","first":27.86,"ten":27.76,"worst":27.54,"result":"clears"},"payload_safe":{"label":"Safe the payload","first":26.52,"ten":26.22,"worst":25.93,"result":"fails"},"hold":{"label":"Hold","first":26.14,"ten":25.79,"worst":25.48,"result":"stays"}},"loads":{"before_window":[51944.0,52179.0],"after_window":[52375.0,52495.0],"before_label":"14:25\u201314:29","after_label":"14:32\u201314:34","heater":{"before":0.01,"after":3.737,"delta":3.727},"payload":{"before":0.078,"after":0.896,"delta":0.818},"bus":{"before":1.577,"after":6.169,"delta":4.592},"other":{"before":1.489,"after":1.536,"delta":0.047}},"heater_ratio":3.1,"heater_a":3.74,"marg":{"t0":51990.0,"t1":53160.0,"t_warn":52570.0,"bus":[[51990,28.047],[52005,28.096],[52020,28.147],[52035,28.143],[52050,28.114],[52065,28.085],[52080,28.078],[52095,28.025],[52110,28.076],[52125,27.994],[52140,28.046],[52155,28.093],[52170,28.074],[52185,27.16],[52200,27.166],[52215,27.148],[52230,27.106],[52245,27.135],[52260,27.096],[52275,27.073],[52290,27.1],[52305,27.089],[52320,26.622],[52335,26.685],[52350,26.709],[52365,26.616],[52380,26.727],[52395,26.669],[52410,26.657],[52425,26.684],[52440,26.688],[52455,26.653],[52470,26.61],[52485,26.663],[52500,26.562],[52515,26.653],[52530,26.602],[52545,26.558],[52560,26.537],[52575,26.556],[52590,26.655],[52605,26.622],[52620,26.56],[52635,26.551],[52650,26.454],[52665,26.567],[52680,26.546],[52695,26.549],[52710,26.444],[52725,26.444],[52740,26.565],[52755,26.498],[52770,26.456],[52785,26.472],[52800,26.456],[52815,26.381],[52830,26.36],[52845,26.46],[52860,26.408],[52875,26.474],[52890,26.439],[52905,26.442],[52920,26.396],[52935,26.364],[52950,26.337],[52965,26.326],[52980,26.363],[52995,26.364],[53010,26.397],[53025,26.339],[53040,26.26],[53055,26.28],[53070,26.331],[53085,26.351],[53100,26.291],[53115,26.224],[53130,26.32],[53145,26.272],[53160,26.311]],"heater":[[51990,0.0],[52005,0.036],[52020,0.0],[52035,0.0],[52050,0.021],[52065,0.015],[52080,0.0],[52095,0.0],[52110,0.016],[52125,0.0],[52140,0.008],[52155,0.0],[52170,0.031],[52185,2.047],[52200,2.086],[52215,2.082],[52230,2.009],[52245,2.037],[52260,2.061],[52275,2.004],[52290,2.043],[52305,2.047],[52320,2.124],[52335,2.051],[52350,2.01],[52365,2.056],[52380,2.01],[52395,2.034],[52410,2.061],[52425,2.063],[52440,1.99],[52455,2.071],[52470,2.101],[52485,2.052],[52500,2.068],[52515,2.048],[52530,2.052],[52545,2.022],[52560,2.056],[52575,2.031],[52590,2.06],[52605,2.051],[52620,2.042],[52635,2.026],[52650,2.011],[52665,2.051],[52680,2.047],[52695,2.052],[52710,2.065],[52725,2.044],[52740,1.997],[52755,2.031],[52770,2.005],[52785,2.002],[52800,2.024],[52815,2.011],[52830,2.032],[52845,2.079],[52860,2.051],[52875,1.978],[52890,2.05],[52905,2.026],[52920,2.01],[52935,2.044],[52950,2.03],[52965,2.056],[52980,2.009],[52995,2.007],[53010,2.033],[53025,2.004],[53040,2.019],[53055,2.082],[53070,2.085],[53085,2.032],[53100,2.043],[53115,2.039],[53130,2.086],[53145,2.059],[53160,2.048]]},"eps":{"bus":[[51990,28.393],[52005,28.442],[52020,28.493],[52035,28.488],[52050,28.459],[52065,28.43],[52080,28.424],[52095,28.37],[52110,28.422],[52125,28.339],[52140,28.391],[52155,28.439],[52170,28.419],[52185,26.727],[52200,26.73],[52215,26.709],[52230,26.665],[52245,26.691],[52260,26.649],[52275,26.623],[52290,26.647],[52305,26.633],[52320,26.164],[52335,26.224],[52350,26.245],[52365,26.15],[52380,26.258],[52395,26.196],[52410,26.182],[52425,26.206],[52440,26.207],[52455,26.169],[52470,26.124],[52485,26.174],[52500,26.07],[52515,26.159],[52530,26.105],[52545,26.058],[52560,26.034],[52575,26.05],[52590,26.147],[52605,26.11],[52620,26.046],[52635,26.034],[52650,25.934],[52665,26.044],[52680,26.02],[52695,26.02],[52710,25.912],[52725,25.91],[52740,26.028],[52755,25.958],[52770,25.913],[52785,25.926],[52800,25.907],[52815,25.83],[52830,25.806],[52845,25.903],[52860,25.848],[52875,25.912],[52890,25.874],[52905,25.874],[52920,25.825],[52935,25.79],[52950,25.76],[52965,25.747],[52980,25.781],[52995,25.779],[53010,25.809],[53025,25.748],[53040,25.666],[53055,25.683],[53070,25.732],[53085,25.749]],"heater":[[51990,0.0],[52005,0.036],[52020,0.0],[52035,0.0],[52050,0.021],[52065,0.015],[52080,0.0],[52095,0.0],[52110,0.016],[52125,0.0],[52140,0.008],[52155,0.0],[52170,0.031],[52185,3.739],[52200,3.777],[52215,3.773],[52230,3.7],[52245,3.728],[52260,3.752],[52275,3.695],[52290,3.735],[52305,3.739],[52320,3.816],[52335,3.743],[52350,3.702],[52365,3.747],[52380,3.702],[52395,3.726],[52410,3.752],[52425,3.755],[52440,3.682],[52455,3.763],[52470,3.793],[52485,3.743],[52500,3.76],[52515,3.74],[52530,3.744],[52545,3.714],[52560,3.747],[52575,3.722],[52590,3.752],[52605,3.743],[52620,3.734],[52635,3.718],[52650,3.703],[52665,3.742],[52680,3.739],[52695,3.743],[52710,3.757],[52725,3.735],[52740,3.688],[52755,3.723],[52770,3.696],[52785,3.694],[52800,3.715],[52815,3.703],[52830,3.723],[52845,3.771],[52860,3.743],[52875,3.67],[52890,3.742],[52905,3.718],[52920,3.702],[52935,3.735],[52950,3.722],[52965,3.747],[52980,3.7],[52995,3.698],[53010,3.725],[53025,3.696],[53040,3.71],[53055,3.773],[53070,3.776],[53085,3.724]]}};
+const NS = "http://www.w3.org/2000/svg";
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const el = (tag, attrs = {}, parent) => {
+  const n = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) k === "text" ? (n.textContent = v) : n.setAttribute(k, v);
+  if (parent) parent.appendChild(n);
+  return n;
+};
+const clk = (t, s = true) => { const h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60), x = Math.round(t % 60);
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}${s ? ":" + String(x).padStart(2, "0") : ""}`; };
+const pathOf = (pts, x, y) => pts.map(([t, v], i) => `${i ? "L" : "M"}${x(t).toFixed(1)},${y(v).toFixed(1)}`).join("");
+
+/* nav */
+const nav = document.getElementById("nav");
+addEventListener("scroll", () => nav.classList.toggle("scrolled", scrollY > 30), { passive: true });
+
+/* hero live console: plays the real tape */
+(() => {
+  const svg = document.getElementById("live");
+  const W = 520, H = 210, P = { l: 34, r: 10, t: 10, b: 20 };
+  const t0 = D.t0, t1 = D.t_warn + 240;
+  const x = (t) => P.l + (t - t0) / (t1 - t0) * (W - P.l - P.r);
+  const yb = (v) => P.t + (29 - v) / (29 - 25.4) * 110;
+  const yc = (v) => 140 + (4.2 - v) / 4.2 * 50;
+  for (const v of [26, 27, 28, 29]) { el("line", { x1: P.l, x2: W - P.r, y1: yb(v), y2: yb(v), stroke: "rgba(15,23,42,.06)" }, svg); el("text", { x: 4, y: yb(v) + 3, "font-size": 9, fill: "#94a3b8", "font-family": "IBM Plex Mono", text: v + "V" }, svg); }
+  el("line", { x1: P.l, x2: W - P.r, y1: yb(26.5), y2: yb(26.5), stroke: "#b45309", "stroke-dasharray": "4 4", opacity: .7 }, svg);
+  el("text", { x: W - P.r, y: yb(26.5) - 4, "text-anchor": "end", "font-size": 9, fill: "#b45309", "font-family": "IBM Plex Mono", text: "warn 26.5 V" }, svg);
+  el("text", { x: 4, y: 150, "font-size": 9, fill: "#dc2626", "font-family": "IBM Plex Mono", text: "HTR" }, svg);
+  el("text", { x: 4, y: 180, "font-size": 9, fill: "#2563eb", "font-family": "IBM Plex Mono", text: "PAY" }, svg);
+  const bus = el("path", { fill: "none", stroke: "#0f172a", "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+  const htr = el("path", { fill: "none", stroke: "#dc2626", "stroke-width": 1.8 }, svg);
+  const pay = el("path", { fill: "none", stroke: "#2563eb", "stroke-width": 1.8 }, svg);
+  const head = el("circle", { r: 4, fill: "#0d9488" }, svg);
+  const flash = el("circle", { r: 0, fill: "none", stroke: "#b45309", "stroke-width": 2, opacity: 0 }, svg);
+  const cut = (arr, t) => arr.filter(([s]) => s <= t);
+  const val = (arr, t) => (cut(arr, t).at(-1) || arr[0])[1];
+  const dur = 9000; let start = null;
+  const frame = (ts) => {
+    if (start == null) start = ts;
+    const k = Math.min(1, ((ts - start) % (dur + 2600)) / dur);
+    const t = reduce ? t1 : t0 + (t1 - t0) * k;
+    bus.setAttribute("d", pathOf(cut(D.bus, t), x, yb));
+    htr.setAttribute("d", pathOf(cut(D.heater, t), x, yc));
+    pay.setAttribute("d", pathOf(cut(D.payload, t), x, yc));
+    const bv = val(D.bus, t);
+    head.setAttribute("cx", x(Math.min(t, t1))); head.setAttribute("cy", yb(bv));
+    document.getElementById("clock").textContent = clk(t) + " UTC";
+    document.getElementById("v-bus").textContent = bv.toFixed(2) + " V";
+    document.getElementById("v-htr").textContent = val(D.heater, t).toFixed(2) + " A";
+    document.getElementById("v-pay").textContent = val(D.payload, t).toFixed(2) + " A";
+    const alarm = t >= D.t_warn;
+    document.getElementById("ro-bus").classList.toggle("alarm", alarm);
+    document.getElementById("alarm-chip").classList.toggle("on", alarm);
+    document.getElementById("ro-htr").classList.toggle("hot", t >= D.t_heater + 10);
+    if (alarm) { const r = ((ts - start) % 1200) / 1200; flash.setAttribute("cx", x(D.t_warn)); flash.setAttribute("cy", yb(26.5)); flash.setAttribute("r", 4 + r * 22); flash.setAttribute("opacity", 1 - r); }
+    else flash.setAttribute("opacity", 0);
+    if (!reduce) requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+})();
+
+/* story chart */
+const story = (() => {
+  const svg = document.getElementById("story-svg");
+  const W = 900, L = 74, R = 18;
+  const t0 = D.t0, t1 = D.t1;
+  const x = (t) => L + (t - t0) / (t1 - t0) * (W - L - R);
+  const yb = (v) => 30 + (29 - v) / (29 - 25) * 250;     // bus panel 30–280
+  const yp = (v) => 330 + (4.2 - v) / 4.2 * 80;           // payload lane 330–410
+  const yh = (v) => 450 + (4.2 - v) / 4.2 * 80;           // heater lane 450–530
+  const g = (cls) => el("g", { class: "layer " + cls }, svg);
+
+  // base: axes, lanes
+  const base = el("g", {}, svg);
+  for (const v of [25, 26, 27, 28, 29]) { el("line", { x1: L, x2: W - R, y1: yb(v), y2: yb(v), class: "grid" }, base); el("text", { x: L - 10, y: yb(v) + 5, "text-anchor": "end", text: `${v} V` }, base); }
+  for (let t = Math.ceil(t0 / 180) * 180; t <= t1; t += 180) el("text", { x: x(t), y: 556, "text-anchor": "middle", text: clk(t, false) }, base);
+  el("text", { x: L, y: 18, class: "lane-label", fill: "#0f172a", text: "Bus voltage" }, base);
+  el("line", { x1: L, x2: W - R, y1: yb(26.5), y2: yb(26.5), stroke: "#b45309", "stroke-dasharray": "5 5", opacity: .8 }, base);
+  el("text", { x: L + 6, y: yb(26.5) + 18, fill: "#b45309", text: "warn 26.5 V" }, base);
+  el("line", { x1: L, x2: W - R, y1: yb(25), y2: yb(25), stroke: "#dc2626", "stroke-dasharray": "5 5", opacity: .5 }, base);
+  el("text", { x: L + 6, y: yb(25) - 6, fill: "#dc2626", opacity: .8, text: "critical 25 V" }, base);
+
+  const busActual = (() => { const l = g("s-bus"); return el("path", { d: pathOf(D.bus.filter(([t]) => t <= D.t_dec), x, yb), class: "ln draw", stroke: "#0f172a" }, l); })();
+  const busRest = (() => { const l = g("s-rest"); return el("path", { d: pathOf(D.bus.filter(([t]) => t >= D.t_dec - 15), x, yb), class: "ln", stroke: "#0f172a", opacity: .9 }, l); })();
+  // alarm marker
+  const alarm = g("s-alarm");
+  el("circle", { cx: x(D.t_warn), cy: yb(26.5), r: 7, fill: "#b45309" }, alarm);
+  el("circle", { cx: x(D.t_warn), cy: yb(26.5), r: 16, fill: "none", stroke: "#b45309", "stroke-width": 1.5, opacity: .5 }, alarm);
+  el("text", { x: x(D.t_warn) + 20, y: yb(26.5) + 50, class: "big halo", fill: "#b45309", text: `WARN · ${clk(D.t_warn)}` }, alarm);
+
+  // payload lane
+  const pay = g("s-pay");
+  el("text", { x: L, y: 326, class: "lane-label", fill: "#2563eb", text: "Payload current" }, pay);
+  el("path", { d: pathOf(D.payload, x, yp), class: "ln draw", stroke: "#2563eb" }, pay);
+  el("line", { x1: x(D.t_sci), x2: x(D.t_sci), y1: 30, y2: 410, stroke: "#2563eb", "stroke-dasharray": "3 4", opacity: .8 }, pay);
+  el("text", { x: x(D.t_sci) + 8, y: 372, class: "big halo", fill: "#2563eb", text: `science mode ${clk(D.t_sci)} · +0.82 A` }, pay);
+
+  // heater lane
+  const htr = g("s-htr");
+  el("text", { x: L, y: 446, class: "lane-label", fill: "#dc2626", text: "Heater B current" }, htr);
+  el("rect", { x: L, width: W - L - R, y: yh(1.2), height: yh(0.8) - yh(1.2), fill: "#0d9488", opacity: .12 }, htr);
+  el("line", { x1: L, x2: W - R, y1: yh(2.4), y2: yh(2.4), stroke: "#b45309", "stroke-dasharray": "4 4", opacity: .8 }, htr);
+  el("text", { x: W - R, y: yh(2.4) + 18, "text-anchor": "end", fill: "#b45309", text: "EPS-17 2× bar" }, htr);
+  el("path", { d: pathOf(D.heater, x, yh), class: "ln draw", stroke: "#dc2626" }, htr);
+  el("line", { x1: x(D.t_heater), x2: x(D.t_heater), y1: 30, y2: 530, stroke: "#dc2626", "stroke-dasharray": "3 4", opacity: .8 }, htr);
+  el("text", { x: x(D.t_heater) + 10, y: yh(3.74) - 10, class: "big halo", fill: "#dc2626", text: `on ${clk(D.t_heater)} · 3.74 A · 3.1× healthy` }, htr);
+  const by = 302;
+  el("path", { d: `M${x(D.t_heater)},${by - 6}V${by}H${x(D.t_sci)}V${by - 6}`, fill: "none", stroke: "#b45309", "stroke-width": 1.8 }, htr);
+  el("text", { x: x(D.t_sci) + 10, y: by + 5, class: "big halo", fill: "#b45309", text: "← heater leads by 2 min 8 s" }, htr);
+
+  // what-if
+  const wi = g("s-whatif");
+  el("path", { d: pathOf(D.healthy_bus, x, yb), class: "ln draw", stroke: "#0d9488", "stroke-dasharray": "7 6" }, wi);
+  el("text", { x: W - R, y: yb(27.6) - 14, "text-anchor": "end", class: "big halo", fill: "#0d9488", text: "replay, healthy heater · worst 27.09 V · no alarm" }, wi);
+
+  // options
+  const op = g("s-opts");
+  el("rect", { x: x(D.t_dec), y: 30, width: W - R - x(D.t_dec), height: 250, fill: "rgba(13,148,136,.05)" }, op);
+  el("line", { x1: x(D.t_dec), x2: x(D.t_dec), y1: 22, y2: 280, stroke: "#64748b", "stroke-dasharray": "2 4" }, op);
+  el("text", { x: x(D.t_dec) + 8, y: 46, class: "halo", fill: "#64748b", text: `decision ${clk(D.t_dec, false)}` }, op);
+  const col = { heater_off: "#0d9488", payload_safe: "#2563eb", hold: "#64748b" };
+  for (const id of ["hold", "payload_safe", "heater_off"]) {
+    const pts = D.options[id].filter(([t]) => t <= t1);
+    el("path", { d: pathOf(pts, x, yb), class: "ln draw", stroke: col[id], "stroke-width": id === "heater_off" ? 3 : 1.8, "stroke-dasharray": id === "heater_off" ? "" : "6 5", opacity: id === "heater_off" ? 1 : .75 }, op);
+    const [lt, lv] = pts.at(-1);
+    const o = D.option_text[id];
+    const dy = { heater_off: -14, payload_safe: -34, hold: 26 }[id];
+    el("text", { x: x(lt) - 4, y: yb(lv) + dy, "text-anchor": "end", class: "big halo", fill: col[id], text: `${o.label} · ${o.ten} V` }, op);
+  }
+
+  // prep draw-on paths
+  svg.querySelectorAll(".draw").forEach((p) => {
+    const len = p.getTotalLength();
+    p.dataset.len = len;
+    if (!p.getAttribute("stroke-dasharray")) { p.style.strokeDasharray = len; p.style.strokeDashoffset = len; }
+  });
+
+  const layersFor = {
+    1: ["s-bus", "s-alarm"],
+    2: ["s-bus", "s-alarm", "s-pay"],
+    3: ["s-bus", "s-alarm", "s-pay", "s-htr"],
+    4: ["s-bus", "s-rest", "s-alarm", "s-pay", "s-htr", "s-whatif"],
+    5: ["s-bus", "s-alarm", "s-pay", "s-htr", "s-opts"],
+  };
+  const status = { 1: "ALARM", 2: "SUSPECT · PAYLOAD?", 3: "PRIME SUSPECT · HEATER B", 4: "REPLAY · SIMULATED", 5: "DECIDE · 3 FUTURES" };
+  const legend = {
+    1: [["#0f172a", "bus voltage (tape)"]],
+    2: [["#0f172a", "bus voltage"], ["#2563eb", "payload current"]],
+    3: [["#0f172a", "bus voltage"], ["#2563eb", "payload"], ["#dc2626", "heater B"]],
+    4: [["#0f172a", "what happened"], ["#0d9488", "replay, healthy heater (simulated)"]],
+    5: [["#0d9488", "turn off Heater B"], ["#2563eb", "safe the payload"], ["#64748b", "hold"]],
+  };
+  return (n) => {
+    const on = new Set(layersFor[n]);
+    svg.querySelectorAll(".layer").forEach((l) => {
+      const show = [...l.classList].some((c) => on.has(c));
+      l.classList.toggle("on", show);
+      l.querySelectorAll(".draw").forEach((p) => { if (!p.getAttribute("stroke-dasharray")) p.style.strokeDashoffset = show ? 0 : p.dataset.len; });
+    });
+    document.getElementById("stage-status").textContent = status[n];
+    document.getElementById("stage-status").style.color = n >= 4 ? "#0d9488" : n === 3 ? "#dc2626" : "#b45309";
+    document.getElementById("stage-legend").innerHTML = legend[n].map(([c, t]) => `<span><i style="background:${c}"></i>${t}</span>`).join("");
+  };
+})();
+story(1);
+const stepIO = new IntersectionObserver((entries) => {
+  for (const e of entries) if (e.isIntersecting) {
+    document.querySelectorAll(".step").forEach((s) => s.classList.toggle("on", s === e.target));
+    story(Number(e.target.dataset.step));
+  }
+}, { rootMargin: "-45% 0px -45% 0px" });
+document.querySelectorAll(".step").forEach((s) => stepIO.observe(s));
+
+/* duo charts */
+function duo(id, bus, heater, ratioColor) {
+  const svg = document.getElementById(id);
+  const W = 520, L = 34, R = 8, t0 = D.marg.t0, t1 = D.marg.t1;
+  const x = (t) => L + (t - t0) / (t1 - t0) * (W - L - R);
+  const y = (v) => 14 + (4.2 - v) / 4.2 * 140;
+  for (const v of [0, 1, 2, 3, 4]) { el("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: "rgba(15,23,42,.06)" }, svg); el("text", { x: 4, y: y(v) + 3, text: `${v}A` }, svg); }
+  el("rect", { x: L, width: W - L - R, y: y(1.2), height: y(0.8) - y(1.2), fill: "#0d9488", opacity: .12 }, svg);
+  el("line", { x1: L, x2: W - R, y1: y(2.4), y2: y(2.4), stroke: "#b45309", "stroke-dasharray": "4 4" }, svg);
+  el("text", { x: W - R, y: y(2.4) - 5, "text-anchor": "end", fill: "#b45309", text: "2× bar · 2.4 A" }, svg);
+  el("text", { x: W - R, y: y(1.2) - 4, "text-anchor": "end", fill: "#0d9488", text: "healthy" }, svg);
+  const p = el("path", { d: pathOf(heater, x, y), fill: "none", stroke: ratioColor, "stroke-width": 2.4, "stroke-linejoin": "round" }, svg);
+  const len = p.getTotalLength(); p.style.strokeDasharray = len; p.style.strokeDashoffset = len; p.style.transition = "stroke-dashoffset 2s cubic-bezier(.2,.7,.2,1)";
+  new IntersectionObserver(([e], o) => { if (e.isIntersecting) { p.style.strokeDashoffset = 0; o.disconnect(); } }, { threshold: .5 }).observe(svg);
+}
+duo("duo-a", D.eps.bus, D.eps.heater, "#dc2626");
+duo("duo-b", D.marg.bus, D.marg.heater, "#b45309");
+
+/* reveals, lifecycle, counters */
+const io = new IntersectionObserver((entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: .15 });
+document.querySelectorAll(".reveal, .life").forEach((n, i) => { n.style.transitionDelay = n.classList.contains("rc") ? `${(i % 5) * 80}ms` : ""; io.observe(n); });
+const cio = new IntersectionObserver((entries) => entries.forEach((e) => {
+  if (!e.isIntersecting) return;
+  e.target.querySelectorAll("[data-count]").forEach((n) => {
+    const to = Number(n.dataset.count); const t0 = performance.now();
+    const step = (ts) => { const k = Math.min(1, (ts - t0) / 1400); n.textContent = Math.round(to * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
+  cio.unobserve(e.target);
+}), { threshold: .4 });
+document.querySelectorAll(".proof").forEach((n) => cio.observe(n));
+</script>
+</body>
+</html>

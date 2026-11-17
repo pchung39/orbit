@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from agent.hypothesis import PROCEDURE_BY_FAMILY, classify, measure
 from agent.llm import investigate_llm, resolve_provider
 from agent.tools import Tools, _fmt
 from agent.tracing import flush_tracing, init_tracing, log_to_span, span
@@ -54,74 +55,29 @@ def _investigate_rules_body(run_id: str, alarm_channel: str = "EPS.bus_voltage")
     tools = Tools(conn, spec)
 
     warn_meta = spec["channels"][alarm_channel]
-    warn_limit = warn_meta["warn_limit"]
-    crossing = tools.first_warn(run_id, alarm_channel)
+    m = measure(tools, spec, run_id, alarm_channel)
+    crossing = m.crossing
     if crossing is None:
         return f"# Investigation {run_id}\n\nNo {alarm_channel} warn crossing found. **[OBSERVED]**\n"
 
-    t_warn = crossing["time_s"]
-    events = tools.events_before(run_id, t_warn, window_s=600.0)
-
-    heater_enable = next((e for e in events if e["detail"] == "HEATER_B_ENABLE"), None)
-    science = next((e for e in events if e["detail"] == "SCIENCE_MODE"), None)
-
-    heater_now = tools.sample(run_id, "THM.heater_b_current", t_warn)
-    payload_now = tools.sample(run_id, "PAY.payload_current", t_warn)
-    payload_mode = tools.sample(run_id, "PAY.mode", t_warn)
-    bus_i = tools.sample(run_id, "EPS.bus_current", t_warn)
-    heater_temp = tools.sample(run_id, "THM.heater_b_temperature", t_warn)
-    batt_v = tools.sample(run_id, "EPS.battery_voltage", t_warn)
-
-    heater_at_cmd = (
-        tools.sample(run_id, "THM.heater_b_current", heater_enable["time_s"])
-        if heater_enable
-        else None
-    )
+    t_warn = m.t_warn
+    events = m.events
+    heater_enable = m.heater_enable
+    science = m.science
+    payload_mode = m.payload_mode
+    bus_i = m.bus_i
+    heater_temp = m.heater_temp
+    batt_v = m.batt_v
 
     heater_nominal = spec["channels"]["THM.heater_b_current"]["nominal_range"]
-    heater_healthy_max = heater_nominal[1]
-    heater_value = _num(heater_at_cmd) or _num(heater_now)
-    heater_ratio = (heater_value / heater_healthy_max) if heater_value else None
+    heater_healthy_max = m.heater_healthy_max
+    heater_value = m.heater_value
+    heater_ratio = m.heater_ratio
+    payload_value = m.payload_value
+    payload_ratio = m.payload_ratio
 
-    payload_healthy_science = spec["channels"]["PAY.payload_current"]["nominal_range"][1]
-    payload_value = _num(payload_now)
-    payload_ratio = (payload_value / payload_healthy_science) if payload_value else None
-
-    heater_guilty = heater_ratio is not None and heater_ratio >= 2
-    payload_guilty = (not heater_guilty) and payload_ratio is not None and payload_ratio >= 2
-    heater_marginal = heater_ratio is not None and 1.3 <= heater_ratio < 2
-    payload_marginal = payload_ratio is not None and 1.3 <= payload_ratio < 2
-    loads_elevated = heater_guilty or payload_guilty or heater_marginal or payload_marginal
-    battery_family = (not heater_guilty) and (not payload_guilty) and (
-        alarm_channel == "EPS.battery_voltage"
-        or (
-            not loads_elevated
-            and batt_v is not None
-            and _num(batt_v) is not None
-            and _num(batt_v) < spec["channels"]["EPS.battery_voltage"]["warn_limit"]
-        )
-    )
-
-    if heater_guilty:
-        procedure_id = "EPS-17"
-        family = "heater"
-        prefer = "INC-0187"
-    elif payload_guilty:
-        procedure_id = "PAY-04"
-        family = "payload"
-        prefer = "INC-0191"
-    elif battery_family:
-        procedure_id = "EPS-09"
-        family = "battery"
-        prefer = "INC-0162"
-    elif events and (heater_marginal or payload_marginal):
-        procedure_id = "EPS-17"
-        family = "withheld"
-        prefer = "INC-0187"
-    else:
-        procedure_id = "EPS-17"
-        family = "open"
-        prefer = "INC-0187"
+    family = classify(m, spec)
+    procedure_id, prefer = PROCEDURE_BY_FAMILY[family]
 
     procedure = tools.get_doc(procedure_id)
     if procedure is None:
@@ -191,7 +147,7 @@ def _investigate_rules_body(run_id: str, alarm_channel: str = "EPS.bus_voltage")
             f"{pval:.2f} A. **[OBSERVED]**"
         )
         n += 1
-        if payload_guilty:
+        if family == "payload":
             lines.append(
                 f"{n}. That is **{payload_ratio:.1f}×** the 0.9 A healthy science draw. "
                 f"PAY-04 treats ≥2× as the prime suspect. Heater current is not ≥2× — "

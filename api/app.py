@@ -6,6 +6,7 @@ Does not command the spacecraft. Investigation uses --provider rules only
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -14,8 +15,9 @@ from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from agent.brief import build_brief
 from agent.closeout import build_closeout
-from agent.hypothesis import hypothesis_for
+from agent.hypothesis import HYPOTHESIS_BY_FAMILY
 from agent.investigate import investigate_rules
 from agent.tools import Tools
 from agent.tracing import flush_tracing, init_tracing, log_to_span, span
@@ -23,21 +25,16 @@ from simulator.scenarios import clock_to_s, format_clock
 from simulator.simulate import load_and_validate
 from storage.sources import (
     bind_preview,
-    list_activity,
     list_archive_catalog,
-    list_connectors,
     parse_alarm_clock,
     resolve_archive_run,
     seal_run_window,
-    sync_connector,
 )
-from eval.bundle import PromoteError, promote_candidate_to_baseline
-from eval.compare import run_compare
-from eval.explorer import build_explorer_case_detail, build_explorer_index
 from storage.evidence import list_runs, query_channel, query_events
 from storage.store import (
     connect,
     create_incident,
+    decide_incident,
     ensure_demo_incident,
     file_incident,
     get_hypothesis_feedback,
@@ -46,12 +43,7 @@ from storage.store import (
     list_incidents,
     reset_demo_incidents,
     save_investigation,
-    store_trust_snapshot,
     upsert_hypothesis_feedback,
-    _load_eval_baseline,
-    _load_eval_candidate,
-    _load_eval_comparison,
-    _load_eval_scorecard,
 )
 
 UI_DIR = Path(__file__).resolve().parent.parent / "ui"
@@ -283,126 +275,6 @@ def _channel_card(spec: dict[str, Any], name: str) -> dict[str, Any]:
     }
 
 
-@api.get("/trust")
-def trust() -> dict[str, Any]:
-    """Data-plane health for the trust console. Read-only."""
-    spec = load_and_validate()
-    with _conn() as conn:
-        ensure_demo_incident(conn)
-        snapshot = store_trust_snapshot(conn, spec)
-    snapshot["boundaries"] = [
-        "ORBIT replays ingested telemetry tapes — not a live downlink.",
-        "ORBIT does not detect anomalies or open alarms on its own.",
-        "ORBIT assembles tagged reports; it does not command the spacecraft.",
-        "Report assembly may omit a root-cause hypothesis when no load meets the procedure bar.",
-        "Investigation in this console uses rules only — no paid LLM.",
-    ]
-    return snapshot
-
-
-class PromoteBaselineBody(BaseModel):
-    note: str | None = None
-    force: bool = False
-
-
-@api.get("/eval/compare")
-def eval_compare() -> dict[str, Any]:
-    """Baseline vs candidate release comparison."""
-    return run_compare(write=True)
-
-
-@api.get("/eval/explorer")
-def eval_explorer() -> dict[str, Any]:
-    """Eval Explorer index — cases, metrics, and run metadata."""
-    candidate = _load_eval_candidate()
-    if not candidate:
-        raise HTTPException(404, "no candidate run — run the eval suite first")
-    comparison = _load_eval_comparison()
-    if comparison is None and _load_eval_baseline():
-        comparison = run_compare(write=False)
-    scorecard = _load_eval_scorecard()
-    return build_explorer_index(candidate, comparison, scorecard)
-
-
-@api.get("/eval/baseline")
-def eval_baseline() -> dict[str, Any]:
-    data = _load_eval_baseline()
-    if not data:
-        raise HTTPException(404, "no approved baseline — promote a passing candidate first")
-    return {
-        "baseline_id": data.get("baseline_id"),
-        "approved_at": data.get("approved_at"),
-        "generated_at": data.get("generated_at"),
-        "agent": data.get("agent"),
-        "scorecard": data.get("scorecard"),
-        "suite_case_ids": data.get("suite_case_ids"),
-        "note": data.get("note"),
-    }
-
-
-@api.get("/eval/candidate")
-def eval_candidate() -> dict[str, Any]:
-    data = _load_eval_candidate()
-    if not data:
-        raise HTTPException(404, "no candidate run — run the eval suite first")
-    return {
-        "run_id": data.get("run_id"),
-        "generated_at": data.get("generated_at"),
-        "agent": data.get("agent"),
-        "scorecard": data.get("scorecard"),
-        "suite_case_ids": data.get("suite_case_ids"),
-        "cases": [
-            {
-                "id": case_id,
-                "ok": entry.get("ok"),
-                "passed": entry.get("passed"),
-                "total": entry.get("total"),
-                "label": (entry.get("contract") or {}).get("label"),
-            }
-            for case_id, entry in sorted((data.get("cases") or {}).items())
-        ],
-    }
-
-
-@api.get("/eval/cases/{case_id}")
-def eval_case_detail(case_id: str) -> dict[str, Any]:
-    data = _load_eval_candidate()
-    if not data:
-        raise HTTPException(404, "no candidate run — run the eval suite first")
-    cases = data.get("cases") or {}
-    if case_id not in cases:
-        raise HTTPException(404, f"unknown eval case {case_id}")
-    entry = cases[case_id]
-    baseline = _load_eval_baseline()
-    baseline_entry = (baseline.get("cases") or {}).get(case_id) if baseline else None
-    comparison = _load_eval_comparison()
-    if comparison is None and baseline:
-        comparison = run_compare(write=False)
-    explorer = build_explorer_case_detail(
-        case_id,
-        entry,
-        baseline_entry,
-        comparison,
-        baseline,
-    )
-    return {
-        "id": case_id,
-        "candidate": entry,
-        "baseline": baseline_entry,
-        **explorer,
-    }
-
-
-@api.post("/eval/baseline/promote")
-def eval_promote_baseline(body: PromoteBaselineBody) -> dict[str, Any]:
-    try:
-        path = promote_candidate_to_baseline(note=body.note, force=body.force)
-        run_compare(write=True)
-        return {"ok": True, "path": str(path), "baseline": _load_eval_baseline()}
-    except PromoteError as exc:
-        raise HTTPException(409, str(exc)) from exc
-
-
 @api.get("/desk")
 def desk(run_id: str | None = Query(default=None)) -> dict[str, Any]:
     """Last samples on a tape. Not a live downlink. ORBIT does not detect."""
@@ -489,46 +361,11 @@ def open_incident(body: IncidentIn) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
-@api.get("/sources")
-def sources() -> dict[str, Any]:
-    """Upstream archive catalog. Cases fetch-on-seal — not a live feed."""
-    with _conn() as conn:
-        ensure_demo_incident(conn)
-        connectors = list_connectors(conn)
-    return {
-        "adapters": "demo-local",
-        "note": (
-            "Mission archive stays upstream. Opening a case fetches a time window and writes "
-            "only that sealed file. ORBIT does not detect or command."
-        ),
-        "connectors": connectors,
-        "activity": list_activity(),
-    }
-
-
 @api.get("/archive")
 def archive_catalog() -> list[dict[str, Any]]:
     """Upstream archive tapes available to seal from (metadata + reachability)."""
     return list_archive_catalog()
 
-
-@api.get("/sources/activity")
-def sources_activity(limit: int = Query(default=20, ge=1, le=50)) -> list[dict[str, Any]]:
-    return list_activity(limit)
-
-
-@api.post("/sources/{connector_id}/sync")
-def sources_sync(connector_id: str) -> dict[str, Any]:
-    try:
-        with _conn() as conn:
-            ensure_demo_incident(conn)
-            connector = sync_connector(conn, connector_id)
-    except ValueError as exc:
-        raise HTTPException(404, str(exc)) from exc
-    return {
-        "connector": connector,
-        "activity": list_activity(),
-    }
 
 @api.get("/incidents/{incident_id}")
 def incident(incident_id: str) -> dict[str, Any]:
@@ -561,11 +398,40 @@ def incident_workspace(incident_id: str) -> dict[str, Any]:
         }
         fb = get_hypothesis_feedback(conn, incident_id)
     data = workspace_payload(spec, run_id, events, telemetry, extra_channels=[row["alarm"]])
-    data["incident"] = dict(row)
+    data["incident"] = _incident_out(row)
     if fb:
         data["incident"]["feedback"] = dict(fb)
     data["alarm"] = row["alarm"]
+    # The brief exists once ORBIT has investigated; before that the page shows raw evidence only.
+    data["brief"] = _brief_for(row) if row.get("investigation_report") else None
     return data
+
+
+def _incident_out(row: Any) -> dict[str, Any]:
+    out = dict(row)
+    raw = out.get("verify_result")
+    if isinstance(raw, str):
+        try:
+            out["verify_result"] = json.loads(raw)
+        except ValueError:
+            out["verify_result"] = None
+    return out
+
+
+def _brief_for(row: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        return build_brief(row["run_id"], row["alarm"])
+    except Exception as exc:  # a broken brief must not take the case page down
+        return {"error": str(exc)}
+
+
+@api.get("/incidents/{incident_id}/brief")
+def incident_brief(incident_id: str) -> dict[str, Any] | None:
+    with _conn() as conn:
+        row = get_incident(conn, incident_id)
+    if row is None:
+        raise HTTPException(404, f"unknown incident {incident_id}")
+    return _brief_for(dict(row)) if row.get("investigation_report") else None
 
 
 def workspace_payload(
@@ -616,6 +482,7 @@ def investigate_incident(incident_id: str) -> dict[str, Any]:
             "status": saved["status"],
             "report": report,
             "investigated_at": saved.get("investigated_at"),
+            "brief": _brief_for(dict(saved)),
         }
         log_to_span(sp, output={"incident_id": incident_id, "run_id": row["run_id"], "chars": len(report)})
         return out
@@ -625,45 +492,78 @@ class FileIn(BaseModel):
     note: str | None = Field(default=None)
 
 
-class FeedbackIn(BaseModel):
-    verdict: str = Field(pattern="^(confirmed|rejected)$")
+class DecideIn(BaseModel):
+    option: str = Field(pattern="^(heater_off|payload_safe|hold)$")
     note: str | None = Field(default=None)
 
 
-@api.get("/incidents/{incident_id}/feedback")
-def incident_feedback(incident_id: str) -> dict[str, Any] | None:
-    with _conn() as conn:
-        row = get_incident(conn, incident_id)
-        if row is None:
-            raise HTTPException(404, f"unknown incident {incident_id}")
-        fb = get_hypothesis_feedback(conn, incident_id)
-        return dict(fb) if fb else None
+VERIFY_STEP = {
+    ("heater_off", True): "EPS-17 step 7: the bus recovered, so leave Heater B off and open a fault report.",
+    ("payload_safe", True): "PAY-04 step 7: current recovered, so leave the payload in STANDBY and open a fault report.",
+    ("heater_off", False): "No recovery. EPS-17 step 7: check the next suspect load or continue to EPS-09.",
+    ("payload_safe", False): "No recovery. Return to the evidence and pick the next suspect.",
+}
+WATCH_STEP = {
+    "withheld": "Watching. EPS-17 step 4 is not met; reopen if Heater B current reaches the 2× bar.",
+    "battery": "Watching. EPS-09 step 7: continue the battery checkout offline.",
+}
 
 
-@api.put("/incidents/{incident_id}/feedback")
-def save_incident_feedback(incident_id: str, body: FeedbackIn) -> dict[str, Any]:
+@api.post("/incidents/{incident_id}/decide")
+def decide(incident_id: str, body: DecideIn) -> dict[str, Any]:
+    """Record the operator's decision and run it in the simulator. Nothing is uplinked."""
     with _conn() as conn:
         row = get_incident(conn, incident_id)
-        if row is None:
-            raise HTTPException(404, f"unknown incident {incident_id}")
-        if row["status"] == "filed":
-            raise HTTPException(409, f"{incident_id} is already filed")
-    hyp = hypothesis_for(row["run_id"], row["alarm"])
+    if row is None:
+        raise HTTPException(404, f"unknown incident {incident_id}")
+    if not row.get("investigation_report"):
+        raise HTTPException(409, f"{incident_id} has not been investigated")
+    brief = _brief_for(dict(row)) or {}
+    simulation = brief.get("simulation")
+    option = next((o for o in (simulation or {}).get("decision", {}).get("options", []) if o["id"] == body.option), None)
+    family = brief.get("family", "open")
+    if option is None:
+        verify = {"option": body.option, "simulated": False, "label": body.option,
+                  "text": "No simulator recipe for this tape. The decision is recorded without a preview."}
+    else:
+        clears = option["result"] == "clears"
+        step = (
+            WATCH_STEP.get(family, "Watching. Hold until the evidence clears a procedure bar.")
+            if body.option == "hold"
+            else VERIFY_STEP[(body.option, clears)]
+        )
+        verify = {
+            "option": body.option,
+            "label": option["label"],
+            "simulated": True,
+            "recommended": option["recommended"],
+            "result": option["result"],
+            "clears": clears,
+            "text": option["text"],
+            "step": step,
+            "decision_clock": simulation["decision"]["clock"],
+            "channel": simulation["channel"],
+            "unit": simulation["unit"],
+            "outcome": option["outcome"],
+        }
+    hyp_key, hyp_label = HYPOTHESIS_BY_FAMILY.get(family, ("OPEN", "No hypothesis"))
+    recommended = (option or {}).get("recommended", False)
     try:
         with _conn() as conn:
-            fb = upsert_hypothesis_feedback(
+            saved = decide_incident(conn, incident_id, option=body.option, note=body.note, verify_result=verify)
+            upsert_hypothesis_feedback(
                 conn,
                 incident_id,
                 run_id=row["run_id"],
                 alarm=row["alarm"],
-                hypothesis_key=hyp.key,
-                hypothesis_label=hyp.label,
-                verdict=body.verdict,
+                hypothesis_key=hyp_key,
+                hypothesis_label=hyp_label,
+                verdict="confirmed" if recommended else "rejected",
                 note=body.note,
             )
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
-    return {"feedback": fb, "incident_id": incident_id, "status": row["status"]}
+    return {"incident": _incident_out(saved), "status": saved["status"], "verify_result": verify}
 
 
 @api.post("/incidents/{incident_id}/file")
@@ -690,7 +590,7 @@ def file_open_incident(incident_id: str, body: FileIn | None = None) -> dict[str
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     return {
-        "incident": filed,
+        "incident": _incident_out(filed),
         "status": filed["status"],
     }
 
@@ -698,43 +598,6 @@ def file_open_incident(incident_id: str, body: FileIn | None = None) -> dict[str
 @api.get("/runs")
 def runs() -> list[dict[str, Any]]:
     return [_row(row) for row in list_runs()]
-
-
-@api.get("/runs/{run_id}/events")
-def events(run_id: str) -> list[dict[str, Any]]:
-    rows = query_events(run_id)
-    if not rows and not any(r["id"] == run_id for r in list_runs()):
-        raise HTTPException(404, f"unknown run {run_id}")
-    return [_row(row) for row in rows]
-
-
-@api.get("/runs/{run_id}/workspace")
-def workspace(run_id: str) -> dict[str, Any]:
-    """One payload for the console: events, traces, and channel limits."""
-    spec = load_and_validate()
-    if not any(row["id"] == run_id for row in list_runs()):
-        raise HTTPException(404, f"unknown run {run_id}")
-    events = [_row(row) for row in query_events(run_id)]
-    telemetry = {
-        channel: [_row(row) for row in query_channel(run_id, channel)]
-        for channel in WORKSPACE_CHANNELS
-    }
-    return workspace_payload(spec, run_id, events, telemetry)
-
-
-@api.get("/runs/{run_id}/channels/{channel}")
-def channel(
-    run_id: str,
-    channel: str,
-    from_clock: str | None = Query(default=None),
-    to_clock: str | None = Query(default=None),
-) -> list[dict[str, Any]]:
-    start = clock_to_s(from_clock) if from_clock else None
-    end = clock_to_s(to_clock) if to_clock else None
-    rows = query_channel(run_id, channel, start, end)
-    if not rows and not any(r["id"] == run_id for r in list_runs()):
-        raise HTTPException(404, f"unknown run {run_id}")
-    return [_row(row) for row in rows]
 
 
 @api.get("/runs/{run_id}/inspect")
@@ -827,20 +690,6 @@ def inspect_tape(
     }
 
 
-@api.post("/investigate/{run_id}")
-def investigate(run_id: str, alarm: str = Query(default="EPS.bus_voltage")) -> dict[str, str]:
-    """Rules-based investigation only. Paid LLM stays on the CLI, on request."""
-    with span(
-        "api.investigate_run",
-        span_type="task",
-        input={"run_id": run_id, "alarm": alarm},
-        metadata={"provider": "rules", "source": "api"},
-    ) as sp:
-        report = investigate_rules(run_id, alarm_channel=alarm)
-        log_to_span(sp, output={"run_id": run_id, "chars": len(report)})
-        return {"run_id": run_id, "provider": "rules", "alarm": alarm, "report": report}
-
-
 def health() -> dict[str, bool]:
     return {"ok": True}
 
@@ -893,11 +742,6 @@ def spa_incidents() -> FileResponse:
     return _spa_index()
 
 
-@app.get("/app/trust")
-def spa_trust() -> FileResponse:
-    return _spa_index()
-
-
 @app.get("/app/incidents/{incident_id}")
 def spa_case(incident_id: str) -> FileResponse:
     return _spa_index()
@@ -907,11 +751,6 @@ def spa_case(incident_id: str) -> FileResponse:
 @app.get("/incidents")
 def legacy_incidents() -> RedirectResponse:
     return RedirectResponse(url="/app/incidents", status_code=307)
-
-
-@app.get("/trust")
-def legacy_trust() -> RedirectResponse:
-    return RedirectResponse(url="/app/trust", status_code=307)
 
 
 @app.get("/incidents/{incident_id}")

@@ -22,9 +22,14 @@ class Tools:
         self.conn = conn
         self.spec = spec
         self.log: list[str] = []
+        # Structured twin of `log` for the case page's audit trail.
+        self.trail: list[dict[str, Any]] = []
 
     def _note(self, msg: str) -> None:
         self.log.append(msg)
+
+    def _trail(self, tool: str, args: str, out: str, tag: str) -> None:
+        self.trail.append({"tool": tool, "args": args, "out": out, "tag": tag})
 
     def sample(self, run_id: str, channel: str, time_s: float) -> dict[str, Any] | None:
         with span(
@@ -35,12 +40,20 @@ class Tools:
             rows = query_channel(run_id, channel, time_s - 5, time_s + 5)
             if not rows:
                 self._note(f"sample {run_id} {channel} @ {format_clock(time_s)} → none")
+                self._trail("sample", f"{channel} @ {format_clock(time_s)}", "no sample", "OBSERVED")
                 log_to_span(sp, output=None)
                 return None
             row = min(rows, key=lambda r: abs(r["time_s"] - time_s))
             self._note(
                 f"sample {run_id} {channel} @ {format_clock(time_s)} "
                 f"→ {format_clock(row['time_s'])} {_fmt(row)}"
+            )
+            unit = self.spec["channels"].get(channel, {}).get("unit") or ""
+            self._trail(
+                "sample",
+                f"{channel} @ {format_clock(time_s)}",
+                f"{_fmt_short(row)}{' ' + unit if unit and row.get('value_text') is None else ''}",
+                "OBSERVED",
             )
             out = public_row(row)
             log_to_span(sp, output=out)
@@ -71,6 +84,13 @@ class Tools:
                 f"first_warn {run_id} {channel} limit={limit} {direction} "
                 f"→ {format_clock(hit['time_s']) + ' ' + _fmt(hit) if hit else 'none'}"
             )
+            unit = meta.get("unit") or ""
+            self._trail(
+                "first_warn",
+                f"{channel} · warn {limit} {unit} {direction}",
+                f"{format_clock(hit['time_s'])} · {_fmt_short(hit)} {unit}" if hit else "no crossing",
+                "OBSERVED",
+            )
             log_to_span(sp, output=public_row(hit))
             return hit
 
@@ -93,6 +113,13 @@ class Tools:
                 f"events {run_id} in {format_clock(deadline_s - window_s)}–{format_clock(deadline_s)} "
                 f"→ {len(rows)}"
             )
+            listed = " · ".join(f"{r['detail']} {format_clock(r['time_s'])}" for r in rows[:6])
+            self._trail(
+                "events_before",
+                f"{int(window_s // 60)} min before {format_clock(deadline_s)}",
+                f"{len(rows)} event{'s' if len(rows) != 1 else ''}" + (f" · {listed}" if listed else ""),
+                "OBSERVED",
+            )
             log_to_span(sp, output={"count": len(rows), "events": [public_event(r) for r in rows[:20]]})
             return rows
 
@@ -100,6 +127,12 @@ class Tools:
         with span("get_doc", span_type="tool", input={"doc_id": doc_id}) as sp:
             row = get_document(doc_id)
             self._note(f"get_doc {doc_id} → {'hit' if row else 'miss'}")
+            self._trail(
+                "get_doc",
+                doc_id,
+                f"hit · {row.get('title')}" if row else "miss",
+                "DOCUMENTED",
+            )
             if row is None:
                 log_to_span(sp, output=None)
             else:
@@ -158,3 +191,10 @@ def _fmt(row: dict[str, Any]) -> str:
         return str(row["value_text"])
     value = row.get("value_num")
     return f"{value:.3f}" if value is not None else "n/a"
+
+
+def _fmt_short(row: dict[str, Any]) -> str:
+    if row.get("value_text") is not None:
+        return str(row["value_text"])
+    value = row.get("value_num")
+    return f"{value:.2f}" if value is not None else "n/a"

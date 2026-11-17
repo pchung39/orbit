@@ -91,8 +91,14 @@ def run_heater_fault(
     *,
     fault: ActiveFault | None = None,
     initial_soc_pct: float = 100.0,
+    faults: list[ActiveFault] | None = None,
+    extra_commands: list[tuple[float, str]] | None = None,
 ) -> pd.DataFrame:
-    """Heater-overcurrent window. Optional SCIENCE_MODE for the EPS-204 confounder."""
+    """Heater-overcurrent window. Optional SCIENCE_MODE for the EPS-204 confounder.
+
+    `faults` overrides the injected faults (pass [] for a healthy replay) and
+    `extra_commands` adds operator actions; both exist for what-if replays.
+    """
     assumptions = Assumptions(
         initial_soc_pct=initial_soc_pct,
         t_batt_init_c=18.0,
@@ -104,11 +110,12 @@ def run_heater_fault(
     commands = [(onset, "HEATER_B_ENABLE")]
     if science_mode:
         commands.append((clock_to_s(science_mode), "SCIENCE_MODE"))
+    commands += list(extra_commands or [])
     return run_simulation(
         spec,
         duration_s=clock_to_s(end_clock) - start_s,
         assumptions=assumptions,
-        faults=[fault or heater_overcurrent_fault(spec, onset)],
+        faults=faults if faults is not None else [fault or heater_overcurrent_fault(spec, onset)],
         state=initial_state(assumptions, t_s=start_s),
         commands=commands,
     )
@@ -156,6 +163,9 @@ def run_payload_fault(
     end_clock: str,
     science_mode: str,
     epoch: datetime | None = None,
+    *,
+    faults: list[ActiveFault] | None = None,
+    extra_commands: list[tuple[float, str]] | None = None,
 ) -> pd.DataFrame:
     """Payload overcurrent on SCIENCE_MODE. Heater stays off."""
     assumptions = Assumptions(
@@ -170,9 +180,9 @@ def run_payload_fault(
         spec,
         duration_s=clock_to_s(end_clock) - start_s,
         assumptions=assumptions,
-        faults=[payload_spike_fault(spec, onset)],
+        faults=faults if faults is not None else [payload_spike_fault(spec, onset)],
         state=initial_state(assumptions, t_s=start_s),
-        commands=[(onset, "SCIENCE_MODE")],
+        commands=[(onset, "SCIENCE_MODE"), *(extra_commands or [])],
     )
 
 
@@ -192,6 +202,9 @@ def run_battery_fault(
     end_clock: str,
     heater_enable: str,
     epoch: datetime | None = None,
+    *,
+    faults: list[ActiveFault] | None = None,
+    extra_commands: list[tuple[float, str]] | None = None,
 ) -> pd.DataFrame:
     """High pack IR in eclipse. Heater ON and healthy so there is discharge load."""
     assumptions = Assumptions(
@@ -205,9 +218,9 @@ def run_battery_fault(
         spec,
         duration_s=clock_to_s(end_clock) - start_s,
         assumptions=assumptions,
-        faults=[battery_ir_fault(spec, start_s)],
+        faults=faults if faults is not None else [battery_ir_fault(spec, start_s)],
         state=initial_state(assumptions, t_s=start_s),
-        commands=[(clock_to_s(heater_enable), "HEATER_B_ENABLE")],
+        commands=[(clock_to_s(heater_enable), "HEATER_B_ENABLE"), *(extra_commands or [])],
     )
 
 

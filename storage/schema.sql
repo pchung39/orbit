@@ -15,6 +15,10 @@ ALTER TABLE incidents ADD COLUMN IF NOT EXISTS filed_at TEXT;
 ALTER TABLE incidents ADD COLUMN IF NOT EXISTS closeout TEXT;
 ALTER TABLE incidents ADD COLUMN IF NOT EXISTS investigation_report TEXT;
 ALTER TABLE incidents ADD COLUMN IF NOT EXISTS investigated_at TEXT;
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS decision TEXT;
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS decision_note TEXT;
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS decided_at TEXT;
+ALTER TABLE incidents ADD COLUMN IF NOT EXISTS verify_result TEXT;
 
 CREATE TABLE IF NOT EXISTS hypothesis_feedback (
     incident_id TEXT PRIMARY KEY REFERENCES incidents(id),

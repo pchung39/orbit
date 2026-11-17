@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>INC-0204 · ORBIT (Phase 2 mockup)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root {
+  color-scheme: dark;
+  --void: #05080c; --surface: #0b121a; --surface-2: #101a24; --surface-3: #16222e; --raised: #1b2a37;
+  --line: #1a2733; --line-2: #253544; --line-3: #35495b;
+  --text: #e3ebf2; --text-2: #9fb3c4; --text-3: #66798c;
+  --signal: #2ad3a8; --signal-soft: rgba(42,211,168,.13);
+  --warn: #f2a33c; --warn-soft: rgba(242,163,60,.13);
+  --crit: #ff6257; --crit-soft: rgba(255,98,87,.13);
+  --info: #5f9dff; --violet: #a78bfa;
+  --ch-bus: #e3ebf2; --ch-heater: #ff7a6e; --ch-payload: #5f9dff; --ch-other: #4a5d70;
+  --observed: #2ad3a8; --derived: #5f9dff; --documented: #a78bfa; --hypothesis: #f2a33c;
+  --btn-ink: #04120e; --grid: rgba(227,235,242,.06);
+  --sans: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+  --mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+  --r: 14px; --r-sm: 8px;
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --void: #eaeef3; --surface: #fff; --surface-2: #f4f7fa; --surface-3: #e9eef4; --raised: #dde4ec;
+  --line: #e3e9f0; --line-2: #cdd7e2; --line-3: #97a8b9;
+  --text: #0e1a24; --text-2: #45596b; --text-3: #6d8296;
+  --signal: #0d9488; --signal-soft: rgba(13,148,136,.1);
+  --warn: #b45309; --warn-soft: rgba(180,83,9,.1);
+  --crit: #dc2626; --crit-soft: rgba(220,38,38,.09);
+  --info: #2563eb; --violet: #7c3aed;
+  --ch-bus: #1e293b; --ch-heater: #dc2626; --ch-payload: #2563eb; --ch-other: #b6c3d0;
+  --observed: #0d9488; --derived: #2563eb; --documented: #7c3aed; --hypothesis: #b45309;
+  --btn-ink: #fff; --grid: rgba(14,26,36,.06);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--void); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; }
+.mono { font-family: var(--mono); }
+
+/* Shell */
+.shell { display: grid; grid-template-columns: 212px 1fr; min-height: 100vh; }
+.sidebar { position: sticky; top: 0; height: 100vh; border-right: 1px solid var(--line); background: var(--surface); padding: 18px 14px; display: flex; flex-direction: column; gap: 18px; }
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 8px; color: var(--signal); }
+.brand svg { width: 26px; height: 26px; }
+.brand b { font-family: var(--mono); letter-spacing: .22em; font-size: 14px; color: var(--text); }
+.side-cta { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-radius: var(--r-sm); border: 0; background: var(--signal); color: var(--btn-ink); font-weight: 600; font-size: 13.5px; cursor: pointer; }
+.side-nav { display: flex; flex-direction: column; gap: 2px; }
+.side-nav a { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: var(--r-sm); color: var(--text-2); text-decoration: none; font-size: 14px; }
+.side-nav a.on { background: var(--surface-3); color: var(--text); }
+.side-nav .n { font-family: var(--mono); font-size: 11.5px; padding: 1px 7px; border-radius: 99px; background: var(--warn-soft); color: var(--warn); }
+.side-group { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-3); padding: 0 10px; margin-top: 6px; }
+.side-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding: 0 6px; font-size: 13px; color: var(--text-3); }
+.icon-btn { border: 1px solid var(--line-2); background: transparent; border-radius: var(--r-sm); padding: 5px 9px; cursor: pointer; color: var(--text-2); }
+
+main { padding: 26px 34px 80px; max-width: 1160px; width: 100%; }
+.mock-note { font-family: var(--mono); font-size: 11.5px; color: var(--text-3); margin-bottom: 14px; display: flex; gap: 10px; align-items: center; }
+.mock-note span { padding: 2px 8px; border-radius: 99px; border: 1px dashed var(--line-3); }
+
+/* Cards & sections */
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 24px 26px; margin-bottom: 16px; }
+.sec-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--text-3); display: flex; align-items: center; gap: 8px; }
+.eyebrow .num { color: var(--text-2); }
+h1 { font-size: 26px; font-weight: 600; letter-spacing: -.01em; margin: 6px 0 4px; }
+h2 { font-size: 18px; font-weight: 600; margin: 4px 0 0; letter-spacing: -.005em; }
+.lede { color: var(--text-2); font-size: 14px; margin: 4px 0 0; max-width: 72ch; }
+.muted { color: var(--text-3); }
+
+/* Tags */
+.tag { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; padding: 1px 6px; border-radius: 4px; border: 1px solid currentColor; white-space: nowrap; opacity: .9; }
+.tag.obs { color: var(--observed); } .tag.der { color: var(--derived); } .tag.doc { color: var(--documented); } .tag.hyp { color: var(--hypothesis); }
+.tag.sim { color: var(--text-2); border-style: dashed; }
+
+/* Header */
+.case-head { position: relative; overflow: hidden;
+  background: radial-gradient(560px 240px at 100% 0%, color-mix(in srgb, var(--accent-h, var(--warn)) 15%, transparent), transparent 70%), var(--surface); }
+.crumb { font-size: 13px; color: var(--text-3); }
+.crumb a { color: var(--text-3); text-decoration: none; }
+.head-row { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
+.status-pill { font-family: var(--mono); font-size: 11.5px; letter-spacing: .08em; padding: 5px 11px; border-radius: 99px; background: var(--warn-soft); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent); white-space: nowrap; }
+.status-pill.ok { background: var(--signal-soft); color: var(--signal); border-color: color-mix(in srgb, var(--signal) 35%, transparent); }
+.facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 22px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.fact { background: var(--surface-2); padding: 12px 14px; }
+.fact .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+.fact .v { font-size: 16px; font-weight: 600; margin-top: 2px; }
+.fact .s { font-size: 12.5px; color: var(--text-2); }
+.v.warn { color: var(--warn); } .v.heater { color: var(--ch-heater); } .v.ok { color: var(--signal); }
+
+/* Lifecycle stepper */
+.stepper { display: flex; align-items: center; gap: 0; margin-top: 22px; }
+.step { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-3); white-space: nowrap; }
+.step .dot { width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid var(--line-3); display: grid; place-items: center; font-size: 11px; font-family: var(--mono); }
+.step.done { color: var(--text-2); } .step.done .dot { background: var(--signal); border-color: var(--signal); color: var(--btn-ink); }
+.step.now { color: var(--text); font-weight: 600; } .step.now .dot { border-color: var(--warn); color: var(--warn); box-shadow: 0 0 0 4px var(--warn-soft); }
+.step-line { flex: 1; height: 1.5px; background: var(--line-2); margin: 0 10px; min-width: 18px; }
+.step-line.done { background: var(--signal); }
+
+/* Charts */
+.chosen { position: relative; }
+.chosen summary { list-style: none; cursor: pointer; font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: var(--violet); border: 1px solid color-mix(in srgb, var(--violet) 40%, transparent); background: color-mix(in srgb, var(--violet) 10%, transparent); padding: 4px 10px; border-radius: 99px; white-space: nowrap; }
+.chosen summary::-webkit-details-marker { display: none; }
+.chosen .pop { position: absolute; right: 0; top: 34px; width: 360px; z-index: 5; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: 10px; padding: 14px 16px; font-size: 13px; color: var(--text-2); box-shadow: 0 18px 40px -16px rgba(0,0,0,.6); }
+.chosen .pop b { color: var(--text); }
+.chosen .pop ul { margin: 8px 0 0; padding-left: 18px; }
+.viz-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+.viz { background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px 12px; }
+.viz-title { font-size: 13.5px; font-weight: 600; display: flex; justify-content: space-between; gap: 10px; }
+.viz-cap { font-size: 13px; color: var(--text-2); margin-top: 8px; }
+.viz-cap .tag { margin-left: 4px; }
+.viz-cap b { color: var(--text); }
+svg.chart { width: 100%; height: auto; display: block; margin-top: 8px; overflow: visible; }
+svg text { font-family: var(--mono); font-size: 10.5px; fill: var(--text-3); }
+.raw-toggle { background: none; border: 0; padding: 0; color: var(--text-3); font-size: 12.5px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-2); }
+.legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 6px; }
+.legend i.dash { background: repeating-linear-gradient(90deg, currentColor 0 4px, transparent 4px 7px) !important; height: 2px; }
+
+/* Explanations */
+.hyp-grid { display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 14px; }
+.hyp { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--surface-2); display: flex; flex-direction: column; gap: 10px; }
+.hyp.lead { border-color: color-mix(in srgb, var(--ch-heater) 45%, var(--line)); background: linear-gradient(180deg, color-mix(in srgb, var(--ch-heater) 7%, var(--surface-2)), var(--surface-2) 60%); }
+.hyp.out { opacity: .82; }
+.hyp-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.verdict { font-family: var(--mono); font-size: 10.5px; letter-spacing: .1em; padding: 2px 8px; border-radius: 99px; }
+.verdict.lead { background: color-mix(in srgb, var(--ch-heater) 16%, transparent); color: var(--ch-heater); }
+.verdict.out { background: var(--surface-3); color: var(--text-3); }
+.hyp h3 { margin: 0; font-size: 15px; }
+.hyp .code { font-family: var(--mono); font-size: 11px; color: var(--text-3); }
+.ev { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.ev li { display: grid; grid-template-columns: 16px 1fr; gap: 6px; padding: 6px 8px; border-radius: 6px; font-size: 13px; color: var(--text-2); cursor: pointer; border: 1px solid transparent; }
+.ev li:hover, .ev li.active { background: var(--surface-3); border-color: var(--line-2); color: var(--text); }
+.ev .sgn { font-family: var(--mono); font-weight: 600; }
+.ev .sgn.p { color: var(--signal); } .ev .sgn.m { color: var(--crit); }
+.ev .meta { display: flex; gap: 6px; margin-top: 3px; }
+.bar-meter { height: 4px; background: var(--surface-3); border-radius: 99px; overflow: hidden; margin-top: 2px; }
+.bar-meter span { display: block; height: 100%; border-radius: 99px; }
+.hyp-foot { margin-top: auto; font-size: 12px; color: var(--text-3); border-top: 1px dashed var(--line-2); padding-top: 8px; }
+
+/* Decide */
+.options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 4px; }
+.opt { text-align: left; border: 1px solid var(--line-2); border-radius: 12px; padding: 14px 16px; background: var(--surface-2); cursor: pointer; display: flex; flex-direction: column; gap: 6px; }
+.opt:hover { border-color: var(--line-3); }
+.opt.sel { border-color: var(--signal); box-shadow: 0 0 0 3px var(--signal-soft); }
+.opt .t { font-weight: 600; font-size: 14.5px; display: flex; justify-content: space-between; align-items: center; }
+.opt .o { font-size: 13px; color: var(--text-2); }
+.opt .res { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; }
+.res.good { color: var(--signal); } .res.bad { color: var(--crit); } .res.meh { color: var(--warn); }
+.rec { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; color: var(--signal); border: 1px solid var(--signal); border-radius: 4px; padding: 0 5px; }
+.decide-row { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+.decide-row input { flex: 1; background: var(--surface-2); border: 1px solid var(--line-2); border-radius: var(--r-sm); padding: 10px 12px; color: var(--text); font: inherit; font-size: 14px; }
+.btn { border: 0; border-radius: var(--r-sm); padding: 10px 18px; font-weight: 600; font-size: 14px; cursor: pointer; background: var(--signal); color: var(--btn-ink); white-space: nowrap; }
+.btn.ghost { background: transparent; color: var(--text-2); border: 1px solid var(--line-2); }
+.btn:disabled { opacity: .5; cursor: default; }
+.guard { font-size: 12.5px; color: var(--text-3); margin-top: 10px; }
+
+/* Verify */
+.verify { display: none; border-color: color-mix(in srgb, var(--signal) 40%, var(--line)); background: radial-gradient(500px 200px at 100% 0%, var(--signal-soft), transparent 70%), var(--surface); }
+.verify.show { display: block; animation: rise .35s ease-out; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.checks { list-style: none; padding: 0; margin: 14px 0 0; display: grid; gap: 8px; }
+.checks li { display: flex; gap: 10px; align-items: baseline; font-size: 14px; color: var(--text-2); }
+.checks li::before { content: "✓"; color: var(--signal); font-weight: 700; }
+.remember { margin-top: 16px; padding: 12px 14px; border-radius: 10px; border: 1px dashed var(--line-3); font-size: 13.5px; color: var(--text-2); display: none; }
+.remember.show { display: block; }
+
+details.drawer summary { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 14px; }
+details.drawer summary::-webkit-details-marker { display: none; }
+.dr-icon { width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--violet) 12%, transparent); color: var(--violet); flex: none; }
+.dr-icon svg { width: 17px; height: 17px; }
+.dr-title { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.dr-title b { font-size: 15px; font-weight: 600; }
+.dr-title span { font-size: 13px; color: var(--text-3); }
+.dr-stats { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.dr-stats span { font-family: var(--mono); font-size: 11px; padding: 3px 9px; border-radius: 99px; background: var(--surface-2); border: 1px solid var(--line); color: var(--text-2); white-space: nowrap; }
+.dr-chev { color: var(--text-3); transition: transform .2s; }
+details.drawer[open] .dr-chev { transform: rotate(180deg); }
+.dr-body { margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--line); display: grid; gap: 22px; animation: rise .25s ease-out; }
+.dr-block .eyebrow { margin-bottom: 10px; }
+.seal { display: grid; grid-template-columns: repeat(4, auto); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seal > div { background: var(--surface-2); padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
+.seal .k { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+.seal .v { font-size: 13px; color: var(--text); }
+.lock { font-size: 12.5px; color: var(--signal); }
+.trail { list-style: none; margin: 0; padding: 0; counter-reset: s; position: relative; }
+.trail::before { content: ""; position: absolute; left: 11px; top: 14px; bottom: 14px; width: 1.5px; background: var(--line-2); }
+.trail li { counter-increment: s; position: relative; display: grid; grid-template-columns: 24px 118px minmax(180px, 1fr) minmax(220px, 1.4fr) 104px; gap: 12px; align-items: center; padding: 8px 10px 8px 0; border-radius: 8px; font-size: 13px; }
+.trail li:hover { background: var(--surface-2); }
+.trail li::before { content: counter(s); width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-family: var(--mono); font-size: 11px; background: var(--surface); border: 1.5px solid var(--kc); color: var(--kc); position: relative; z-index: 1; }
+.trail li.k-read { --kc: var(--observed); } .trail li.k-doc { --kc: var(--documented); } .trail li.k-sim { --kc: var(--text-3); }
+.trail .tool { font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--kc); background: color-mix(in srgb, var(--kc) 11%, transparent); padding: 2px 8px; border-radius: 5px; justify-self: start; }
+.trail .args { font-family: var(--mono); font-size: 12px; color: var(--text-3); }
+.trail .out { color: var(--text-2); }
+.trail .out b { color: var(--text); font-family: var(--mono); font-weight: 600; }
+.trail .tag { justify-self: end; }
+.tally { display: flex; height: 30px; border-radius: 8px; overflow: hidden; gap: 2px; }
+.tally span { display: flex; align-items: center; padding: 0 10px; font-family: var(--mono); font-size: 11px; letter-spacing: .06em; color: var(--surface); font-weight: 600; white-space: nowrap; overflow: hidden; }
+.dr-foot { margin: 10px 0 0; font-size: 13px; color: var(--text-2); }
+.dr-foot b { color: var(--signal); }
+
+@media (max-width: 980px) { .hyp-grid, .options, .viz-grid { grid-template-columns: 1fr; } .facts { grid-template-columns: repeat(2, 1fr); } .shell { grid-template-columns: 1fr; } .sidebar { display: none; } }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <svg viewBox="0 0 32 32"><ellipse cx="16" cy="16" rx="13" ry="6.2" fill="none" stroke="currentColor" stroke-width="1.4" transform="rotate(-28 16 16)"/><circle cx="25.4" cy="11.2" r="2.3" fill="currentColor"/></svg>
+      <b>ORBIT</b>
+    </div>
+    <button class="side-cta">＋ Open case</button>
+    <nav class="side-nav">
+      <div class="side-group">Incidents</div>
+      <a href="#" class="on">Needs decision <span class="n">1</span></a>
+      <a href="#">Watching <span class="n" style="background:var(--surface-3);color:var(--text-2)">1</span></a>
+      <a href="#">Verifying</a>
+      <a href="#">Closed</a>
+    </nav>
+    <div class="side-foot">
+      <span>Aurora-1</span>
+      <button class="icon-btn" id="theme">◐</button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="mock-note"><span>Phase 2 mockup</span>Numbers come from the eps204 tape. What-if and fix previews were run in the ORBIT simulator.</div>
+
+    <!-- HEADER -->
+    <section class="card case-head" id="head">
+      <div class="crumb"><a href="#">Incidents</a> / INC-0204</div>
+      <div class="head-row">
+        <div>
+          <h1>Bus voltage dropped after Heater B came on</h1>
+          <p class="lede">The payload entered science mode 8 seconds before the alarm, so it looks guilty. The evidence says Heater B was already drawing three times its normal current.</p>
+        </div>
+        <span class="status-pill" id="status">NEEDS DECISION</span>
+      </div>
+
+      <div class="facts">
+        <div class="fact"><div class="k">Alarm</div><div class="v warn">26.4 V</div><div class="s">EPS.bus_voltage · 14:32:00 UTC</div></div>
+        <div class="fact"><div class="k">Lowest so far</div><div class="v">25.43 V</div><div class="s">0.43 V above critical (25.0)</div></div>
+        <div class="fact"><div class="k">Leading cause</div><div class="v heater">Heater B</div><div class="s">3.1× healthy draw</div></div>
+        <div class="fact"><div class="k">Procedure</div><div class="v">EPS-17</div><div class="s">Step 4 threshold met (≥2×)</div></div>
+      </div>
+
+      <div class="stepper" id="stepper"></div>
+    </section>
+
+    <!-- 1. WHAT HAPPENED -->
+    <section class="card">
+      <div class="sec-head">
+        <div>
+          <div class="eyebrow"><span class="num">01</span> What happened</div>
+          <h2>The heater moved first. The payload came later.</h2>
+        </div>
+        <details class="chosen">
+          <summary>✦ Charts chosen for this case</summary>
+          <div class="pop">
+            <b>Why these three charts?</b> This is a <b>load-fault</b> case. Two loads switched on just before the alarm, so ORBIT shows:
+            <ul>
+              <li>the <b>order</b> in which signals moved</li>
+              <li>how much each load <b>added</b> to the bus</li>
+              <li>the suspect load against a <b>healthy</b> switch-on</li>
+            </ul>
+            <p style="margin:10px 0 0">ORBIT drew every chart from the sealed tape <span class="mono">sealed_eps204_143155_c161</span>. Current axes start at zero, limit lines are always shown, and captions are recomputed from the data before display.</p>
+          </div>
+        </details>
+      </div>
+
+      <div class="viz">
+        <div class="viz-title"><span>Which signal moved first</span><span class="legend"><span><i style="background:var(--ch-heater)"></i>Heater B</span><span><i style="background:var(--ch-payload)"></i>Payload</span><span><i style="background:var(--ch-bus)"></i>Bus voltage</span></span></div>
+        <svg class="chart" id="lanes" viewBox="0 0 1000 240"></svg>
+        <div class="viz-cap">Heater B stepped up at <b>14:29:44</b>, <b>2 min 8 s</b> before the payload changed mode. The bus crossed warn 8 s after science mode, because the heater had already used up its margin. <span class="tag obs">OBSERVED</span></div>
+      </div>
+
+      <div class="viz-grid">
+        <div class="viz">
+          <div class="viz-title"><span>Where did the power go?</span><span class="muted mono" style="font-size:11px">EPS.bus_current</span></div>
+          <svg class="chart" id="stack" viewBox="0 0 480 250"></svg>
+          <div class="viz-cap">The bus jumped <b>+4.61 A</b>. Heater B accounts for <b>+3.73 A</b> and the payload for <b>+0.81 A</b>. <span class="tag der">DERIVED</span></div>
+        </div>
+        <div class="viz">
+          <div class="viz-title"><span>Heater B vs. a healthy switch-on</span><span class="legend"><span><i style="background:var(--ch-heater)"></i>today</span><span style="color:var(--text-3)"><i class="dash"></i>healthy</span></span></div>
+          <svg class="chart" id="healthy" viewBox="0 0 480 250"></svg>
+          <div class="viz-cap">Same command, same time. Healthy draw is <b>1.18 A</b>; today it is <b>3.74 A</b>. <span class="tag obs">OBSERVED</span> <span class="tag doc">EPS-17 range 0.8–1.2 A</span></div>
+        </div>
+      </div>
+      <div style="margin-top:12px"><button class="raw-toggle">Show raw telemetry (all 13 channels)</button></div>
+    </section>
+
+    <!-- 2. COMPETING EXPLANATIONS -->
+    <section class="card">
+      <div class="sec-head">
+        <div>
+          <div class="eyebrow"><span class="num">02</span> Competing explanations</div>
+          <h2>Three causes fit the alarm. Only one fits the evidence.</h2>
+          <p class="lede">Click any line of evidence to see where it shows up in the charts.</p>
+        </div>
+      </div>
+      <div class="hyp-grid" id="hyps"></div>
+    </section>
+
+    <!-- 3. PROVE IT -->
+    <section class="card">
+      <div class="sec-head">
+        <div>
+          <div class="eyebrow"><span class="num">03</span> Prove it · what-if replay</div>
+          <h2>With a healthy heater, the alarm never happens.</h2>
+          <p class="lede">ORBIT replayed this window in the simulator with Heater B drawing its normal current. Everything else stayed the same, including science mode at 14:31:52.</p>
+        </div>
+        <span class="legend" style="margin-top:6px"><span><i style="background:var(--ch-bus)"></i>what happened</span><span style="color:var(--signal)"><i class="dash"></i>if Heater B were healthy</span></span>
+      </div>
+      <div class="viz"><svg class="chart" id="whatif" viewBox="0 0 1000 260"></svg>
+        <div class="viz-cap">Replayed lowest voltage: <b>26.94 V</b>, which stays above the 26.5 V warn. Science mode alone does not trigger the alarm. <span class="tag der">DERIVED</span> <span class="tag sim">SIMULATED</span></div>
+      </div>
+    </section>
+
+    <!-- 4. DECIDE -->
+    <section class="card" id="decide">
+      <div class="sec-head">
+        <div>
+          <div class="eyebrow"><span class="num">04</span> Decide · fix preview</div>
+          <h2>Compare what happens next under each option.</h2>
+          <p class="lede">Each option was simulated from 14:34:00. ORBIT recommends; you decide. Nothing is sent to the spacecraft.</p>
+        </div>
+      </div>
+      <div class="options" id="options"></div>
+      <div class="viz" style="margin-top:14px"><svg class="chart" id="preview" viewBox="0 0 1000 240"></svg></div>
+      <div class="decide-row">
+        <input id="reason" placeholder="Reason (optional). Becomes part of the case record." />
+        <button class="btn" id="approve">Approve & simulate</button>
+      </div>
+      <div class="guard">Approving records your decision and runs it in the simulator to verify. A real command still goes through your normal uplink process.</div>
+    </section>
+
+    <!-- 5. VERIFY -->
+    <section class="card verify" id="verify">
+      <div class="eyebrow"><span class="num">05</span> Verify</div>
+      <h2>The fix worked. The bus recovered.</h2>
+      <ul class="checks">
+        <li><span>Bus voltage back to <b>27.92 V</b> at the next sample, above the 26.5 V warn <span class="tag obs">OBSERVED · simulated</span></span></li>
+        <li><span>Still holding at <b>27.68 V</b> at 14:45 <span class="tag obs">OBSERVED · simulated</span></span></li>
+        <li><span>EPS-17 step 7: voltage recovered, so leave Heater B off and open a fault report <span class="tag doc">DOCUMENTED</span></span></li>
+      </ul>
+      <div class="decide-row"><button class="btn" id="close">Close as confirmed</button><button class="btn ghost">Reopen</button></div>
+      <div class="remember" id="remember">📎 <b>Saved for future cases.</b> INC-0204 is now a past incident ORBIT can cite. The next Heater B alarm will be matched against it, together with INC-0187.</div>
+    </section>
+
+    <section class="card">
+      <details class="drawer">
+        <summary>
+          <span class="dr-icon"><svg viewBox="0 0 16 16"><path d="M3 2.5h7l3 3v8H3z M10 2.5v3h3 M5.5 8h5 M5.5 10.5h5" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg></span>
+          <span class="dr-title"><b>Audit trail</b><span>How ORBIT reached this report: what it read, what it computed, and what it simulated</span></span>
+          <span class="dr-stats" id="dr-stats"></span>
+          <span class="dr-chev">▾</span>
+        </summary>
+
+        <div class="dr-body">
+          <div class="dr-block">
+            <div class="eyebrow">Sealed evidence</div>
+            <div class="seal">
+              <div><span class="k">Window</span><span class="v mono">sealed_eps204_143155_c161</span></div>
+              <div><span class="k">Time range</span><span class="v mono">14:21:55 → 14:36:55 UTC</span></div>
+              <div><span class="k">Cut from tape</span><span class="v mono">eps204</span></div>
+              <div><span class="k">Status</span><span class="v"><span class="lock">🔒 Frozen at case open. Every number below reads from this window.</span></span></div>
+            </div>
+          </div>
+
+          <div class="dr-block">
+            <div class="eyebrow">Tool trail <span class="muted" style="letter-spacing:0;text-transform:none">· in the order ORBIT ran them</span></div>
+            <ol class="trail">
+              <li class="k-read"><span class="tool">first_warn</span><span class="args">EPS.bus_voltage · limit 26.5 V below</span><span class="out">14:32:00 · <b>26.4 V</b></span><span class="tag obs">OBSERVED</span></li>
+              <li class="k-read"><span class="tool">events_before</span><span class="args">10 min before warn</span><span class="out"><b>2 events</b> · HEATER_B_ENABLE 14:29:44 · SCIENCE_MODE 14:31:52</span><span class="tag obs">OBSERVED</span></li>
+              <li class="k-read"><span class="tool">sample</span><span class="args">THM.heater_b_current @ 14:29:44</span><span class="out"><b>3.74 A</b> → 3.1× healthy max 1.2 A</span><span class="tag der">DERIVED</span></li>
+              <li class="k-read"><span class="tool">sample</span><span class="args">PAY.payload_current @ 14:32:00</span><span class="out"><b>0.89 A</b> → 1.0× science draw 0.9 A</span><span class="tag der">DERIVED</span></li>
+              <li class="k-doc"><span class="tool">get_doc</span><span class="args">EPS-17 · step 4, step 5, step 7</span><span class="out">hit · ≥2× bar applies</span><span class="tag doc">DOCUMENTED</span></li>
+              <li class="k-doc"><span class="tool">get_doc</span><span class="args">INC-0187 · prior close-out</span><span class="out">hit · ~3× heater signature</span><span class="tag doc">DOCUMENTED</span></li>
+              <li class="k-sim"><span class="tool">what_if</span><span class="args">heater multiplier 1.0 · same commands</span><span class="out">min bus <b>26.94 V</b> · no warn</span><span class="tag sim">SIMULATED</span></li>
+              <li class="k-sim"><span class="tool">preview</span><span class="args">3 options from 14:34:00</span><span class="out">heater off <b>27.92 V</b> · payload safe 26.42 V · hold 25.43 V min</span><span class="tag sim">SIMULATED</span></li>
+            </ol>
+          </div>
+
+          <div class="dr-block">
+            <div class="eyebrow">Claims on this page, by source</div>
+            <div class="tally" id="tally"></div>
+            <p class="dr-foot">✓ Every claim carries a source tag. Untagged claims: <b>0</b>.</p>
+          </div>
+        </div>
+      </details>
+    </section>
+  </main>
+</div>
+
+<script>
+const S = {"actual": {"t": [51600.0, 51615.0, 51630.0, 51645.0, 51660.0, 51675.0, 51690.0, 51705.0, 51720.0, 51735.0, 51750.0, 51765.0, 51780.0, 51795.0, 51810.0, 51825.0, 51840.0, 51855.0, 51870.0, 51885.0, 51900.0, 51915.0, 51930.0, 51945.0, 51960.0, 51975.0, 51990.0, 52005.0, 52020.0, 52035.0, 52050.0, 52065.0, 52080.0, 52095.0, 52110.0, 52125.0, 52140.0, 52155.0, 52170.0, 52185.0, 52200.0, 52215.0, 52230.0, 52245.0, 52260.0, 52275.0, 52290.0, 52305.0, 52320.0, 52335.0, 52350.0, 52365.0, 52380.0, 52395.0, 52410.0, 52425.0, 52440.0, 52455.0, 52470.0, 52485.0, 52500.0, 52515.0, 52530.0, 52545.0, 52560.0, 52575.0, 52590.0, 52605.0, 52620.0, 52635.0, 52650.0, 52665.0, 52680.0, 52695.0, 52710.0, 52725.0, 52740.0, 52755.0, 52770.0, 52785.0, 52800.0, 52815.0, 52830.0, 52845.0, 52860.0, 52875.0, 52890.0, 52905.0, 52920.0, 52935.0, 52950.0, 52965.0, 52980.0, 52995.0, 53010.0, 53025.0, 53040.0, 53055.0, 53070.0, 53085.0, 53100.0, 53115.0, 53130.0, 53145.0, 53160.0, 53175.0, 53190.0, 53205.0, 53220.0, 53235.0, 53250.0, 53265.0, 53280.0, 53295.0, 53310.0, 53325.0, 53340.0, 53355.0, 53370.0, 53385.0], "EPS.bus_voltage": [28.577, 28.523, 28.537, 28.64, 28.589, 28.516, 28.55, 28.516, 28.629, 28.634, 28.642, 28.541, 28.565, 28.674, 28.457, 28.479, 28.484, 28.442, 28.545, 28.512, 28.52, 28.45, 28.512, 28.512, 28.464, 28.458, 28.393, 28.442, 28.493, 28.488, 28.459, 28.43, 28.424, 28.37, 28.422, 28.339, 28.391, 28.439, 28.419, 26.727, 26.73, 26.709, 26.665, 26.691, 26.649, 26.623, 26.647, 26.633, 26.164, 26.224, 26.245, 26.15, 26.258, 26.196, 26.182, 26.206, 26.207, 26.169, 26.124, 26.174, 26.07, 26.159, 26.105, 26.058, 26.034, 26.05, 26.147, 26.11, 26.046, 26.034, 25.934, 26.044, 26.02, 26.02, 25.912, 25.91, 26.028, 25.958, 25.913, 25.926, 25.907, 25.83, 25.806, 25.903, 25.848, 25.912, 25.874, 25.874, 25.825, 25.79, 25.76, 25.747, 25.781, 25.779, 25.809, 25.748, 25.666, 25.683, 25.732, 25.749, 25.686, 25.616, 25.709, 25.658, 25.695, 25.687, 25.66, 25.676, 25.599, 25.582, 25.586, 25.481, 25.7, 25.625, 25.539, 25.599, 25.595, 25.609, 25.426, 25.529], "EPS.bus_current": [1.658, 1.662, 1.475, 1.524, 1.723, 1.571, 1.657, 1.646, 1.573, 1.695, 1.491, 1.476, 1.451, 1.571, 1.604, 1.694, 1.652, 1.731, 1.681, 1.576, 1.635, 1.626, 1.596, 1.527, 1.595, 1.507, 1.46, 1.575, 1.512, 1.554, 1.745, 1.577, 1.399, 1.442, 1.571, 1.636, 1.651, 1.468, 1.608, 5.376, 5.507, 5.409, 5.346, 5.306, 5.369, 5.263, 5.165, 5.289, 6.126, 6.051, 6.186, 6.194, 6.241, 6.051, 6.162, 6.125, 6.202, 6.178, 6.41, 6.182, 5.974, 6.19, 6.223, 6.007, 6.141, 6.042, 6.158, 6.123, 5.961, 6.073, 6.22, 6.157, 6.075, 6.257, 6.13, 6.213, 6.141, 6.088, 6.124, 5.921, 6.177, 5.978, 6.181, 6.016, 6.2, 6.067, 6.149, 6.032, 6.067, 6.129, 6.262, 6.134, 6.015, 6.174, 5.975, 6.247, 6.164, 6.051, 6.149, 6.158, 6.192, 6.159, 6.12, 5.945, 6.185, 6.121, 6.173, 6.078, 5.984, 6.164, 6.225, 6.136, 6.179, 6.136, 6.027, 6.219, 6.104, 6.15, 6.015, 6.147], "THM.heater_b_current": [0.0, 0.008, 0.04, 0.0, 0.0, 0.025, 0.042, 0.028, 0.0, 0.015, 0.0, 0.0, 0.053, 0.0, 0.058, 0.004, 0.004, 0.055, 0.013, 0.0, 0.032, 0.0, 0.013, 0.0, 0.012, 0.0, 0.0, 0.036, 0.0, 0.0, 0.021, 0.015, 0.0, 0.0, 0.016, 0.0, 0.008, 0.0, 0.031, 3.739, 3.777, 3.773, 3.7, 3.728, 3.752, 3.695, 3.735, 3.739, 3.816, 3.743, 3.702, 3.747, 3.702, 3.726, 3.752, 3.755, 3.682, 3.763, 3.793, 3.743, 3.76, 3.74, 3.744, 3.714, 3.747, 3.722, 3.752, 3.743, 3.734, 3.718, 3.703, 3.742, 3.739, 3.743, 3.757, 3.735, 3.688, 3.723, 3.696, 3.694, 3.715, 3.703, 3.723, 3.771, 3.743, 3.67, 3.742, 3.718, 3.702, 3.735, 3.722, 3.747, 3.7, 3.698, 3.725, 3.696, 3.71, 3.773, 3.776, 3.724, 3.734, 3.731, 3.778, 3.751, 3.74, 3.748, 3.757, 3.73, 3.708, 3.745, 3.746, 3.753, 3.783, 3.739, 3.809, 3.733, 3.793, 3.737, 3.707, 3.716], "PAY.payload_current": [0.069, 0.077, 0.08, 0.105, 0.069, 0.11, 0.092, 0.113, 0.128, 0.089, 0.078, 0.108, 0.095, 0.067, 0.13, 0.062, 0.073, 0.098, 0.103, 0.126, 0.095, 0.079, 0.063, 0.092, 0.087, 0.066, 0.053, 0.1, 0.084, 0.072, 0.071, 0.047, 0.082, 0.07, 0.096, 0.095, 0.075, 0.093, 0.091, 0.053, 0.079, 0.053, 0.083, 0.055, 0.085, 0.044, 0.07, 0.074, 0.884, 0.906, 0.87, 0.93, 0.879, 0.875, 0.904, 0.898, 0.915, 0.885, 0.865, 0.884, 0.893, 0.913, 0.896, 0.896, 0.865, 0.939, 0.932, 0.927, 0.9, 0.908, 0.912, 0.914, 0.909, 0.938, 0.879, 0.881, 0.888, 0.903, 0.865, 0.901, 0.899, 0.908, 0.902, 0.891, 0.921, 0.882, 0.917, 0.918, 0.92, 0.886, 0.912, 0.909, 0.945, 0.896, 0.894, 0.905, 0.935, 0.905, 0.899, 0.92, 0.91, 0.91, 0.918, 0.885, 0.899, 0.873, 0.88, 0.909, 0.901, 0.917, 0.884, 0.923, 0.903, 0.908, 0.889, 0.926, 0.895, 0.894, 0.964, 0.872]}, "healthy": {"t": [51600.0, 51615.0, 51630.0, 51645.0, 51660.0, 51675.0, 51690.0, 51705.0, 51720.0, 51735.0, 51750.0, 51765.0, 51780.0, 51795.0, 51810.0, 51825.0, 51840.0, 51855.0, 51870.0, 51885.0, 51900.0, 51915.0, 51930.0, 51945.0, 51960.0, 51975.0, 51990.0, 52005.0, 52020.0, 52035.0, 52050.0, 52065.0, 52080.0, 52095.0, 52110.0, 52125.0, 52140.0, 52155.0, 52170.0, 52185.0, 52200.0, 52215.0, 52230.0, 52245.0, 52260.0, 52275.0, 52290.0, 52305.0, 52320.0, 52335.0, 52350.0, 52365.0, 52380.0, 52395.0, 52410.0, 52425.0, 52440.0, 52455.0, 52470.0, 52485.0, 52500.0, 52515.0, 52530.0, 52545.0, 52560.0, 52575.0, 52590.0, 52605.0, 52620.0, 52635.0, 52650.0, 52665.0, 52680.0, 52695.0, 52710.0, 52725.0, 52740.0, 52755.0, 52770.0, 52785.0, 52800.0, 52815.0, 52830.0, 52845.0, 52860.0, 52875.0, 52890.0, 52905.0, 52920.0, 52935.0, 52950.0, 52965.0, 52980.0, 52995.0, 53010.0, 53025.0, 53040.0, 53055.0, 53070.0, 53085.0, 53100.0, 53115.0, 53130.0, 53145.0, 53160.0, 53175.0, 53190.0, 53205.0, 53220.0, 53235.0, 53250.0, 53265.0, 53280.0, 53295.0, 53310.0, 53325.0, 53340.0, 53355.0, 53370.0, 53385.0], "EPS.bus_voltage": [28.577, 28.523, 28.537, 28.64, 28.589, 28.516, 28.55, 28.516, 28.629, 28.634, 28.642, 28.541, 28.565, 28.674, 28.457, 28.479, 28.484, 28.442, 28.545, 28.512, 28.52, 28.45, 28.512, 28.512, 28.464, 28.458, 28.393, 28.442, 28.493, 28.488, 28.459, 28.43, 28.424, 28.37, 28.422, 28.339, 28.391, 28.439, 28.419, 27.908, 27.915, 27.899, 27.858, 27.889, 27.851, 27.83, 27.858, 27.848, 27.383, 27.447, 27.473, 27.382, 27.494, 27.437, 27.427, 27.455, 27.46, 27.427, 27.386, 27.44, 27.341, 27.433, 27.384, 27.341, 27.322, 27.341, 27.443, 27.411, 27.35, 27.343, 27.247, 27.361, 27.342, 27.346, 27.243, 27.245, 27.367, 27.301, 27.261, 27.278, 27.264, 27.191, 27.171, 27.272, 27.222, 27.289, 27.256, 27.26, 27.215, 27.185, 27.159, 27.15, 27.188, 27.19, 27.225, 27.168, 27.091, 27.112, 27.165, 27.187, 27.128, 27.062, 27.159, 27.113, 27.153, 27.15, 27.127, 27.148, 27.075, 27.062, 27.07, 26.97, 27.193, 27.122, 27.041, 27.105, 27.105, 27.124, 26.944, 27.052], "EPS.bus_current": [1.658, 1.662, 1.475, 1.524, 1.723, 1.571, 1.657, 1.646, 1.573, 1.695, 1.491, 1.476, 1.451, 1.571, 1.604, 1.694, 1.652, 1.731, 1.681, 1.576, 1.635, 1.626, 1.596, 1.527, 1.595, 1.507, 1.46, 1.575, 1.512, 1.554, 1.745, 1.577, 1.399, 1.442, 1.571, 1.636, 1.651, 1.468, 1.608, 2.809, 2.94, 2.842, 2.779, 2.74, 2.802, 2.696, 2.598, 2.722, 3.56, 3.485, 3.62, 3.627, 3.674, 3.484, 3.596, 3.559, 3.636, 3.611, 3.843, 3.615, 3.408, 3.623, 3.656, 3.441, 3.575, 3.475, 3.592, 3.556, 3.394, 3.507, 3.654, 3.59, 3.508, 3.69, 3.563, 3.646, 3.575, 3.522, 3.558, 3.355, 3.61, 3.411, 3.614, 3.449, 3.633, 3.5, 3.582, 3.465, 3.501, 3.563, 3.695, 3.568, 3.448, 3.608, 3.408, 3.681, 3.597, 3.484, 3.583, 3.591, 3.625, 3.592, 3.554, 3.378, 3.618, 3.554, 3.606, 3.511, 3.418, 3.598, 3.658, 3.569, 3.612, 3.569, 3.46, 3.653, 3.538, 3.583, 3.448, 3.581], "THM.heater_b_current": [0.0, 0.008, 0.04, 0.0, 0.0, 0.025, 0.042, 0.028, 0.0, 0.015, 0.0, 0.0, 0.053, 0.0, 0.058, 0.004, 0.004, 0.055, 0.013, 0.0, 0.032, 0.0, 0.013, 0.0, 0.012, 0.0, 0.0, 0.036, 0.0, 0.0, 0.021, 0.015, 0.0, 0.0, 0.016, 0.0, 0.008, 0.0, 0.031, 1.172, 1.211, 1.207, 1.134, 1.162, 1.186, 1.129, 1.168, 1.172, 1.249, 1.176, 1.135, 1.181, 1.135, 1.159, 1.186, 1.188, 1.115, 1.196, 1.226, 1.177, 1.193, 1.173, 1.177, 1.147, 1.181, 1.156, 1.185, 1.176, 1.167, 1.151, 1.136, 1.176, 1.172, 1.177, 1.19, 1.169, 1.122, 1.156, 1.13, 1.127, 1.149, 1.136, 1.157, 1.204, 1.176, 1.103, 1.175, 1.151, 1.135, 1.169, 1.155, 1.181, 1.134, 1.132, 1.158, 1.129, 1.144, 1.207, 1.21, 1.157, 1.168, 1.164, 1.211, 1.184, 1.173, 1.181, 1.19, 1.164, 1.141, 1.178, 1.18, 1.187, 1.216, 1.173, 1.243, 1.166, 1.226, 1.171, 1.14, 1.15], "PAY.payload_current": [0.069, 0.077, 0.08, 0.105, 0.069, 0.11, 0.092, 0.113, 0.128, 0.089, 0.078, 0.108, 0.095, 0.067, 0.13, 0.062, 0.073, 0.098, 0.103, 0.126, 0.095, 0.079, 0.063, 0.092, 0.087, 0.066, 0.053, 0.1, 0.084, 0.072, 0.071, 0.047, 0.082, 0.07, 0.096, 0.095, 0.075, 0.093, 0.091, 0.053, 0.079, 0.053, 0.083, 0.055, 0.085, 0.044, 0.07, 0.074, 0.884, 0.906, 0.87, 0.93, 0.879, 0.875, 0.904, 0.898, 0.915, 0.885, 0.865, 0.884, 0.893, 0.913, 0.896, 0.896, 0.865, 0.939, 0.932, 0.927, 0.9, 0.908, 0.912, 0.914, 0.909, 0.938, 0.879, 0.881, 0.888, 0.903, 0.865, 0.901, 0.899, 0.908, 0.902, 0.891, 0.921, 0.882, 0.917, 0.918, 0.92, 0.886, 0.912, 0.909, 0.945, 0.896, 0.894, 0.905, 0.935, 0.905, 0.899, 0.92, 0.91, 0.91, 0.918, 0.885, 0.899, 0.873, 0.88, 0.909, 0.901, 0.917, 0.884, 0.923, 0.903, 0.908, 0.889, 0.926, 0.895, 0.894, 0.964, 0.872]}, "heater_off": {"t": [51600.0, 51615.0, 51630.0, 51645.0, 51660.0, 51675.0, 51690.0, 51705.0, 51720.0, 51735.0, 51750.0, 51765.0, 51780.0, 51795.0, 51810.0, 51825.0, 51840.0, 51855.0, 51870.0, 51885.0, 51900.0, 51915.0, 51930.0, 51945.0, 51960.0, 51975.0, 51990.0, 52005.0, 52020.0, 52035.0, 52050.0, 52065.0, 52080.0, 52095.0, 52110.0, 52125.0, 52140.0, 52155.0, 52170.0, 52185.0, 52200.0, 52215.0, 52230.0, 52245.0, 52260.0, 52275.0, 52290.0, 52305.0, 52320.0, 52335.0, 52350.0, 52365.0, 52380.0, 52395.0, 52410.0, 52425.0, 52440.0, 52455.0, 52470.0, 52485.0, 52500.0, 52515.0, 52530.0, 52545.0, 52560.0, 52575.0, 52590.0, 52605.0, 52620.0, 52635.0, 52650.0, 52665.0, 52680.0, 52695.0, 52710.0, 52725.0, 52740.0, 52755.0, 52770.0, 52785.0, 52800.0, 52815.0, 52830.0, 52845.0, 52860.0, 52875.0, 52890.0, 52905.0, 52920.0, 52935.0, 52950.0, 52965.0, 52980.0, 52995.0, 53010.0, 53025.0, 53040.0, 53055.0, 53070.0, 53085.0, 53100.0, 53115.0, 53130.0, 53145.0, 53160.0, 53175.0, 53190.0, 53205.0, 53220.0, 53235.0, 53250.0, 53265.0, 53280.0, 53295.0, 53310.0, 53325.0, 53340.0, 53355.0, 53370.0, 53385.0], "EPS.bus_voltage": [28.577, 28.523, 28.537, 28.64, 28.589, 28.516, 28.55, 28.516, 28.629, 28.634, 28.642, 28.541, 28.565, 28.674, 28.457, 28.479, 28.484, 28.442, 28.545, 28.512, 28.52, 28.45, 28.512, 28.512, 28.464, 28.458, 28.393, 28.442, 28.493, 28.488, 28.459, 28.43, 28.424, 28.37, 28.422, 28.339, 28.391, 28.439, 28.419, 26.727, 26.73, 26.709, 26.665, 26.691, 26.649, 26.623, 26.647, 26.633, 26.164, 26.224, 26.245, 26.15, 26.258, 26.196, 26.182, 26.206, 27.924, 27.893, 27.854, 27.91, 27.812, 27.907, 27.859, 27.819, 27.801, 27.823, 27.926, 27.896, 27.838, 27.832, 27.738, 27.854, 27.837, 27.843, 27.742, 27.746, 27.87, 27.806, 27.767, 27.787, 27.774, 27.703, 27.685, 27.789, 27.74, 27.809, 27.778, 27.784, 27.741, 27.713, 27.689, 27.682, 27.722, 27.726, 27.763, 27.708, 27.633, 27.656, 27.71, 27.734, 27.677, 27.613, 27.713, 27.668, 27.711, 27.709, 27.688, 27.711, 27.64, 27.629, 27.639, 27.541, 27.765, 27.697, 27.618, 27.683, 27.685, 27.706, 27.529, 27.639], "EPS.bus_current": [1.658, 1.662, 1.475, 1.524, 1.723, 1.571, 1.657, 1.646, 1.573, 1.695, 1.491, 1.476, 1.451, 1.571, 1.604, 1.694, 1.652, 1.731, 1.681, 1.576, 1.635, 1.626, 1.596, 1.527, 1.595, 1.507, 1.46, 1.575, 1.512, 1.554, 1.745, 1.577, 1.399, 1.442, 1.571, 1.636, 1.651, 1.468, 1.608, 5.376, 5.507, 5.409, 5.346, 5.306, 5.369, 5.263, 5.165, 5.289, 6.126, 6.051, 6.186, 6.194, 6.241, 6.051, 6.162, 6.125, 2.469, 2.445, 2.676, 2.449, 2.241, 2.456, 2.49, 2.274, 2.408, 2.308, 2.425, 2.389, 2.227, 2.34, 2.487, 2.423, 2.341, 2.524, 2.397, 2.479, 2.408, 2.355, 2.391, 2.188, 2.443, 2.244, 2.448, 2.283, 2.466, 2.334, 2.416, 2.298, 2.334, 2.396, 2.528, 2.401, 2.282, 2.441, 2.242, 2.514, 2.431, 2.317, 2.416, 2.425, 2.459, 2.425, 2.387, 2.212, 2.451, 2.387, 2.439, 2.345, 2.251, 2.431, 2.492, 2.403, 2.445, 2.402, 2.294, 2.486, 2.371, 2.416, 2.281, 2.414], "THM.heater_b_current": [0.0, 0.008, 0.04, 0.0, 0.0, 0.025, 0.042, 0.028, 0.0, 0.015, 0.0, 0.0, 0.053, 0.0, 0.058, 0.004, 0.004, 0.055, 0.013, 0.0, 0.032, 0.0, 0.013, 0.0, 0.012, 0.0, 0.0, 0.036, 0.0, 0.0, 0.021, 0.015, 0.0, 0.0, 0.016, 0.0, 0.008, 0.0, 0.031, 3.739, 3.777, 3.773, 3.7, 3.728, 3.752, 3.695, 3.735, 3.739, 3.816, 3.743, 3.702, 3.747, 3.702, 3.726, 3.752, 3.755, 0.0, 0.029, 0.06, 0.01, 0.027, 0.007, 0.01, 0.0, 0.014, 0.0, 0.018, 0.009, 0.001, 0.0, 0.0, 0.009, 0.005, 0.01, 0.024, 0.002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.038, 0.01, 0.0, 0.008, 0.0, 0.0, 0.002, 0.0, 0.014, 0.0, 0.0, 0.0, 0.0, 0.0, 0.04, 0.043, 0.0, 0.001, 0.0, 0.044, 0.018, 0.007, 0.015, 0.023, 0.0, 0.0, 0.011, 0.013, 0.02, 0.05, 0.006, 0.076, 0.0, 0.059, 0.004, 0.0, 0.0], "PAY.payload_current": [0.069, 0.077, 0.08, 0.105, 0.069, 0.11, 0.092, 0.113, 0.128, 0.089, 0.078, 0.108, 0.095, 0.067, 0.13, 0.062, 0.073, 0.098, 0.103, 0.126, 0.095, 0.079, 0.063, 0.092, 0.087, 0.066, 0.053, 0.1, 0.084, 0.072, 0.071, 0.047, 0.082, 0.07, 0.096, 0.095, 0.075, 0.093, 0.091, 0.053, 0.079, 0.053, 0.083, 0.055, 0.085, 0.044, 0.07, 0.074, 0.884, 0.906, 0.87, 0.93, 0.879, 0.875, 0.904, 0.898, 0.915, 0.885, 0.865, 0.884, 0.893, 0.913, 0.896, 0.896, 0.865, 0.939, 0.932, 0.927, 0.9, 0.908, 0.912, 0.914, 0.909, 0.938, 0.879, 0.881, 0.888, 0.903, 0.865, 0.901, 0.899, 0.908, 0.902, 0.891, 0.921, 0.882, 0.917, 0.918, 0.92, 0.886, 0.912, 0.909, 0.945, 0.896, 0.894, 0.905, 0.935, 0.905, 0.899, 0.92, 0.91, 0.91, 0.918, 0.885, 0.899, 0.873, 0.88, 0.909, 0.901, 0.917, 0.884, 0.923, 0.903, 0.908, 0.889, 0.926, 0.895, 0.894, 0.964, 0.872]}, "payload_safe": {"t": [51600.0, 51615.0, 51630.0, 51645.0, 51660.0, 51675.0, 51690.0, 51705.0, 51720.0, 51735.0, 51750.0, 51765.0, 51780.0, 51795.0, 51810.0, 51825.0, 51840.0, 51855.0, 51870.0, 51885.0, 51900.0, 51915.0, 51930.0, 51945.0, 51960.0, 51975.0, 51990.0, 52005.0, 52020.0, 52035.0, 52050.0, 52065.0, 52080.0, 52095.0, 52110.0, 52125.0, 52140.0, 52155.0, 52170.0, 52185.0, 52200.0, 52215.0, 52230.0, 52245.0, 52260.0, 52275.0, 52290.0, 52305.0, 52320.0, 52335.0, 52350.0, 52365.0, 52380.0, 52395.0, 52410.0, 52425.0, 52440.0, 52455.0, 52470.0, 52485.0, 52500.0, 52515.0, 52530.0, 52545.0, 52560.0, 52575.0, 52590.0, 52605.0, 52620.0, 52635.0, 52650.0, 52665.0, 52680.0, 52695.0, 52710.0, 52725.0, 52740.0, 52755.0, 52770.0, 52785.0, 52800.0, 52815.0, 52830.0, 52845.0, 52860.0, 52875.0, 52890.0, 52905.0, 52920.0, 52935.0, 52950.0, 52965.0, 52980.0, 52995.0, 53010.0, 53025.0, 53040.0, 53055.0, 53070.0, 53085.0, 53100.0, 53115.0, 53130.0, 53145.0, 53160.0, 53175.0, 53190.0, 53205.0, 53220.0, 53235.0, 53250.0, 53265.0, 53280.0, 53295.0, 53310.0, 53325.0, 53340.0, 53355.0, 53370.0, 53385.0], "EPS.bus_voltage": [28.577, 28.523, 28.537, 28.64, 28.589, 28.516, 28.55, 28.516, 28.629, 28.634, 28.642, 28.541, 28.565, 28.674, 28.457, 28.479, 28.484, 28.442, 28.545, 28.512, 28.52, 28.45, 28.512, 28.512, 28.464, 28.458, 28.393, 28.442, 28.493, 28.488, 28.459, 28.43, 28.424, 28.37, 28.422, 28.339, 28.391, 28.439, 28.419, 26.727, 26.73, 26.709, 26.665, 26.691, 26.649, 26.623, 26.647, 26.633, 26.164, 26.224, 26.245, 26.15, 26.258, 26.196, 26.182, 26.206, 26.584, 26.548, 26.504, 26.555, 26.453, 26.543, 26.49, 26.445, 26.422, 26.439, 26.537, 26.503, 26.439, 26.428, 26.33, 26.441, 26.419, 26.421, 26.314, 26.313, 26.432, 26.364, 26.32, 26.335, 26.317, 26.242, 26.219, 26.318, 26.264, 26.328, 26.292, 26.293, 26.246, 26.213, 26.184, 26.172, 26.207, 26.206, 26.238, 26.178, 26.098, 26.117, 26.166, 26.185, 26.123, 26.055, 26.149, 26.1, 26.138, 26.131, 26.105, 26.123, 26.048, 26.032, 26.037, 25.934, 26.153, 26.08, 25.996, 26.057, 26.054, 26.07, 25.888, 25.993], "EPS.bus_current": [1.658, 1.662, 1.475, 1.524, 1.723, 1.571, 1.657, 1.646, 1.573, 1.695, 1.491, 1.476, 1.451, 1.571, 1.604, 1.694, 1.652, 1.731, 1.681, 1.576, 1.635, 1.626, 1.596, 1.527, 1.595, 1.507, 1.46, 1.575, 1.512, 1.554, 1.745, 1.577, 1.399, 1.442, 1.571, 1.636, 1.651, 1.468, 1.608, 5.376, 5.507, 5.409, 5.346, 5.306, 5.369, 5.263, 5.165, 5.289, 6.126, 6.051, 6.186, 6.194, 6.241, 6.051, 6.162, 6.125, 5.382, 5.358, 5.59, 5.362, 5.154, 5.37, 5.403, 5.187, 5.321, 5.222, 5.338, 5.303, 5.141, 5.253, 5.4, 5.337, 5.255, 5.437, 5.31, 5.393, 5.321, 5.268, 5.304, 5.101, 5.357, 5.158, 5.361, 5.196, 5.38, 5.247, 5.329, 5.212, 5.247, 5.309, 5.442, 5.314, 5.195, 5.354, 5.155, 5.427, 5.344, 5.231, 5.329, 5.338, 5.372, 5.339, 5.3, 5.125, 5.365, 5.301, 5.353, 5.258, 5.164, 5.344, 5.405, 5.316, 5.359, 5.316, 5.207, 5.399, 5.284, 5.33, 5.195, 5.327], "THM.heater_b_current": [0.0, 0.008, 0.04, 0.0, 0.0, 0.025, 0.042, 0.028, 0.0, 0.015, 0.0, 0.0, 0.053, 0.0, 0.058, 0.004, 0.004, 0.055, 0.013, 0.0, 0.032, 0.0, 0.013, 0.0, 0.012, 0.0, 0.0, 0.036, 0.0, 0.0, 0.021, 0.015, 0.0, 0.0, 0.016, 0.0, 0.008, 0.0, 0.031, 3.739, 3.777, 3.773, 3.7, 3.728, 3.752, 3.695, 3.735, 3.739, 3.816, 3.743, 3.702, 3.747, 3.702, 3.726, 3.752, 3.755, 3.682, 3.763, 3.793, 3.743, 3.76, 3.74, 3.744, 3.714, 3.747, 3.722, 3.752, 3.743, 3.734, 3.718, 3.703, 3.742, 3.739, 3.743, 3.757, 3.735, 3.688, 3.723, 3.696, 3.694, 3.715, 3.703, 3.723, 3.771, 3.743, 3.67, 3.742, 3.718, 3.702, 3.735, 3.722, 3.747, 3.7, 3.698, 3.725, 3.696, 3.71, 3.773, 3.776, 3.724, 3.734, 3.731, 3.778, 3.751, 3.74, 3.748, 3.757, 3.73, 3.708, 3.745, 3.746, 3.753, 3.783, 3.739, 3.809, 3.733, 3.793, 3.737, 3.707, 3.716], "PAY.payload_current": [0.069, 0.077, 0.08, 0.105, 0.069, 0.11, 0.092, 0.113, 0.128, 0.089, 0.078, 0.108, 0.095, 0.067, 0.13, 0.062, 0.073, 0.098, 0.103, 0.126, 0.095, 0.079, 0.063, 0.092, 0.087, 0.066, 0.053, 0.1, 0.084, 0.072, 0.071, 0.047, 0.082, 0.07, 0.096, 0.095, 0.075, 0.093, 0.091, 0.053, 0.079, 0.053, 0.083, 0.055, 0.085, 0.044, 0.07, 0.074, 0.884, 0.906, 0.87, 0.93, 0.879, 0.875, 0.904, 0.898, 0.095, 0.065, 0.045, 0.064, 0.073, 0.093, 0.076, 0.076, 0.045, 0.119, 0.112, 0.107, 0.08, 0.088, 0.092, 0.094, 0.089, 0.118, 0.059, 0.061, 0.068, 0.083, 0.045, 0.081, 0.079, 0.088, 0.082, 0.071, 0.101, 0.062, 0.097, 0.098, 0.1, 0.066, 0.092, 0.089, 0.125, 0.076, 0.074, 0.085, 0.115, 0.085, 0.079, 0.1, 0.09, 0.09, 0.098, 0.065, 0.079, 0.053, 0.06, 0.089, 0.081, 0.097, 0.064, 0.103, 0.083, 0.088, 0.069, 0.106, 0.075, 0.074, 0.144, 0.052]}};
+const T0 = 14*3600 + 20*60, T_HEAT = 52184, T_SCI = 52312, T_WARN = 52320, T_DEC = 52440;
+const clk = (t, sec) => { const h = Math.floor(t/3600), m = Math.floor(t%3600/60), s = Math.round(t%60);
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}` + (sec ? `:${String(s).padStart(2,"0")}` : ""); };
+const ns = "http://www.w3.org/2000/svg";
+const el = (tag, attrs = {}, parent) => { const n = document.createElementNS(ns, tag);
+  for (const [k, v] of Object.entries(attrs)) k === "text" ? (n.textContent = v) : n.setAttribute(k, v);
+  parent && parent.appendChild(n); return n; };
+const pts = (name, ch, a, b) => S[name].t.map((t, i) => [t, S[name][ch][i]]).filter(([t]) => t >= a && t <= b);
+
+let pin = null;
+
+function lineChart(svg, o) {
+  svg.innerHTML = "";
+  const [W, H] = svg.getAttribute("viewBox").split(" ").slice(2).map(Number);
+  const P = { l: 46, r: 14, t: 22, b: 24 };
+  const x = t => P.l + (t - o.x[0]) / (o.x[1] - o.x[0]) * (W - P.l - P.r);
+  const y = v => H - P.b - (v - o.y[0]) / (o.y[1] - o.y[0]) * (H - P.t - P.b);
+  for (const v of o.ticks) { el("line", { x1: P.l, x2: W - P.r, y1: y(v), y2: y(v), stroke: "var(--grid)", style: "stroke:var(--grid)" }, svg);
+    el("text", { x: P.l - 8, y: y(v) + 3.5, "text-anchor": "end", text: v + (o.unit || "") }, svg); }
+  for (let t = Math.ceil(o.x[0] / 300) * 300; t <= o.x[1]; t += o.xStep || 300)
+    el("text", { x: x(t), y: H - 6, "text-anchor": "middle", text: clk(t) }, svg);
+  (o.bands || []).forEach(b => { el("rect", { x: P.l, width: W - P.l - P.r, y: y(b.hi), height: y(b.lo) - y(b.hi), style: `fill:${b.color};opacity:.10` }, svg);
+    el("text", { x: W - P.r - 4, y: y(b.hi) - 4, "text-anchor": "end", text: b.label, style: `fill:${b.color}` }, svg); });
+  (o.limits || []).forEach(l => { el("line", { x1: P.l, x2: W - P.r, y1: y(l.v), y2: y(l.v), style: `stroke:${l.color};stroke-dasharray:5 4;stroke-width:1.2` }, svg);
+    el("text", { x: W - P.r - 4, y: y(l.v) - 5, "text-anchor": "end", text: l.label, style: `fill:${l.color}` }, svg); });
+  (o.events || []).forEach(e => { el("line", { x1: x(e.t), x2: x(e.t), y1: P.t - 6, y2: H - P.b, style: `stroke:${e.color || "var(--line-3)"};stroke-dasharray:2 4` }, svg);
+    el("text", { x: x(e.t) + (e.dx || 4), y: P.t - 10 + (e.dy || 0), "text-anchor": e.anchor || "start", text: e.label, style: `fill:${e.color || "var(--text-3)"}` }, svg); });
+  if (o.shade) el("rect", { x: x(o.shade[0]), width: x(o.shade[1]) - x(o.shade[0]), y: P.t, height: H - P.t - P.b, style: "fill:var(--surface-3);opacity:.5" }, svg);
+  o.series.forEach(s => { const d = s.pts.map(([t, v], i) => `${i ? "L" : "M"}${x(t).toFixed(1)},${y(v).toFixed(1)}`).join("");
+    el("path", { d, fill: "none", style: `stroke:${s.color};stroke-width:${s.w || 2};opacity:${s.op ?? 1};${s.dash ? "stroke-dasharray:6 5;" : ""}stroke-linejoin:round` }, svg);
+    if (s.label) { const [lt, lv] = s.pts[s.pts.length - 1]; el("text", { x: x(lt) - 4, y: y(lv) - 7, "text-anchor": "end", text: s.label, style: `fill:${s.color}` }, svg); } });
+  (o.dots || []).forEach(d => { el("circle", { cx: x(d.t), cy: y(d.v), r: 4.5, style: `fill:var(--surface-2);stroke:${d.color};stroke-width:2` }, svg); });
+  if (pin && o.pinnable) { const px = x(pin.t); el("line", { x1: px, x2: px, y1: P.t - 4, y2: H - P.b, style: "stroke:var(--violet);stroke-width:1.5" }, svg);
+    el("rect", { x: px - 30, y: H - P.b - 2, width: 60, height: 16, rx: 3, style: "fill:var(--violet)" }, svg);
+    el("text", { x: px, y: H - P.b + 10, "text-anchor": "middle", text: clk(pin.t, 1), style: "fill:var(--surface);font-weight:600" }, svg); }
+  return { x, y };
+}
+
+function drawLanes() {
+  const svg = document.getElementById("lanes"); svg.innerHTML = "";
+  const W = 1000, L = 150, R = 20, a = 52020, b = 52620;
+  const x = t => L + (t - a) / (b - a) * (W - L - R);
+  const lanes = [
+    { ch: "THM.heater_b_current", name: "Heater B current", color: "var(--ch-heater)", on: T_HEAT, note: "14:29:44 · ON at 3.7 A", lo: 0, hi: 5.2 },
+    { ch: "PAY.payload_current", name: "Payload current", color: "var(--ch-payload)", on: T_SCI, note: "14:31:52 · science mode", lo: 0, hi: 4 },
+    { ch: "EPS.bus_voltage", name: "Bus voltage", color: "var(--ch-bus)", on: T_WARN, note: "14:32:00 · warn 26.5 V", lo: 25, hi: 29, inv: true },
+  ];
+  const lh = 64, top = 20;
+  for (let t = Math.ceil(a / 60) * 60; t <= b; t += 60) { el("line", { x1: x(t), x2: x(t), y1: top - 6, y2: top + lh * 3, style: "stroke:var(--grid)" }, svg);
+    if (t % 120 === 0) el("text", { x: x(t), y: top + lh * 3 + 16, "text-anchor": "middle", text: clk(t) }, svg); }
+  lanes.forEach((ln, i) => {
+    const y0 = top + i * lh, active = pin && pin.lane === i;
+    el("rect", { x: 0, y: y0, width: W, height: lh - 6, rx: 6, style: `fill:${active ? "var(--surface-3)" : "transparent"}` }, svg);
+    el("text", { x: 10, y: y0 + lh / 2, text: ln.name, style: `fill:${ln.color};font-family:var(--sans);font-size:12.5px;font-weight:500` }, svg);
+    const yy = v => y0 + (lh - 14) - (v - ln.lo) / (ln.hi - ln.lo) * (lh - 22);
+    const d = pts("actual", ln.ch, a, b).map(([t, v], k) => `${k ? "L" : "M"}${x(t).toFixed(1)},${yy(v).toFixed(1)}`).join("");
+    el("path", { d, fill: "none", style: `stroke:${ln.color};stroke-width:2;stroke-linejoin:round` }, svg);
+    el("line", { x1: x(ln.on), x2: x(ln.on), y1: y0 + 2, y2: y0 + lh - 8, style: `stroke:${ln.color};stroke-width:1.5;stroke-dasharray:3 3` }, svg);
+    el("circle", { cx: x(ln.on), cy: y0 + 6, r: 4, style: `fill:${ln.color}` }, svg);
+    el("text", { x: x(ln.on) + 8, y: y0 + 10, text: ln.note, style: `fill:${ln.color}` }, svg);
+  });
+  // lead bracket
+  const by = top + lh * 3 - 2;
+  el("path", { d: `M${x(T_HEAT)},${by - 4}V${by}H${x(T_SCI)}V${by - 4}`, fill: "none", style: "stroke:var(--warn);stroke-width:1.5" }, svg);
+  el("text", { x: (x(T_HEAT) + x(T_SCI)) / 2, y: by - 6, "text-anchor": "middle", text: "heater leads by 2 min 8 s", style: "fill:var(--warn)" }, svg);
+  if (pin) { const px = x(pin.t); el("line", { x1: px, x2: px, y1: top - 8, y2: top + lh * 3, style: "stroke:var(--violet);stroke-width:1.5" }, svg);
+    el("rect", { x: px - 30, y: top - 18, width: 60, height: 15, rx: 3, style: "fill:var(--violet)" }, svg);
+    el("text", { x: px, y: top - 7, "text-anchor": "middle", text: clk(pin.t, 1), style: "fill:var(--surface);font-weight:600" }, svg); }
+}
+
+function drawStack() {
+  const svg = document.getElementById("stack"); svg.innerHTML = "";
+  const H = 250, P = { l: 46, b: 26, t: 14 }, max = 7;
+  const y = v => H - P.b - v / max * (H - P.t - P.b);
+  [0, 2, 4, 6].forEach(v => { el("line", { x1: P.l, x2: 470, y1: y(v), y2: y(v), style: "stroke:var(--grid)" }, svg); el("text", { x: P.l - 8, y: y(v) + 3.5, "text-anchor": "end", text: v + " A" }, svg); });
+  el("line", { x1: P.l, x2: 470, y1: y(6), y2: y(6), style: "stroke:var(--warn);stroke-dasharray:5 4" }, svg);
+  el("text", { x: P.l + 4, y: y(6) - 5, text: "bus-current warn 6.0 A", style: "fill:var(--warn)" }, svg);
+  const bars = [
+    { x: 110, label: "before · 14:25–14:29", parts: [["other", 1.47], ["payload", 0.08], ["heater", 0.01]] },
+    { x: 290, label: "after · 14:33–14:35", parts: [["other", 1.54], ["payload", 0.89], ["heater", 3.74]] },
+  ];
+  const col = { other: "var(--ch-other)", payload: "var(--ch-payload)", heater: "var(--ch-heater)" };
+  bars.forEach((b, bi) => { let acc = 0; b.parts.forEach(([k, v]) => {
+      const hl = pin && pin.part === k && bi === 1;
+      el("rect", { x: b.x, width: 90, y: y(acc + v), height: Math.max(0.5, y(acc) - y(acc + v)), rx: 2, style: `fill:${col[k]};opacity:${pin && pin.part && !hl && bi === 1 ? .35 : .9}` }, svg);
+      acc += v; });
+    el("text", { x: b.x + 45, y: H - 8, "text-anchor": "middle", text: b.label }, svg);
+    el("text", { x: b.x + 45, y: y(acc) - 6, "text-anchor": "middle", text: acc.toFixed(2) + " A", style: "fill:var(--text);font-weight:600" }, svg); });
+  const lx = 392;
+  [["heater", "+3.73 A Heater B", 1.54 + 0.89 + 3.74 / 2], ["payload", "+0.81 A payload", 1.54 + 0.89 / 2], ["other", "+0.07 A other", 1.54 / 2]].forEach(([k, t, v]) => {
+    el("line", { x1: 382, x2: lx - 2, y1: y(v), y2: y(v), style: `stroke:${col[k]}` }, svg);
+    el("text", { x: lx, y: y(v) + 3.5, text: t, style: `fill:${k === "other" ? "var(--text-3)" : col[k]}` }, svg); });
+}
+
+function drawHealthy() {
+  lineChart(document.getElementById("healthy"), {
+    x: [52020, 52620], y: [0, 4.2], ticks: [0, 1, 2, 3, 4], unit: " A", xStep: 300, pinnable: false,
+    bands: [{ lo: 0.8, hi: 1.2, color: "var(--signal)", label: "healthy 0.8–1.2 A" }],
+    limits: [{ v: 2.4, color: "var(--hypothesis)", label: "EPS-17 2× bar" }],
+    events: [{ t: T_HEAT, label: "HEATER_B_ENABLE" }],
+    series: [{ pts: pts("healthy", "THM.heater_b_current", 52020, 52620), color: "var(--text-3)", dash: 1 },
+             { pts: pts("actual", "THM.heater_b_current", 52020, 52620), color: "var(--ch-heater)", w: 2.4 }],
+  });
+}
+
+function drawWhatIf() {
+  lineChart(document.getElementById("whatif"), {
+    x: [51900, 53400], y: [25, 29], ticks: [25, 26, 27, 28, 29], unit: " V", pinnable: true,
+    limits: [{ v: 26.5, color: "var(--warn)", label: "warn 26.5 V" }, { v: 25.0, color: "var(--crit)", label: "critical 25.0 V" }],
+    events: [{ t: T_HEAT, label: "heater on", anchor: "end", dx: -4 }, { t: T_SCI, label: "science mode" }],
+    series: [{ pts: pts("actual", "EPS.bus_voltage", 51900, 53400), color: "var(--ch-bus)", w: 2 },
+             { pts: pts("healthy", "EPS.bus_voltage", 51900, 53400), color: "var(--signal)", dash: 1, w: 2.2 }],
+    dots: [{ t: T_WARN, v: 26.4, color: "var(--warn)" }],
+  });
+}
+
+const OPTS = [
+  { id: "heater_off", t: "Turn off Heater B", o: "Bus recovers to 27.9 V within seconds and holds 27.7 V through 14:45.", res: "✓ CLEARS WARN", cls: "good", rec: true, color: "var(--signal)" },
+  { id: "payload_safe", t: "Safe the payload", o: "Bus rises only to 26.4 V, then drifts to 26.1 V. Stays in warn.", res: "✗ DOES NOT CLEAR", cls: "bad", color: "var(--ch-payload)" },
+  { id: "actual", t: "Hold", o: "Bus stays at 25.4–26.0 V, just 0.43 V above critical at its lowest.", res: "△ STAYS IN WARN", cls: "meh", color: "var(--text-3)" },
+];
+let sel = "heater_off";
+function drawOptions() {
+  document.getElementById("options").innerHTML = OPTS.map(o => `
+    <button class="opt ${o.id === sel ? "sel" : ""}" data-opt="${o.id}">
+      <span class="t">${o.t} ${o.rec ? '<span class="rec">RECOMMENDED</span>' : ""}</span>
+      <span class="o">${o.o}</span><span class="res ${o.cls}">${o.res}</span></button>`).join("");
+  lineChart(document.getElementById("preview"), {
+    x: [52020, 53400], y: [25, 29], ticks: [25, 26, 27, 28, 29], unit: " V", xStep: 300,
+    limits: [{ v: 26.5, color: "var(--warn)", label: "warn 26.5 V" }, { v: 25.0, color: "var(--crit)", label: "critical" }],
+    events: [{ t: T_DEC, label: "decision 14:34", color: "var(--text-2)" }],
+    shade: [52020, T_DEC],
+    series: [{ pts: pts("actual", "EPS.bus_voltage", 52020, T_DEC), color: "var(--ch-bus)", w: 2 },
+      ...OPTS.map(o => ({ pts: pts(o.id, "EPS.bus_voltage", T_DEC - 15, 53400), color: o.color, dash: o.id !== sel, w: o.id === sel ? 2.6 : 1.4, op: o.id === sel ? 1 : .45 }))],
+  });
+}
+
+const HYPS = [
+  { cls: "lead", verdict: "LEADING", name: "Heater B overcurrent", code: "FAULT-001 · EPS-17", score: 92, color: "var(--ch-heater)", ev: [
+    ["p", "Draws 3.74 A after switch-on, 3.1× the healthy maximum of 1.2 A", ["obs", "der"], { t: 52200, lane: 0 }],
+    ["p", "Stepped up at 14:29:44, 2 min 8 s before the payload changed", ["obs"], { t: T_HEAT, lane: 0 }],
+    ["p", "Accounts for +3.73 A of the +4.61 A bus jump", ["der"], { part: "heater", t: 52400 }],
+    ["p", "Matches INC-0187: about 3× heater draw, payload not involved", ["doc"], {}],
+    ["p", "With a healthy heater in the replay, there is no alarm", ["der", "sim"], { t: T_WARN, scroll: "whatif" }],
+  ], foot: "Meets EPS-17 step 4 (≥2× healthy draw)" },
+  { cls: "out", verdict: "RULED OUT", name: "Payload power spike", code: "FAULT-002 · PAY-04", score: 12, color: "var(--ch-payload)", ev: [
+    ["p", "Science mode began 8 s before the alarm", ["obs"], { t: T_SCI, lane: 1 }],
+    ["m", "Draws 0.89 A, normal for science mode (0.9 A) and nowhere near 2×", ["der"], { t: T_SCI + 60, lane: 1 }],
+    ["m", "Adds only +0.81 A and can't explain a 4.6 A jump", ["der", "doc"], { part: "payload", t: 52400 }],
+    ["m", "The heater was already high before the payload switched", ["obs"], { t: T_HEAT, lane: 0 }],
+  ], foot: "EPS-17 step 5: confounder, not a cause" },
+  { cls: "out", verdict: "RULED OUT", name: "Battery aging", code: "FAULT-003 · EPS-09", score: 6, color: "var(--signal)", ev: [
+    ["p", "Bus voltage sagged to 25.43 V", ["obs"], { t: 52500, lane: 2 }],
+    ["m", "A load is ≥2× healthy, which explains the sag without a battery problem", ["der"], { t: 52200, lane: 0 }],
+    ["m", "Voltage holds when the heater is healthy in the replay", ["der", "sim"], { t: T_WARN, scroll: "whatif" }],
+  ], foot: "Would need healthy loads and a sag anyway" },
+];
+const TAGN = { obs: "OBSERVED", der: "DERIVED", doc: "DOCUMENTED", sim: "SIMULATED" };
+function drawHyps() {
+  document.getElementById("hyps").innerHTML = HYPS.map((h, hi) => `
+    <article class="hyp ${h.cls}">
+      <div class="hyp-top"><span class="code">${h.code}</span><span class="verdict ${h.cls}">${h.verdict}</span></div>
+      <h3>${h.name}</h3>
+      <div><div class="muted" style="font-size:11.5px;display:flex;justify-content:space-between"><span>evidence weight</span><span class="mono">${h.score}%</span></div>
+        <div class="bar-meter"><span style="width:${h.score}%;background:${h.color}"></span></div></div>
+      <ul class="ev">${h.ev.map(([s, txt, tags], ei) => `
+        <li data-h="${hi}" data-e="${ei}"><span class="sgn ${s}">${s === "p" ? "+" : "−"}</span>
+          <span>${txt}<span class="meta">${tags.map(t => `<span class="tag ${t}">${TAGN[t]}</span>`).join("")}</span></span></li>`).join("")}</ul>
+      <div class="hyp-foot">${h.foot}</div>
+    </article>`).join("");
+}
+
+const STAGES = ["Open", "Investigate", "Decide", "Act", "Verify", "Close"];
+let stage = 2;
+function drawStepper() {
+  document.getElementById("stepper").innerHTML = STAGES.map((s, i) =>
+    `${i ? `<span class="step-line ${i <= stage ? "done" : ""}"></span>` : ""}<span class="step ${i < stage ? "done" : i === stage ? "now" : ""}"><span class="dot">${i < stage ? "✓" : i + 1}</span>${s}</span>`).join("");
+}
+
+function redrawPinned() { drawLanes(); drawStack(); drawWhatIf(); }
+
+document.addEventListener("click", e => {
+  const li = e.target.closest(".ev li");
+  if (li) {
+    document.querySelectorAll(".ev li").forEach(n => n.classList.remove("active")); li.classList.add("active");
+    pin = HYPS[li.dataset.h].ev[li.dataset.e][3]; redrawPinned();
+    const target = pin.scroll ? document.getElementById(pin.scroll) : pin.part ? document.getElementById("stack") : document.getElementById("lanes");
+    target.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  const opt = e.target.closest("[data-opt]");
+  if (opt) { sel = opt.dataset.opt; drawOptions(); return; }
+  if (e.target.id === "approve") {
+    stage = 4; drawStepper();
+    const st = document.getElementById("status"); st.textContent = "VERIFYING"; st.classList.add("ok");
+    document.getElementById("head").style.setProperty("--accent-h", "var(--signal)");
+    e.target.disabled = true; e.target.textContent = "Approved · Heater B off";
+    if (sel !== "heater_off") {
+      const o = OPTS.find(x => x.id === sel);
+      document.querySelector("#verify h2").textContent = "The bus did not recover. Back to Decide.";
+      document.querySelector("#verify .checks").innerHTML = `<li><span>${o.o} <span class="tag obs">OBSERVED · simulated</span></span></li><li><span>EPS-17 step 7: no recovery, so check the next suspect load or continue to EPS-09 <span class="tag doc">DOCUMENTED</span></span></li>`;
+      document.getElementById("close").textContent = "Try another option";
+    }
+    const v = document.getElementById("verify"); v.classList.add("show"); setTimeout(() => v.scrollIntoView({ behavior: "smooth", block: "center" }), 50);
+  }
+  if (e.target.id === "close" && sel !== "heater_off") { location.reload(); return; }
+  if (e.target.id === "close") {
+    stage = 6; drawStepper(); document.getElementById("status").textContent = "CLOSED · CONFIRMED";
+    e.target.disabled = true; document.getElementById("remember").classList.add("show");
+  }
+  if (e.target.id === "theme") { const r = document.documentElement; r.dataset.theme = r.dataset.theme === "dark" ? "light" : "dark"; }
+});
+
+drawStepper(); drawLanes(); drawStack(); drawHealthy(); drawHyps(); drawWhatIf(); drawOptions();
+
+// Tally the source tags actually present on the page (outside the drawer).
+(function tally() {
+  const kinds = [["obs", "OBSERVED", "var(--observed)"], ["der", "DERIVED", "var(--derived)"], ["doc", "DOCUMENTED", "var(--documented)"], ["sim", "SIMULATED", "var(--text-3)"]];
+  const tags = [...document.querySelectorAll("main .tag")].filter(t => !t.closest(".drawer"));
+  const counts = kinds.map(([k, n, c]) => [n, c, tags.filter(t => t.classList.contains(k)).length]).filter(x => x[2]);
+  const total = counts.reduce((a, x) => a + x[2], 0);
+  document.getElementById("tally").innerHTML = counts.map(([n, c, k]) => `<span style="flex:${k};background:${c}">${n} ${k}</span>`).join("");
+  const steps = document.querySelectorAll(".trail li").length;
+  document.getElementById("dr-stats").innerHTML = `<span>${steps} tool calls</span><span>${total} tagged claims</span><span style="color:var(--signal)">0 unsourced</span>`;
+})();
+</script>
+</body>
+</html>

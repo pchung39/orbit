@@ -15,7 +15,7 @@
       href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/static/landing.css?v=34" />
+    <link rel="stylesheet" href="/static/landing.css?v=37" />
   </head>
 
   <body>
@@ -48,11 +48,12 @@
           <div class="wrap hero-grid">
             <div class="hero-copy">
               <p class="eyebrow">ORBIT · Spacecraft anomaly investigation</p>
-              <h1 class="hero-title" id="hero-t">From spacecraft alarm to a decision you can explain.</h1>
+              <h1 class="hero-title" id="hero-t">From spacecraft alarm to a decision you can check.</h1>
               <p class="lede">
-                ORBIT brings telemetry, command history, procedures, and prior incidents into one
-                reviewable case. It helps operators assess what happened, examine the evidence, and
-                decide what to do next—including when to hold for more information.
+                ORBIT seals a telemetry window for the case, weighs the possible causes against the
+                named procedure, and replays each option in a simulator before anyone acts. Operators
+                see what happened and why, choose a next step—including holding for more
+                evidence—and check that the fix worked.
               </p>
               <p class="byline">
                 Designed and built by
@@ -66,7 +67,7 @@
                 <a class="btn" href="/app/incidents/INC-0204">Explore a sample investigation</a>
                 <a class="btn btn-ghost" href="/about">See the design decisions</a>
               </div>
-              <p class="status-line">Interactive prototype · Simulated spacecraft data · Rules-based browser demo</p>
+              <p class="status-line">Interactive prototype · Simulated spacecraft data · Rules-based investigator · Simulator replays</p>
             </div>
 
             <aside class="hero-preview" aria-label="Sample investigation preview">
@@ -79,20 +80,24 @@
                 <div class="preview-body">
                   <div class="preview-row">
                     <span class="tagchip tag-observed">Observed</span>
-                    <p><code>HEATER_B_ENABLE</code> at 14:29:45 · heater B draws <b>3.73 A</b></p>
+                    <p><code>HEATER_B_ENABLE</code> at 14:29:44 · heater B draws <b>3.74 A</b></p>
                   </div>
                   <div class="preview-row">
                     <span class="tagchip tag-derived">Derived</span>
-                    <p><b>3.2×</b> the healthy ON reference of 1.17 A</p>
+                    <p><b>3.1×</b> the healthy maximum of 1.2 A</p>
                   </div>
                   <div class="preview-row">
                     <span class="tagchip tag-documented">Documented</span>
-                    <p>EPS-17 inhibit bar · at least <b>2×</b> healthy</p>
+                    <p>EPS-17 step 4 · prime suspect at <b>≥2×</b> healthy</p>
+                  </div>
+                  <div class="preview-row">
+                    <span class="tagchip tag-simulated">Simulated</span>
+                    <p>Replay with a healthy heater · <b>no alarm</b></p>
                   </div>
                   <div class="preview-decision">
                     <div>
                       <p class="preview-rec-label">Recommended action</p>
-                      <p class="preview-rec">Inhibit Heater B</p>
+                      <p class="preview-rec">Turn off Heater B</p>
                     </div>
                     <span class="preview-not-sent" title="ORBIT does not uplink commands">
                       <span aria-hidden="true">×</span> Not sent
@@ -112,8 +117,8 @@
               <h2 class="h-sec" id="decision-t">Similar alarms. Different next steps.</h2>
               <p class="lede">
                 Both cases trigger a low-voltage warning. Both include a payload entering science
-                mode. The deciding evidence is whether heater current meets the procedure’s
-                threshold for recommending an inhibit.
+                mode, which makes the payload look guilty. The deciding evidence is whether heater
+                current meets the procedure’s threshold for naming it the prime suspect.
               </p>
             </div>
 
@@ -131,7 +136,7 @@
                 <dl class="compare-facts">
                   <div>
                     <dt>Heater current</dt>
-                    <dd><b>3.2×</b> its healthy reference</dd>
+                    <dd><b>3.1×</b> its healthy maximum</dd>
                   </div>
                   <div>
                     <dt>Procedure threshold</dt>
@@ -140,7 +145,7 @@
                 </dl>
                 <p class="compare-rec is-act">
                   <span class="compare-rec-k">Recommendation</span>
-                  Inhibit Heater B
+                  Turn off Heater B · the replay shows the bus recover
                 </p>
                 <a class="compare-link" href="/app/incidents/INC-0204">Open the recommendation case</a>
               </article>
@@ -158,7 +163,7 @@
                 <dl class="compare-facts">
                   <div>
                     <dt>Heater current</dt>
-                    <dd><b>1.7×</b> its healthy reference</dd>
+                    <dd><b>1.7×</b> its healthy maximum</dd>
                   </div>
                   <div>
                     <dt>Procedure threshold</dt>
@@ -167,7 +172,7 @@
                 </dl>
                 <p class="compare-rec is-hold-rec">
                   <span class="compare-rec-k">Recommendation</span>
-                  Hold for more evidence
+                  Hold for more evidence · the case moves to Watching
                 </p>
                 <a class="compare-link" href="/app/incidents/INC-0212">Open the hold case</a>
               </article>
@@ -178,7 +183,8 @@
               does not. I built the hold case first to make that requirement explicit.
             </p>
             <p class="boundary">
-              An operator reviews the recommendation. ORBIT cannot send spacecraft commands.
+              An operator makes the decision. ORBIT cannot send spacecraft commands; previews and
+              verification run in a simulator.
             </p>
           </div>
         </section>
@@ -195,22 +201,29 @@
               <li class="step">
                 <span class="step-n" aria-hidden="true">01</span>
                 <div>
-                  <h3>Preserve the evidence</h3>
-                  <p>Save a fixed window of telemetry and events so the investigation can be reviewed against the same inputs later.</p>
+                  <h3>Seal the window</h3>
+                  <p>Cut a fixed window from the archive tape and write it with the case. Every measurement on the case page reads from that sealed file, not a live archive query.</p>
                 </div>
               </li>
               <li class="step">
                 <span class="step-n" aria-hidden="true">02</span>
                 <div>
-                  <h3>Assess it in context</h3>
-                  <p>Use procedures and prior incidents to interpret the measurements and assess whether they support a recommendation.</p>
+                  <h3>Weigh every explanation</h3>
+                  <p>Check heater, payload, and battery against the one procedure that governs the alarm. Each cause gets evidence for and against, and each line links to the moment on the chart.</p>
                 </div>
               </li>
               <li class="step">
                 <span class="step-n" aria-hidden="true">03</span>
                 <div>
-                  <h3>Show the basis for the decision</h3>
-                  <p>Present the evidence, calculations, citations, and proposed explanation together. Hold when the available evidence is insufficient.</p>
+                  <h3>Preview the options</h3>
+                  <p>Replay the same window in the simulator: with the suspect fault removed, and with each possible action taken. See what happens next before anyone decides.</p>
+                </div>
+              </li>
+              <li class="step">
+                <span class="step-n" aria-hidden="true">04</span>
+                <div>
+                  <h3>Decide, verify, close</h3>
+                  <p>The operator approves an option or holds. ORBIT records the decision, checks the result against the procedure’s recovery step, and keeps a hold open as Watching.</p>
                 </div>
               </li>
             </ol>
@@ -218,13 +231,17 @@
             <div class="ai-fit">
               <h3 id="ai-fit-t">Where the AI fits</h3>
               <p>
-                In this workflow, the investigator decides what evidence to examine, uses tools to
-                retrieve or calculate it, and assesses whether the results support a conclusion.
+                The investigator decides what to sample from the sealed tape, which named document
+                to read, and whether those results meet the procedure’s threshold for a recommendation.
               </p>
               <p>
-                ORBIT’s browser demo uses a rules-based investigator to establish repeatable
-                reference behavior. Experimental LLM providers are available separately through the
-                command line. The published evaluation results cover the rules-based provider.
+                The browser demo uses a rules-based investigator so the reference behavior is
+                repeatable. Experimental LLM providers are available on the command line. Published
+                evaluation results cover the rules-based provider only.
+              </p>
+              <p>
+                The previews are not AI. Each scenario is a seeded physics simulation, so replaying
+                it reproduces the tape exactly; changing one thing shows what that change would do.
               </p>
             </div>
           </div>
@@ -237,7 +254,7 @@
               <h2 class="h-sec" id="labels-t">See what is measured—and what is inferred.</h2>
               <p class="lede">
                 Each claim is labeled so a reviewer can distinguish recorded facts from
-                calculations, documentation, and proposed explanations.
+                calculations, documentation, simulator replays, and proposed explanations.
               </p>
             </div>
 
@@ -245,36 +262,43 @@
               <div class="report-row">
                 <span class="tagchip tag-observed">Observed</span>
                 <div>
-                  <p class="report-claim">Command <code>HEATER_B_ENABLE</code> at 14:29:45.</p>
-                  <p class="report-src">Command log · sealed case evidence</p>
+                  <p class="report-claim">Command <code>HEATER_B_ENABLE</code> at 14:29:44, two minutes before the payload entered science mode.</p>
+                  <p class="report-src">Command log · sealed window file</p>
                 </div>
               </div>
               <div class="report-row">
                 <span class="tagchip tag-derived">Derived</span>
                 <div>
-                  <p class="report-claim">Heater draw is 3.2× the healthy ON reference.</p>
-                  <p class="report-src">Computed: 3.73 A ÷ 1.17 A</p>
+                  <p class="report-claim">Heater draw is 3.1× the healthy maximum.</p>
+                  <p class="report-src">Computed: 3.74 A ÷ 1.2 A</p>
                 </div>
               </div>
               <div class="report-row">
                 <span class="tagchip tag-documented">Documented</span>
                 <div>
-                  <p class="report-claim">EPS-17 requires at least 2× healthy for an inhibit recommendation.</p>
-                  <p class="report-src">Procedure EPS-17 · prior close INC-0187</p>
+                  <p class="report-claim">EPS-17 step 4: a load at 2× its healthy draw or more is the prime suspect.</p>
+                  <p class="report-src">Procedure EPS-17 · prior close-out INC-0187</p>
                 </div>
               </div>
               <div class="report-row">
                 <span class="tagchip tag-hypothesis">Hypothesis</span>
                 <div>
-                  <p class="report-claim">A partial short in Heater B is loading the bus.</p>
+                  <p class="report-claim">Heater B overcurrent (FAULT-001). Science mode is a confounder, not the cause.</p>
                   <p class="report-src">Proposed explanation · subject to operator review</p>
+                </div>
+              </div>
+              <div class="report-row">
+                <span class="tagchip tag-simulated">Simulated</span>
+                <div>
+                  <p class="report-claim">With a healthy heater, the bus never drops below its 26.5 V warn.</p>
+                  <p class="report-src">Replay of the sealed window with the heater fault removed</p>
                 </div>
               </div>
             </div>
 
             <p class="lede closing-note">
-              The labels make the report easier to inspect and challenge. They do not turn a
-              hypothesis into a fact.
+              The labels make the record easier to inspect and challenge. They do not turn a
+              hypothesis into a fact, and a replay is evidence about the model, not the spacecraft.
             </p>
           </div>
         </section>
@@ -319,7 +343,9 @@
             </ul>
 
             <p class="lede">
-              Designated failures block release even when the overall score improves.
+              Designated failures block release even when the overall score improves. Separate
+              tests check that the currents quoted on the case page are samples from the tape and
+              that each simulator replay reproduces its tape exactly.
             </p>
             <p class="scope-note">
               These results cover a small regression suite using simulated data. They do not
@@ -327,7 +353,7 @@
               operational use.
             </p>
             <p class="sec-cta">
-              <a class="btn" href="/app/trust">Inspect all evaluation checks</a>
+              <a class="btn" href="https://github.com/pchung39/orbit/tree/master/eval" rel="noopener noreferrer" target="_blank">Inspect all evaluation checks</a>
             </p>
           </div>
         </section>
@@ -337,7 +363,7 @@
           <div class="wrap close-inner">
             <h2 class="h-sec" id="built-t">Built end to end by Paul Chung.</h2>
             <p class="lede">
-              I designed the product scope, investigation workflow, evidence model, application,
+              I designed the product scope, case lifecycle, evidence model, simulator, application,
               and evaluation suite.
             </p>
             <p class="lede">
@@ -363,7 +389,6 @@
           <nav aria-label="Footer">
             <a href="/about">Design decisions</a>
             <a href="/app">Demo</a>
-            <a href="/app/trust">Trust</a>
             <a href="https://github.com/pchung39/orbit" rel="noopener noreferrer" target="_blank">Source</a>
           </nav>
         </div>

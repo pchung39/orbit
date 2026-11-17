@@ -5,66 +5,33 @@
 <h1 align="center">ORBIT</h1>
 
 <p align="center">
-  Investigation workbench for spacecraft anomaly response.<br />
-  Assembles sealed telemetry, procedures, and priors — then stops at a human decision.
+  Anomaly response for spacecraft teams, from alarm to a decision you can check.<br />
+  Seals a telemetry window, weighs every explanation against the procedure,<br />
+  previews each option in a simulator replay, and verifies the operator's decision.
 </p>
 
 <p align="center">
   <a href="#quick-start">Quick start</a> ·
-  <a href="#demo-walkthrough">Demo</a> ·
+  <a href="#demo">Demo</a> ·
+  <a href="#how-it-works">How it works</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="#evaluation">Evaluation</a>
 </p>
 
 ---
 
-## Overview
+## Why ORBIT
 
-ORBIT helps operators investigate alarms they already have. It does **not** detect anomalies and does **not** command the spacecraft.
+Operators already have the alarm. What they need is a reviewable case: the same telemetry window every time, the procedure that governs the response, the explanations that were weighed and ruled out, a recommendation that can be challenged, and a check that the fix worked.
 
-Given an alarm, a time, and an upstream archive tape, ORBIT:
+ORBIT builds that case and carries it through its lifecycle: **open → needs decision → verifying or watching → closed**. It does not detect anomalies and it does not uplink commands. Previews and verification run in a simulator and are labeled as such.
 
-1. **Seals** a time window of telemetry and events into a durable evidence package
-2. **Runs** a deterministic investigation against procedures and prior close-outs
-3. **Tags** every claim with how it was sourced (observed, derived, documented, hypothesis)
-4. **Recommends** a human action — without uplinking anything
-
-The browser console uses the rules-based investigator only (`--provider rules`). Paid LLM providers are available via CLI for experimentation, not in the HTTP investigate path.
-
-**Demo spacecraft:** Aurora-1 · **Suggested path:** `INC-0205` → `INC-0210` → Trust eval scorecard
-
-## Table of contents
-
-- [Overview](#overview)
-- [What ORBIT is not](#what-orbit-is-not)
-- [Quick start](#quick-start)
-- [Demo walkthrough](#demo-walkthrough)
-- [Console](#console)
-- [Investigation model](#investigation-model)
-- [Architecture](#architecture)
-- [Project structure](#project-structure)
-- [CLI reference](#cli-reference)
-- [Evaluation](#evaluation)
-- [Configuration](#configuration)
-- [Development](#development)
-
-## What ORBIT is not
-
-| | |
-|---|---|
-| Anomaly detection | Operators bring the alarm; ORBIT assembles evidence |
-| Live downlink | Evidence is fetched from an archive catalog and sealed locally |
-| Command uplink | Filing records a close-out; ORBIT never sends spacecraft commands |
-| Mission archive of record | ORBIT stores sealed windows, not full-orbit telemetry history |
+**Demo spacecraft:** Aurora-1  
+**Suggested path:** [`INC-0204`](http://127.0.0.1:8000/app/incidents/INC-0204) → [`INC-0210`](http://127.0.0.1:8000/app/incidents/INC-0210) → [`INC-0212`](http://127.0.0.1:8000/app/incidents/INC-0212)
 
 ## Quick start
 
-### Prerequisites
-
-- Python 3.11+
-- Docker (Postgres 16)
-
-### Install and run
+**Requirements:** Python 3.11+, Docker
 
 ```bash
 git clone https://github.com/pchung39/orbit.git
@@ -80,98 +47,86 @@ python -m storage ingest
 uvicorn api.app:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-### Open the app
-
-| URL | Purpose |
+| URL | What you get |
 |---|---|
-| [http://127.0.0.1:8000/](http://127.0.0.1:8000/) | Landing page |
+| [http://127.0.0.1:8000/](http://127.0.0.1:8000/) | Product landing |
 | [http://127.0.0.1:8000/app](http://127.0.0.1:8000/app) | Operator console |
-| [http://127.0.0.1:8000/app/incidents/INC-0205](http://127.0.0.1:8000/app/incidents/INC-0205) | Sample case (direct) |
-| `GET /health` | Health probe (`/api/health` also works) |
+| [http://127.0.0.1:8000/about](http://127.0.0.1:8000/about) | Design decisions |
+| `GET /health` | Health probe |
 
-Default database credentials are in `docker-compose.yml` (`orbit` / `orbit`). They are for local development only.
+Local Postgres credentials live in `docker-compose.yml` (`orbit` / `orbit`) and are for development only.
 
-Optional API keys (`.env`, not committed): `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` for CLI investigation only.
+Optional CLI keys (`.env`, not committed): `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`. The browser investigate path is always rules-based.
 
-## Demo walkthrough
-
-Follow the overview walkthrough in the app, or open these cases directly:
+## Demo
 
 | Step | Case | What to notice |
 |---|---|---|
-| 1 | **INC-0205** | Heater-only fault — clear inhibit recommendation |
-| 2 | **INC-0210** | Same alarm signature, payload is the culprit — do not inhibit the heater |
-| 3 | **Trust → Eval** | Release scorecard matches `python -m eval` output |
-
-Additional scenarios:
+| 1 | **[INC-0204](http://127.0.0.1:8000/app/incidents/INC-0204)** | The payload looks guilty; *Which signal moved first* shows the heater led by 2 min. Open the replay: with a healthy heater there is no alarm. Approve *Turn off Heater B*, watch it verify, close. |
+| 2 | **[INC-0210](http://127.0.0.1:8000/app/incidents/INC-0210)** | Payload is the culprit; the preview shows heater-off changes nothing |
+| 3 | **[INC-0212](http://127.0.0.1:8000/app/incidents/INC-0212)** | No load clears the 2× bar → Hold; the case moves to *Watching* |
 
 | Case | Tape | Lesson |
 |---|---|---|
-| INC-0204 | eps204 | Heater fault + SCIENCE_MODE confounder |
-| INC-0212 | marg001 | Loads below ≥2× bar → hold, do not command |
-| INC-0211 | batt003 | Pack IR sag; healthy load currents |
+| INC-0205 | fault1 | Heater-only fault |
+| INC-0211 | batt003 | Pack IR sag; healthy load currents → hold, continue EPS-09 |
 
-## Console
+The five demo cases reset each time the console loads, so the walkthrough can be replayed. Cases you open yourself are kept.
 
-The desk is a single-page app served from `/app`.
+## How it works
 
-| View | Route | Description |
-|---|---|---|
-| **Overview** | `/app` | Mission context, product brief, desk queue |
-| **Incidents** | `/app/incidents` | Searchable case log grouped by source tape |
-| **Case** | `/app/incidents/{id}` | Investigation, knowledge, procedure, evidence, decision |
-| **Trust** | `/app/trust` | Data sources, store health, eval scorecard, tape inspector |
+1. **Open a case** from an alarm, a UTC clock, and an archive tape.
+2. **Seal a window.** ORBIT cuts warn ± padding from the tape CSV and writes `runs/sealed/{id}.csv` plus a small sidecar. Postgres stores only the case row.
+3. **Investigate.** The rules investigator samples the sealed tape, reads the one named procedure (EPS-17, PAY-04, or EPS-09), and fetches the one named prior when the report cites it. It produces a tagged markdown report (the eval artifact) and a structured **case brief**: facts, per-load attribution, which signal moved first, and heater / payload / battery explanations with evidence for and against.
+4. **Prove it.** Every archive tape is a seeded simulator run, so ORBIT can replay the window with the suspect fault removed (*what-if*) and preview each option (turn off Heater B, safe the payload, hold) from a decision time.
+5. **Decide → verify → close.** The operator approves an option; ORBIT records it and checks the simulated outcome against the procedure's recovery step. Hold moves the case to *Watching*. Nothing is uplinked.
 
-**Open case** collects an alarm channel, alarm time, and upstream archive tape. ORBIT reads that tape, writes a sealed window file, and records the case in Postgres. Pre-seeded demo incidents point at the fixture tapes.
+Case lifecycle: `open → recommended (needs decision) → verifying | watching → filed (closed)`.
 
-JSON API lives under `/api`. Static assets under `/static`.
-
-## Investigation model
+**Current limits**
+- *Watching* is a status. Nothing re-checks a held case yet.
+- Procedure bars (EPS-17's ≥2×, the 1.3× "elevated" floor) are encoded in `agent/hypothesis.py`, not read from the procedure files.
+- Closed cases are not yet cited as priors. Only the three authored close-outs in `incidents/` are.
+- Replays only exist for tapes with a recipe in `simulator/replay.py` (the five demo tapes). Other cases get the investigation without previews.
 
 ### Source tags
 
-Every claim in an investigation report is stamped with a provenance tag:
-
 | Tag | Meaning |
 |---|---|
-| **OBSERVED** | Directly in telemetry or the command log |
-| **DERIVED** | Computed from telemetry (e.g. load ratio vs healthy draw) |
-| **DOCUMENTED** | From a procedure step or prior close-out |
-| **HYPOTHESIS** | Proposed cause — not yet proven |
+| **OBSERVED** | In the sealed telemetry or command log |
+| **DERIVED** | Computed from those measurements |
+| **DOCUMENTED** | From a cited procedure step or prior close-out |
+| **HYPOTHESIS** | Proposed cause — still open |
+| **SIMULATED** | From a simulator replay of the sealed window, not from telemetry |
 
-A plausible narrative is not a root cause until the procedure threshold is met (e.g. EPS-17 step 4: load ≥2× healthy ON).
-
-### Operator feedback
-
-On a recommended case, operators can confirm or reject ORBIT's working hypothesis (or hold decision) before filing. Feedback is stored with the incident and appended to the close-out. It does not change uplink behavior.
+A plausible narrative is not a root cause until the procedure threshold is met (for example EPS-17 step 4: load ≥2× healthy ON).
 
 ### Product thesis
 
 > Last command is not automatically the cause.
 
-Heater B draws ~1.2 A when healthy. A fault draws ~3.7 A. Two minutes later the payload enters SCIENCE_MODE. Bus voltage crosses 26.5 V. The payload looks guilty — but the heater was already wrong. ORBIT walks the procedure, tags the evidence, and recommends inhibiting Heater B without sending the command.
+Heater B draws ~1.2 A when healthy and 3.74 A when faulted (3.1×). Two minutes later the payload enters SCIENCE_MODE and bus voltage crosses 26.5 V three seconds after that. The payload looks guilty — the heater was already wrong. ORBIT walks EPS-17, shows the heater moved first, rules out the payload and the battery with tagged evidence, and proves it: replayed with a healthy heater, the bus never crosses warn. It recommends turning off Heater B, previews that the bus recovers to 27.86 V, and lets the operator decide. Nothing is sent.
 
 ## Architecture
 
-ORBIT is an investigation workbench, not the mission archive.
+ORBIT is a case workbench. The mission archive and the procedure book stay outside it.
 
 ```
-Upstream archive          ORBIT                         Operator
-─────────────────         ─────                         ────────
-Tape CSV             →    Seal window file
-Named procedure file →    Case row in Postgres     →    Console / API
-                          Rules investigator
-                          Eval harness
+Upstream archive          ORBIT                               Operator
+─────────────────         ─────                               ────────
+Tape CSV             →    Sealed window file
+Named procedure file →    Rules investigator → report + brief  →  Console / API
+                          Simulator replay (what-if, previews) →  Decide
+                          Case row in Postgres (decision, verify) ← approve / hold
+                          Eval harness + unit tests
 ```
-
-Interactive diagram: [`docs/architecture.html`](docs/architecture.html)
 
 ```mermaid
 flowchart LR
-  Archive[Archive tape file]
+  Archive[Archive tape CSV]
   Open[Open case]
-  Seal[Seal window file]
-  Case[Incident row]
+  Seal[runs/sealed/*.csv]
+  Case[incidents row]
   Proc[Named procedure file]
 
   Archive --> Open
@@ -179,10 +134,32 @@ flowchart LR
   Proc --> Investigate[Rules investigator]
   Case --> Investigate
   Investigate --> Report[Tagged report]
-  Report --> Decision[Human decision]
+  Investigate --> Brief[Case brief]
+  Brief --> Replay[Simulator replay]
+  Replay --> Decision[Operator decision]
+  Decision --> Verify[Simulated verification]
+  Verify --> Case
 ```
 
-**Trust → Sources** shows the archive catalog. Opening a case reads a tape file and writes a sealed window. ORBIT does not keep a procedure library or a vector index.
+- **Report** (`agent/investigate.py`): tagged markdown. It's what `python -m eval` scores, so its format is stable.
+- **Case brief** (`agent/brief.py`): the same investigation as data. It holds facts, before/after load attribution, the order signals moved in, heater/payload/battery explanations with evidence for and against, the chart recipe, and the tool trail. Report and brief share one classifier (`agent/hypothesis.py`).
+- **Replay** (`simulator/replay.py`): each archive tape is a seeded simulator run. Re-running its recipe reproduces the tape exactly. Removing the suspect fault gives the *what-if*. Adding `HEATER_B_DISABLE` or `PAYLOAD_STANDBY` at the decision time previews each option.
+
+**What Postgres holds:** `incidents` (status, report, close-out, and the operator's decision with its simulated verification) and `hypothesis_feedback` (whether the decision agreed with ORBIT's recommendation). That's the case log.
+
+**What stays on disk:** archive tapes under `runs/`, sealed windows under `runs/sealed/`, procedures under `procedures/`, authored priors under `incidents/`.
+
+**What ORBIT does not keep:** a searchable document library, embeddings, or a copy of full-orbit telemetry in the database.
+
+Interactive poster: [`docs/architecture.html`](docs/architecture.html)
+
+### Console
+
+| View | Route | Description |
+|---|---|---|
+| Overview | `/app` | Mission context and desk queue |
+| Incidents | `/app/incidents` | Case log grouped by lifecycle stage (sidebar: Needs decision · Watching · Verifying · Closed) |
+| Case | `/app/incidents/{id}` | What happened → competing explanations → decide (fix preview) → verify, plus the audit trail |
 
 ## Project structure
 
@@ -191,136 +168,103 @@ The mission spec is canonical: [`spec/aurora1_mission_model.yaml`](spec/aurora1_
 ```
 orbit/
 ├── spec/                 Mission model — channels, limits, faults, scenarios
-├── simulator/            Physics engine and scenario CSV generation
+├── simulator/            Physics engine, scenario CSVs, what-if replay
 ├── storage/              Case log, tape files, sealed windows
-├── agent/                Investigator (rules | claude | openai) + tools
+├── agent/                Investigator (rules | claude | openai), case brief, tools
 ├── api/                  FastAPI server and static console routes
-├── ui/                   Desk SPA (overview, incidents, case, trust)
+├── ui/                   Desk SPA (overview, incidents, case)
 ├── eval/                 Scorecard, baseline comparison, release gate
 ├── procedures/           EPS-17, PAY-04, EPS-09
-├── incidents/            Closed prior close-outs (INC-0187, …)
-├── runs/                 Generated scenario CSVs (archive source)
+├── incidents/            Authored prior close-outs (INC-0187, …)
+├── runs/                 Archive CSVs + sealed/ windows
 └── docs/                 Architecture poster, screenshots, assets
 ```
 
-| Component | Role |
-|---|---|
-| **Spec** | Channel definitions, warn limits, fault library, demo scripts |
-| **Simulator** | Nominal, EPS-204, fault1, pay002, batt003, marg001, priors |
-| **Store** | Incidents, feedback, tape files, sealed windows |
-| **Agent** | Tool-using investigator; rules provider for console/API |
-| **Console** | Case workflow UI with investigation, evidence, and filing |
-| **Eval** | Diagnosis accuracy, withhold correctness, false-inhibit checks |
-
-## CLI reference
-
-### Storage
+## CLI
 
 ```bash
-python -m storage ingest                          # Ensure tape files, case tables, demo incidents
-python -m storage channel eps204 THM.heater_b_current --from-clock 14:29:00 --to-clock 14:33:00
-python -m storage events eps204
-```
+# Storage — ensure tapes, case tables, demo incidents
+python -m storage ingest
+python -m storage channel fault1 THM.heater_b_current --from-clock 14:29:00 --to-clock 14:33:00
+python -m storage events fault1
 
-### Simulator
-
-```bash
+# Simulator
 python -m simulator --validate-only
 python -m simulator --scenario eps204 --out runs/eps204.csv
-```
 
-### Investigation (CLI)
-
-```bash
-python -m agent investigate eps204 --provider rules     # Deterministic, no API key
+# Investigation — rules is free and deterministic
+python -m agent investigate eps204 --provider rules
 python -m agent investigate eps204                      # Claude, if ANTHROPIC_API_KEY is set
+
+# Evaluation
+python -m eval                                          # → eval/scorecard.json
+python -m eval --compare-baseline
+python -m eval --promote-baseline                       # explicit promotion only
 ```
 
-The HTTP `POST /api/incidents/{id}/investigate` route always uses rules.
-
-### Tape inspector (HTTP)
-
-```
-GET /api/runs/{run_id}/inspect?channel=THM.heater_b_current&alarm=EPS.bus_voltage&window=focus
-```
-
-Also available in the UI: **Trust → Inspect**, or **Inspect samples** on Case → Tape.
+`POST /api/incidents/{id}/investigate` always uses the rules provider.
 
 ## Evaluation
 
-The eval harness scores finished investigation reports against known close-outs and prints release metrics.
+The harness scores finished reports against known close-outs.
 
 | Metric | What it measures |
 |---|---|
 | **Named closes correct** | Heater / payload / battery cases fully passed |
 | **Withheld when bar not met** | Decoy case refused to invent a root cause |
 | **No false Heater B inhibit** | Contrast cases correctly leave the heater alone |
-| **Source tags** | Provenance tags present; OBSERVED kept separate from HYPOTHESIS |
+| **Source tags** | Provenance present; OBSERVED kept separate from HYPOTHESIS |
 
 ```bash
-python -m eval                              # Run suite → eval/scorecard.json
-python -m eval --scorecard-only
-python -m eval --compare-only               # Compare vs eval/baseline.json
-python -m eval --compare-baseline           # Full run + compare
-python -m eval --promote-baseline           # Promote candidate after PASS
-
-python -m unittest eval.test_release_gate eval.test_explorer -v
+python -m eval
+python -m unittest agent.test_brief simulator.test_replay eval.test_release_gate eval.test_explorer -v
 ```
 
-**Release gate:** Trust Eval Explorer reads `eval/scorecard.json` and compares against `eval/baseline.json` (`PASS`, `BLOCKED`, or `INSUFFICIENT_COVERAGE`). A passing candidate does not overwrite the baseline automatically — promotion is explicit.
+**Release gate:** `python -m eval --compare-baseline` reads `eval/scorecard.json` against `eval/baseline.json` (`PASS`, `BLOCKED`, or `INSUFFICIENT_COVERAGE`). A passing candidate does not overwrite the baseline — promotion is explicit.
 
-**Eval Explorer API:** `GET /api/eval/explorer`, `GET /api/eval/cases/{id}`
-
-**Current rules scorecard:** 4/4 named closes · 1/1 withheld · 3/3 no false Heater B inhibit · 5/5 fact vs inference clean
-
-```bash
-python -m eval --feedback                   # Summarize operator hypothesis feedback
-python -m eval --feedback --export
-```
+**Current rules scorecard:** 4/4 named closes · 1/1 withheld · 3/3 no false Heater B inhibit · 5/5 source tags clean
 
 ## Configuration
 
 | Variable | Purpose |
 |---|---|
-| `ANTHROPIC_API_KEY` | CLI investigation with Claude (optional) |
-| `OPENAI_API_KEY` | CLI investigation with OpenAI (optional) |
-| `LANGSMITH_API_KEY` | Trace investigations to LangSmith (optional) |
+| `DATABASE_URL` | Postgres URL (default `postgresql://orbit:orbit@localhost:5432/orbit`) |
+| `ANTHROPIC_API_KEY` | CLI Claude investigation (optional) |
+| `OPENAI_API_KEY` | CLI OpenAI investigation (optional) |
+| `LANGSMITH_API_KEY` | Trace investigations (optional) |
 | `LANGSMITH_TRACING` | Set `true` to enable LangSmith |
-| `LANGSMITH_PROJECT` | LangSmith project name (default: ORBIT) |
-| `BRAINTRUST_API_KEY` | Braintrust tracing fallback if LangSmith key absent |
+| `LANGSMITH_PROJECT` | Project name (default: ORBIT) |
+| `BRAINTRUST_API_KEY` | Tracing fallback if LangSmith is absent |
 
-Do not commit `.env`, `.env.langsmith`, or `.env.braintrust`.
+Do not commit `.env` files. With no tracing keys, tracing is a no-op.
 
-Traced paths when enabled: console investigate, `python -m agent investigate`, and `python -m eval` case runs. No tracing keys → no-op.
+## API
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/incidents` | List incidents |
+| `POST` | `/api/incidents` | Open case (alarm + tape → sealed file) |
+| `GET` | `/api/incidents/{id}/workspace` | Sealed telemetry, events, channel limits, case brief |
+| `POST` | `/api/incidents/{id}/investigate` | Rules investigation → report + case brief |
+| `GET` | `/api/incidents/{id}/brief` | Case brief (null until investigated) |
+| `POST` | `/api/incidents/{id}/decide` | Record a decision (`heater_off`, `payload_safe`, `hold`) and its simulated outcome |
+| `POST` | `/api/incidents/{id}/file` | Close the case with a close-out |
+| `GET` | `/api/runs` | Archive tapes + sealed windows |
+| `GET` | `/api/archive` | Upstream tape catalog for opening a case |
 
 ## Development
 
-### Regenerate screenshots
-
-With the server running:
-
 ```bash
+# Screenshots (server must be running)
 pip install playwright
 playwright install chromium
 python docs/capture_screenshots.py
 ```
 
-Output goes to `docs/screenshots/`.
-
-### Key API routes
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/api/incidents` | List incidents |
-| `POST` | `/api/incidents` | Open case (alarm + tape → seal) |
-| `GET` | `/api/incidents/{id}/workspace` | Telemetry, events, channels for a case |
-| `POST` | `/api/incidents/{id}/investigate` | Run rules investigation |
-| `POST` | `/api/incidents/{id}/file` | File close-out |
-| `GET` | `/api/trust` | Case log health, tape catalog, eval snapshot |
-| `GET` | `/api/eval/explorer` | Eval suite index |
+Output lands in `docs/screenshots/`.
 
 ---
 
 <p align="center">
-  <sub>ORBIT · Aurora-1 · investigation workbench demo</sub>
+  <sub>ORBIT · Aurora-1 · investigation workbench</sub>
 </p>

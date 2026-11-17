@@ -148,6 +148,9 @@ figcaption {
   color: var(--faint);
 }
 
+.about .steps {
+  display: block;
+}
 .steps {
   list-style: none;
   margin: 0.2rem 0 1.4rem;

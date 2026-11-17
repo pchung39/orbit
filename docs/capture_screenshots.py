@@ -1,19 +1,16 @@
 #!/usr/bin/env python3
-"""Capture README screenshots from a running ORBIT instance."""
+"""Capture README screenshots from a running ORBIT instance.
+
+python docs/capture_screenshots.py            # server on 127.0.0.1:8000
+"""
 
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
 OUT = Path(__file__).resolve().parent / "screenshots"
-BASE = "http://127.0.0.1:8000/app/"
+BASE = "http://127.0.0.1:8000/app"
 VIEWPORT = {"width": 1440, "height": 900}
-
-
-def wait_ready(page) -> None:
-    page.wait_for_selector("#home-brief .home-brief-title", timeout=15000)
-    page.wait_for_selector("#home-path .home-demo-steps", timeout=15000)
-    page.wait_for_timeout(500)
 
 
 def shot(page, name: str, *, full_page: bool = False) -> None:
@@ -28,52 +25,35 @@ def main() -> None:
         browser = p.chromium.launch()
         page = browser.new_page(viewport=VIEWPORT)
         page.goto(BASE, wait_until="networkidle")
-        wait_ready(page)
+        page.wait_for_selector("#home-desk", timeout=15000)
+        page.wait_for_timeout(500)
+        shot(page, "overview-dark.png")
 
-        shot(page, "overview-dark.png", full_page=True)
-
-        page.goto(f"{BASE.rstrip('/')}/incidents", wait_until="networkidle")
-        page.wait_for_timeout(800)
+        page.goto(f"{BASE}/incidents", wait_until="networkidle")
+        page.wait_for_selector("#inc-list .inc-row", timeout=15000)
         shot(page, "incidents-dark.png")
 
-        page.goto(f"{BASE.rstrip('/')}/trust", wait_until="networkidle")
-        page.wait_for_timeout(800)
-        shot(page, "trust-dark.png", full_page=True)
-
-        # Case walkthrough — heater-only demo beat + knowledge.
-        page.goto(f"{BASE.rstrip('/')}/incidents/INC-0205", wait_until="networkidle")
-        page.wait_for_selector("#case-desk:not([hidden]), #alarm", timeout=15000)
-        page.wait_for_timeout(1000)
-        run_btn = page.locator("#assemble")
-        if run_btn.count():
-            run_btn.first.click()
-            page.wait_for_function(
-                "() => document.body.classList.contains('has-investigation')",
-                timeout=20000,
-            )
-            page.wait_for_timeout(500)
-        # Contextual knowledge — open grounded procedure.
-        knowledge = page.locator("#knowledge-toggle")
-        if knowledge.count():
-            if page.locator("#knowledge.is-collapsed").count():
-                knowledge.first.click()
-                page.wait_for_timeout(300)
-        doc = page.locator('#knowledge-list [data-doc="EPS-17"]')
-        if doc.count():
-            doc.first.click()
-            page.wait_for_function(
-                "() => document.getElementById('reader-title')?.textContent",
-                timeout=10000,
-            )
-            page.wait_for_timeout(400)
-            shot(page, "library-dark.png")
+        # Case walkthrough: the confounder case, investigated, with the replay proof open.
+        page.goto(f"{BASE}/incidents/INC-0204", wait_until="networkidle")
+        page.wait_for_selector("#case-facts .fact", timeout=15000)
+        page.click("#case-run")
+        page.wait_for_selector("#hyps .hyp", timeout=30000)
+        proof = page.locator('#hyps .hyp.is-open [data-proof-kind="whatif"]')
+        if proof.count():
+            proof.first.click()
+        page.wait_for_timeout(600)
+        page.locator("#case-head").scroll_into_view_if_needed()
         shot(page, "case-dark.png")
+        page.locator("#sec-explain").scroll_into_view_if_needed()
+        shot(page, "case-explanations-dark.png")
+        page.locator("#sec-decide").scroll_into_view_if_needed()
+        shot(page, "case-decide-dark.png")
 
         page.goto(BASE, wait_until="networkidle")
         page.wait_for_timeout(400)
         page.click("#theme-toggle")
         page.wait_for_timeout(500)
-        shot(page, "overview-light.png", full_page=True)
+        shot(page, "overview-light.png")
 
         browser.close()
 
