@@ -501,3 +501,9 @@ body.view-case .stage { background: var(--void); }
   #case-desk .conf-model { display: none; }
   #case-desk .conf-body { padding-left: 16px; }
 }
+#case-desk .rec.ops-tag { color: var(--text); border-color: var(--text-2); }
+#case-desk .preview-actual { display: flex; gap: 10px; margin: 10px 0 0; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.5; color: var(--text-2); background: var(--surface); border: 1px solid var(--line); }
+#case-desk .preview-actual[hidden] { display: none; }
+#case-desk .preview-actual b { color: var(--text); }
+#case-desk .preview-actual code { font-family: var(--mono); font-size: 12px; }
+#case-desk .pa-ic { color: var(--text); }

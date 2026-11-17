@@ -106,7 +106,7 @@ def measure(tools: Tools, spec: dict[str, Any], run_id: str, alarm_channel: str)
     m.heater_temp = tools.sample(run_id, "THM.heater_b_temperature", t_warn)
     m.batt_v = tools.sample(run_id, "EPS.battery_voltage", t_warn)
     m.heater_at_cmd = (
-        tools.sample(run_id, "THM.heater_b_current", m.heater_enable["time_s"])
+        tools.sample(run_id, "THM.heater_b_current", m.heater_enable["time_s"], after=True)
         if m.heater_enable
         else None
     )

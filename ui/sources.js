@@ -34,7 +34,7 @@ async function loadSources() {
   state.sourcesLoading = true;
   renderSources();
   try {
-    const res = await fetch(apiUrl("/sources"));
+    const [res] = await Promise.all([fetch(apiUrl("/sources")), loadHistoryAlarms(true)]);
     if (!res.ok) throw new Error(`sources ${res.status}`);
     state.sourcesData = await res.json();
     state.sourcesError = null;
@@ -142,6 +142,10 @@ function renderHistoryCard(h) {
     <div class="src-coverage">
       <div class="src-coverage-head"><span>Coverage by day</span><span class="legend"><i class="day full"></i>complete <i class="day some"></i>small gaps <i class="day gap"></i>large gaps</span></div>
       <div class="days">${days}</div>
+    </div>
+    <div class="src-alarms-wrap">
+      <p class="src-label">Alarms in this history <span class="muted">· a channel past its warn for two samples in a row; related alarms grouped</span></p>
+      <div id="src-alarms">${historyAlarmRows(state.historyAlarms)}</div>
     </div>
     ${issues.length ? `<div class="src-issues"><p class="src-label">Worth knowing</p><ul>${issues.join("")}</ul></div>` : ""}
     <details class="src-more">
@@ -269,6 +273,7 @@ function bindSources() {
   }, true);
   $("tab-sources")?.addEventListener("click", () => goSources());
   bindConnect();
+  bindHistoryAlarms();
 }
 
 function enterSources() {
@@ -435,12 +440,14 @@ const cxActions = {
       state.sourcesData = { ...state.sourcesData, history: data.history };
       state.cx = null;
       state.justConnected = true;
+      state.historyAlarms = null;
       await loadSources();
     });
   },
   async reset() {
     if (!window.confirm("Switch back to the generated dummy CSV history? Your database settings will be forgotten.")) return;
     await cxPost("/sources/reset", {});
+    state.historyAlarms = null;
     await loadSources();
   },
 };
@@ -689,4 +696,113 @@ function bindConnect() {
 function m_noteClear(cx, i) {
   const m = cx.map[i];
   if (Number(m.scale) === 1) m.unit_note = null;
+}
+
+/* ══ Alarms in the connected history ═════════════════════════════════
+   Shown on the Sources page and at the top of the Open case dialog.
+   Opening one seals the window straight from the connected source. */
+
+async function loadHistoryAlarms(force = false) {
+  if (state.historyAlarms && !force) return state.historyAlarms;
+  try {
+    const res = await fetch(apiUrl("/history/alarms"));
+    if (!res.ok) throw new Error(`alarms ${res.status}`);
+    state.historyAlarms = await res.json();
+  } catch (err) {
+    state.historyAlarms = { error: err.message, episodes: [] };
+  }
+  return state.historyAlarms;
+}
+
+function historyAlarmRows(data, { compact = false } = {}) {
+  const eps = data?.episodes || [];
+  if (!eps.length) return `<p class="muted small">No alarms in this history: nothing stayed past a warn limit for two samples in a row.</p>`;
+  return `<ul class="ha-list ${compact ? "compact" : ""}">${eps.map((e) => {
+    const p = e.primary;
+    const when = new Date(p.iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC", hour12: false });
+    const others = e.alarms.filter((a) => a.channel !== p.channel);
+    const lead = e.lead_up.filter((l) => l.mapped);
+    const leadText = lead.length
+      ? `${lead.map((l) => `<code>${escapeHtml(l.source_name)}</code>`).join(", ")} ${durText(p.t - lead[lead.length - 1].t)} before`
+      : "No commands in the 10 minutes before";
+    const busy = state.openingAlarm === e.key;
+    const action = e.case
+      ? `<button type="button" class="btn btn-ghost" data-open-case="${escapeHtml(e.case)}">${escapeHtml(e.case)} →</button>`
+      : `<button type="button" class="btn" data-open-history="${escapeHtml(e.key)}" ${busy ? "disabled" : ""}>${busy ? "Sealing…" : "Open case"}</button>`;
+    return `<li class="ha-row">
+      <span class="ha-when">${escapeHtml(when)} <small>UTC</small></span>
+      <span class="ha-main">
+        <b>${escapeHtml(p.label)} ${p.direction === "below" ? "dropped to" : "reached"} ${p.value} ${escapeHtml(p.unit || "")}</b>
+        <small>warn ${p.limit} ${escapeHtml(p.unit || "")}${others.length ? ` · also tripped ${others.map((a) => escapeHtml(a.label)).join(", ")}` : ""}</small>
+        ${compact ? "" : `<small>Lead-up: ${leadText}</small>`}
+      </span>
+      <span class="ha-act">${action}</span>
+    </li>`;
+  }).join("")}</ul>`;
+}
+
+async function openHistoryCase(key) {
+  if (state.openingAlarm) return;
+  state.openingAlarm = key;
+  refreshAlarmLists();
+  try {
+    const res = await fetch(apiUrl("/history/alarms/open"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || `open ${res.status}`);
+    state.incidents = [data, ...state.incidents.filter((item) => item.id !== data.id)];
+    state.historyAlarms = null;
+    if (!$("slip").hidden) closeSlip();
+    renderIncidents();
+    await openIncident(data.id);
+  } catch (err) {
+    window.alert(`Couldn't open a case on that alarm.\n\n${err.message}`);
+  } finally {
+    state.openingAlarm = null;
+    refreshAlarmLists();
+  }
+}
+
+function refreshAlarmLists() {
+  const src = $("src-alarms");
+  if (src) src.innerHTML = historyAlarmRows(state.historyAlarms);
+  renderSlipHistory();
+}
+
+async function renderSlipHistory() {
+  const root = $("slip-history");
+  if (!root) return;
+  const data = state.historyAlarms;
+  if (!data) {
+    root.innerHTML = `<p class="pick-label">From your connected history</p><p class="pick-hint">Looking for alarms…</p>`;
+    await loadHistoryAlarms();
+    return renderSlipHistory();
+  }
+  const open = (data.episodes || []).filter((e) => !e.case);
+  root.hidden = !(data.episodes || []).length;
+  root.innerHTML = `
+    <p class="pick-label">From your connected history <span class="opt">${escapeHtml(data.source || "")}</span></p>
+    <p class="pick-hint">${open.length ? `${open.length} alarm${open.length === 1 ? "" : "s"} without a case yet. ORBIT seals the window straight from the source.` : "Every alarm in the history already has a case."}</p>
+    ${historyAlarmRows(data, { compact: true })}
+    <p class="slip-or"><span>or seal from an archive tape</span></p>`;
+}
+
+function bindHistoryAlarms() {
+  document.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-open-history]");
+    if (btn) {
+      ev.preventDefault();
+      openHistoryCase(btn.dataset.openHistory);
+      return;
+    }
+    const existing = ev.target.closest("#sources-desk [data-open-case], #slip [data-open-case]");
+    if (existing) {
+      ev.preventDefault();
+      if (!$("slip").hidden) closeSlip();
+      openIncident(existing.dataset.openCase);
+    }
+  });
 }

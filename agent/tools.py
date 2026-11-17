@@ -31,19 +31,24 @@ class Tools:
     def _trail(self, tool: str, args: str, out: str, tag: str) -> None:
         self.trail.append({"tool": tool, "args": args, "out": out, "tag": tag})
 
-    def sample(self, run_id: str, channel: str, time_s: float) -> dict[str, Any] | None:
+    def sample(self, run_id: str, channel: str, time_s: float, *, after: bool = False) -> dict[str, Any] | None:
+        """Value nearest to time_s, or with after=True the first sample at or after it.
+
+        Use after=True to read a load just after a command: the nearest sample can be
+        the one just before the switch-on when the command falls between samples.
+        """
         with span(
             "sample",
             span_type="tool",
             input={"run_id": run_id, "channel": channel, "clock": format_clock(time_s)},
         ) as sp:
-            rows = query_channel(run_id, channel, time_s - 5, time_s + 5)
+            rows = query_channel(run_id, channel, time_s if after else time_s - 5, time_s + (30 if after else 5))
             if not rows:
                 self._note(f"sample {run_id} {channel} @ {format_clock(time_s)} → none")
                 self._trail("sample", f"{channel} @ {format_clock(time_s)}", "no sample", "OBSERVED")
                 log_to_span(sp, output=None)
                 return None
-            row = min(rows, key=lambda r: abs(r["time_s"] - time_s))
+            row = rows[0] if after else min(rows, key=lambda r: abs(r["time_s"] - time_s))
             self._note(
                 f"sample {run_id} {channel} @ {format_clock(time_s)} "
                 f"→ {format_clock(row['time_s'])} {_fmt(row)}"

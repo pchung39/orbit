@@ -666,7 +666,7 @@ function renderDecide() {
       const badge = RESULT_BADGE[o.result];
       const chosen = decided === o.id;
       return `<button type="button" class="opt${o.id === state.caseOption ? " sel" : ""}${chosen ? " chosen" : ""}" data-option="${o.id}" ${isClosed() ? "disabled" : ""}>
-          <span class="t">${escapeHtml(o.label)} ${o.recommended ? '<span class="rec">RECOMMENDED</span>' : ""}${chosen ? '<span class="rec chosen-tag">APPROVED</span>' : ""}</span>
+          <span class="t">${escapeHtml(o.label)} ${o.recommended ? '<span class="rec">RECOMMENDED</span>' : ""}${chosen ? '<span class="rec chosen-tag">APPROVED</span>' : ""}${sim?.decision?.actual?.option === o.id ? '<span class="rec ops-tag">OPS DID THIS</span>' : ""}</span>
           <span class="o">${escapeHtml(o.text || "")}</span>
           ${badge ? `<span class="res ${badge.cls}">${badge.text}</span>` : ""}
           ${o.note ? `<span class="note">${escapeHtml(o.note)}</span>` : ""}
@@ -706,11 +706,23 @@ function drawPreview() {
         .filter((o) => o.id !== sel)
         .map((o) => ({ pts: o.series, color: color[o.id], dash: true, w: 1.4, op: 0.5 })),
       ...d.options.filter((o) => o.id === sel).map((o) => ({ pts: o.series, color: color[o.id], w: 2.6 })),
+      ...(d.actual ? [{ pts: d.actual.series, color: "--ch-bus", w: 2 }] : []),
     ],
   });
+  const note = $("preview-actual");
+  if (note) {
+    const a = d.actual;
+    note.hidden = !a;
+    if (a) {
+      note.innerHTML = `<span class="pa-ic">◉</span><span><b>This happened for real.</b> Operators sent <code>${escapeHtml(a.command)}</code> at ${escapeHtml(a.clock)}, the <b>${escapeHtml(a.label)}</b> option.
+        ${a.mean_error != null
+          ? `The solid line after the decision is what the spacecraft actually did, and ORBIT's forecast for that option was off by <b>${a.mean_error.toFixed(2)} ${escapeHtml(sim.unit)}</b> on average over ${a.minutes} min.`
+          : "The sealed window ends moments later, so there isn't enough of what happened next to check the forecast against."}</span>`;
+    }
+  }
   $("preview-legend").innerHTML = d.options
     .map((o) => `<span class="${o.id === sel ? "" : "dim"}"><i style="background:${cssVar(color[o.id])}"></i>${escapeHtml(o.label)}</span>`)
-    .join("");
+    .join("") + (d.actual ? `<span><i style="background:var(--ch-bus)"></i>what really happened</span>` : "");
 }
 
 async function approveDecision() {

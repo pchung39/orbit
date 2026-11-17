@@ -25,7 +25,7 @@ from agent.tools import Tools
 from simulator.scenarios import format_clock
 from simulator.simulate import load_and_validate
 from model import eps
-from storage.evidence import load_frame, query_channel, read_sealed_meta
+from storage.evidence import load_frame, query_channel, query_events, read_sealed_meta
 
 HEATER = "THM.heater_b_current"
 PAYLOAD = "PAY.payload_current"
@@ -450,6 +450,8 @@ def _option_text(option: str, o: dict[str, Any], channel: str, unit: str, meta: 
     return f"{name} only reaches {o['first_value']:g} {unit} and is {o['value_10min']:g} {unit} ten minutes later.{tail}"
 
 
+OPTION_BY_COMMAND = {"HEATER_B_DISABLE": "heater_off", "PAYLOAD_STANDBY": "payload_safe"}
+
 FIT_LABEL = {
     "high": "The model reproduces what already happened in this case.",
     "medium": "The model only roughly reproduces what already happened here.",
@@ -472,6 +474,15 @@ def _simulation(run_id: str, alarm: str, family: str, m: Measurements, spec: dic
     t_start, t_end = float(df["time_s"].min()), float(df["time_s"].max())
     view0, view1 = max(t_first - 180.0, t_start), min(t_warn + 600.0, t_end)
     t_dec = round((t_warn + 120.0) / 5.0) * 5.0
+    # In recorded history the operators may already have acted. Decide just before they did,
+    # and keep what really happened next to check the forecast against.
+    after_cmds = [e for e in query_events(run_id)
+                  if e["time_s"] > t_warn and e["detail"] in OPTION_BY_COMMAND]
+    ops_action = after_cmds[0] if after_cmds else None
+    if ops_action and ops_action["time_s"] - 1.0 < t_dec:
+        before_cmd = df[df["time_s"] < ops_action["time_s"]]["time_s"]
+        if len(before_cmd) and float(before_cmd.iloc[-1]) > t_warn:
+            t_dec = float(before_cmd.iloc[-1])
 
     fit = eps.fit_check(model, df, alarm, view0, t_dec)
     level = fit["level"]
@@ -569,7 +580,30 @@ def _simulation(run_id: str, alarm: str, family: str, m: Measurements, spec: dic
             "series": pv["series"],
             "band": pv["band"],
         })
+    actual = None
+    if ops_action:
+        opt_id = OPTION_BY_COMMAND[ops_action["detail"]]
+        observed = df[(df["time_s"] >= t_dec) & (df["time_s"] <= t_dec + eps.PREVIEW_HORIZON_S)][["time_s", alarm]].dropna()
+        forecast = next(o for o in options if o["id"] == opt_id)["series"]
+        errs = []
+        for t, v in zip(observed["time_s"], observed[alarm]):
+            if t < ops_action["time_s"] + 20:
+                continue  # skip the switching instant itself
+            f = min(forecast, key=lambda p: abs(p[0] - t))
+            if abs(f[0] - t) <= 10:
+                errs.append(abs(f[1] - float(v)))
+        actual = {
+            "option": opt_id,
+            "label": OPTION_LABELS[opt_id],
+            "command": ops_action["detail"],
+            "clock": format_clock(ops_action["time_s"]),
+            "t": ops_action["time_s"],
+            "series": [[float(t), round(float(v), 4)] for t, v in zip(observed["time_s"], observed[alarm])],
+            "mean_error": round(sum(errs) / len(errs), 3) if errs else None,
+            "minutes": round((float(observed["time_s"].max()) - ops_action["time_s"]) / 60) if len(observed) else 0,
+        }
     out["decision"] = {
+        "actual": actual,
         "t": t_dec,
         "clock": format_clock(t_dec),
         "before": [[float(t), round(float(v), 4)] for t, v in zip(before["time_s"], before[alarm])],

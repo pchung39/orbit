@@ -248,3 +248,25 @@ body.view-sources .stage { background: var(--void); }
 @media (max-width: 860px) {
   .cx-grid4, .cx-grid2, .cx-tabs, .cx-layout { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ── Alarms in history (Sources page + Open case dialog) ── */
+.src-alarms-wrap { margin-top: 20px; }
+.ha-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.ha-row { display: grid; grid-template-columns: 118px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.ha-when { font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--text); }
+.ha-when small { color: var(--text-3); font-size: 11px; }
+.ha-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ha-main b { font-size: 14px; font-weight: 600; color: var(--text); }
+.ha-main small { font-size: 12.5px; color: var(--text-3); }
+.ha-main code { font-family: var(--mono); font-size: 11.5px; padding: 0 4px; border-radius: 4px; background: var(--surface-2); }
+.ha-act .btn { border-radius: 9px; padding: 7px 13px; font-size: 13px; white-space: nowrap; }
+.ha-list.compact .ha-row { padding: 10px 12px; grid-template-columns: 104px minmax(0, 1fr) auto; }
+.ha-list.compact .ha-main b { font-size: 13.5px; }
+#slip .slip-history { padding-bottom: 6px; }
+#slip .slip-or { display: flex; align-items: center; gap: 12px; margin: 16px 0 0; font-size: 12px; color: var(--text-3); }
+#slip .slip-or::before, #slip .slip-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+@media (max-width: 720px) { .ha-row, .ha-list.compact .ha-row { grid-template-columns: minmax(0, 1fr); } }
+/* The history list is an alternative to the numbered steps, not step 1. */
+#slip .slip-step.slip-history { counter-increment: none; background: color-mix(in srgb, var(--signal) 4%, var(--surface)); }
+#slip .slip-step.slip-history > .pick-label:first-child::before { content: "◉"; font-size: 11px; }
+#slip .slip-history .pick-label .opt { font-weight: 400; font-size: 12.5px; color: var(--text-3); }

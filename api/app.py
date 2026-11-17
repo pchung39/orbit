@@ -361,6 +361,36 @@ def open_incident(body: IncidentIn) -> dict[str, Any]:
         raise HTTPException(400, str(exc)) from exc
 
 
+@api.get("/history/alarms")
+def history_alarms() -> dict[str, Any]:
+    """Alarm episodes found in the connected history, and any case already opened on each."""
+    from storage.alarms import find_episodes
+    from storage.connectors import active_config
+
+    cfg = active_config()
+    return {"source": cfg.name, "kind": cfg.kind, "episodes": find_episodes()}
+
+
+class HistoryOpenIn(BaseModel):
+    key: str
+
+
+@api.post("/history/alarms/open")
+def open_history_alarm(body: HistoryOpenIn) -> dict[str, Any]:
+    """Seal the window around a history alarm straight from the source and open a case on it."""
+    from storage.alarms import episode_title, find_episodes, seal_episode
+
+    existing = next((e["case"] for e in find_episodes() if e["key"] == body.key and e["case"]), None)
+    if existing:
+        raise HTTPException(409, f"{existing} is already open on this alarm")
+    try:
+        sealed_id, notes, episode = seal_episode(body.key)
+        with _conn() as conn:
+            return create_incident(conn, sealed_id, episode["primary"]["channel"], episode_title(episode), notes=notes)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
 @api.get("/archive")
 def archive_catalog() -> list[dict[str, Any]]:
     """Upstream archive tapes available to seal from (metadata + reachability)."""

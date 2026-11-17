@@ -1126,6 +1126,7 @@ function openSlip() {
   if (titleInput) delete titleInput.dataset.userEdited;
   fillCreateForm();
   $("slip").hidden = false;
+  renderSlipHistory();
 }
 
 function closeSlip() {

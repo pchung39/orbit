@@ -305,6 +305,12 @@ def query_events(run_id: str) -> list[dict[str, Any]]:
         return []
     if is_sealed_run_id(run_id):
         meta = read_sealed_meta(run_id) or {}
+        if isinstance(meta.get("events"), list):
+            # Sealed from a connected history: the window carries its own command log.
+            return [
+                {**ev, "timestamp": _timestamp_at(df, float(ev["time_s"]))}
+                for ev in sorted(meta["events"], key=lambda e: e["time_s"])
+            ]
         source = str(meta.get("source_run_id") or "")
         t0 = meta.get("t0")
         t1 = meta.get("t1")
@@ -403,8 +409,13 @@ def write_sealed_window(
     t1: float,
     window: pd.DataFrame,
     notes: str,
+    extra: dict[str, Any] | None = None,
 ) -> str:
-    """Write the warn window as a CSV plus a sidecar. Returns the sealed run id."""
+    """Write the warn window as a CSV plus a sidecar. Returns the sealed run id.
+
+    `extra` lands in the sidecar too: windows sealed from a connected history
+    carry their own command events there, since no tape catalog knows them.
+    """
     SEALED_DIR.mkdir(parents=True, exist_ok=True)
     sealed_id = allocate_sealed_id(source_run_id, center_s)
     csv_path = sealed_csv_path(sealed_id)
@@ -420,6 +431,7 @@ def write_sealed_window(
         "started_at": started,
         "notes": notes,
         "source_csv": str(csv_path),
+        **(extra or {}),
     }
     sealed_meta_path(sealed_id).write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     _frames[sealed_id] = window.reset_index(drop=True)

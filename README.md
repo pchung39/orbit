@@ -89,7 +89,7 @@ Case lifecycle: `open → recommended (needs decision) → verifying | watching 
 - Closed cases are not yet cited as priors. Only the three authored close-outs in `incidents/` are.
 - The power model doesn't forecast orbit lighting yet; most backtest misses are at sunrise.
 - History comes from the generated dummy mission (CSV) until you connect a source. The Sources page connects any Postgres-compatible database (TimescaleDB included) read-only, or takes CSV uploads, then maps channels and commands with suggested matches and unit checks.
-- Opening a new case still seals from the archive tapes in `runs/`, not yet from the connected database.
+- Cases can be opened two ways: from an alarm found in the connected history (sealed straight from the source, with the window's own command log), or from an archive tape in `runs/`. History alarms need a channel past its warn for two samples in a row, and related alarms within 20 min are grouped into one episode.
 
 ### Source tags
 
@@ -145,6 +145,7 @@ flowchart LR
 
 - **Report** (`agent/investigate.py`): tagged markdown. It's what `python -m eval` scores, so its format is stable.
 - **Case brief** (`agent/brief.py`): the same investigation as data. It holds facts, before/after load attribution, the order signals moved in, heater/payload/battery explanations with evidence for and against, the chart recipe, and the tool trail. Report and brief share one classifier (`agent/hypothesis.py`).
+- **History alarms** (`storage/alarms.py`): finds alarm episodes in the connected history and seals a case window from the source. When the history records what operators did next, the case page overlays it on the forecast and reports the error.
 - **History sources** (`storage/connectors.py`): a Postgres or CSV source plus a mapping from the team's tables and names to ORBIT's channels and commands. Model learning and the Sources page read history through it.
 - **Power model** (`model/eps.py`): Ohm's-law physics with numbers learned from history. It's calibrated on the first 70% of the dummy mission, backtested on the rest, and fit-checked against every case before its forecasts are shown. Fix previews and what-ifs on the case page come from this model, and the **Sources** page (`/app/sources`) shows what it learned and how well it predicts.
 - **Replay** (`simulator/replay.py`): each archive tape is a seeded simulator run. Re-running its recipe reproduces the tape exactly. Removing the suspect fault gives the *what-if*. Adding `HEATER_B_DISABLE` or `PAYLOAD_STANDBY` at the decision time previews each option.

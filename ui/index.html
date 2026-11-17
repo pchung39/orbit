@@ -11,9 +11,9 @@
       rel="stylesheet"
     />
     <link rel="stylesheet" href="/static/styles.css?v=p2d" />
-    <link rel="stylesheet" href="/static/case.css?v=p2d" />
+    <link rel="stylesheet" href="/static/case.css?v=p4a" />
     <link rel="stylesheet" href="/static/pages.css?v=p2e" />
-    <link rel="stylesheet" href="/static/sources.css?v=p3a" />
+    <link rel="stylesheet" href="/static/sources.css?v=p4b" />
   </head>
   <body class="view-home">
     <a class="skip" href="#home" id="skip">Skip to overview</a>
@@ -235,6 +235,7 @@
             <div class="viz" id="viz-preview" hidden>
               <div class="viz-title"><span>What happens next</span><span class="legend" id="preview-legend"></span></div>
               <svg class="chart" id="chart-preview" viewBox="0 0 1000 240"></svg>
+              <p class="preview-actual" id="preview-actual" hidden></p>
             </div>
             <div class="decide-form" id="decide-form">
               <input id="decide-note" placeholder="Reason (optional). Becomes part of the case record." autocomplete="off" />
@@ -300,6 +301,7 @@
           <p class="slip-stub-note">Pick the alarm and an archive tape. ORBIT seals that telemetry window for investigation. It doesn't detect anomalies.</p>
         </aside>
         <form class="slip-body" id="new-incident">
+          <section class="slip-step slip-history" id="slip-history" hidden></section>
           <input type="hidden" name="alarm" id="incident-alarm-value" value="" />
           <input type="hidden" name="run_id" id="incident-run-value" value="" />
           <section class="slip-step">
@@ -354,8 +356,8 @@
       </div>
     </div>
 
-    <script src="/static/case.js?v=p2e"></script>
-    <script src="/static/sources.js?v=p3d"></script>
-    <script src="/static/app.js?v=p2d"></script>
+    <script src="/static/case.js?v=p4c"></script>
+    <script src="/static/sources.js?v=p4b"></script>
+    <script src="/static/app.js?v=p4a"></script>
   </body>
 </html>
