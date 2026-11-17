@@ -709,7 +709,7 @@ def _spa_index() -> FileResponse:
 
 
 def _landing() -> FileResponse:
-    return FileResponse(UI_DIR / "landing.html")
+    return FileResponse(UI_DIR / "landing-v2.html")
 
 
 app.include_router(api)
