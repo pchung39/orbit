@@ -15,8 +15,8 @@
     href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap"
     rel="stylesheet"
   >
-  <link rel="stylesheet" href="/static/landing.css?v=36">
-  <link rel="stylesheet" href="/static/about.css?v=6">
+  <link rel="stylesheet" href="/static/landing.css?v=37">
+  <link rel="stylesheet" href="/static/about.css?v=7">
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -43,10 +43,10 @@
         <header class="mast">
           <p class="kicker">Design decisions</p>
           <h1>Spacecraft anomaly investigation, with evidence you can review.</h1>
-          <p class="dek">ORBIT seals a telemetry window for each case, reads the named procedure and prior, and builds a reviewable recommendation. An operator assesses a possible cause, examines the evidence, and decides what to do next—including when to hold for more information.</p>
+          <p class="dek">ORBIT seals a telemetry window for each case, weighs the possible causes against the procedure that governs the alarm, and replays each option in a simulator before anyone acts. An operator sees what happened and why, decides what to do next—including holding for more evidence—and checks that the fix worked.</p>
           <p class="dek">I built ORBIT to explore a product question: what would make AI-assisted investigation useful to an operator and credible to the people reviewing the decision?</p>
-          <p class="scope"><b>Current scope.</b> A prototype using five simulated spacecraft scenarios. Postgres holds only the case log; tapes and procedures stay as files. The browser demo runs a rules-based investigator. Experimental LLM providers are available on the command line. No flight data or operator-pilot results are claimed.</p>
-          <p class="meta"><a href="/app">Open the desk</a> · <a href="/app/trust">Inspect the evaluations</a> · <a href="https://github.com/pchung39/orbit">View the source</a></p>
+          <p class="scope"><b>Current scope.</b> A prototype using five simulated spacecraft scenarios. Postgres holds only the case log—the case, its decision, and the simulated verification; tapes and procedures stay as files. The browser demo runs a rules-based investigator, and fix previews come from replaying the seeded simulator that generated each tape. Experimental LLM providers are available on the command line. No flight data or operator-pilot results are claimed.</p>
+          <p class="meta"><a href="/app">Open the desk</a> · <a href="https://github.com/pchung39/orbit/tree/master/eval">Inspect the evaluations</a> · <a href="https://github.com/pchung39/orbit">View the source</a></p>
         </header>
 
 <!-- BUILDER -->
@@ -55,7 +55,7 @@
   <div class="body">
     <h2>Built by Paul Chung</h2>
     <p>My background includes spacecraft ground software and test automation at NASA JPL, followed by customer-facing software delivery. I designed and built ORBIT to explore how that experience translates into AI-assisted mission workflows.</p>
-    <p class="meta-row"><a href="/app">Open the desk</a> · <a href="/app/trust">Inspect the evaluations</a> · <a href="https://github.com/pchung39/orbit">View the source</a> · <a href="https://www.linkedin.com/in/paulchung39/">LinkedIn</a></p>
+    <p class="meta-row"><a href="/app">Open the desk</a> · <a href="https://github.com/pchung39/orbit/tree/master/eval">Inspect the evaluations</a> · <a href="https://github.com/pchung39/orbit">View the source</a> · <a href="https://www.linkedin.com/in/paulchung39/">LinkedIn</a></p>
   </div>
 </section>
 
@@ -65,7 +65,7 @@
   <div class="body">
     <h2>Similar alarms can require different decisions</h2>
     <figure>
-      <svg viewBox="0 0 720 320" role="img" aria-label="Two bus voltage traces with the same shape. INC-0204 ends in a recommended inhibit. INC-0212 ends in a hold.">
+      <svg viewBox="0 0 720 320" role="img" aria-label="Two bus voltage traces with the same shape. INC-0204 ends in turning off Heater B. INC-0212 ends in a hold.">
         <defs><style>
           .tr{fill:none;stroke:var(--ink);stroke-width:2}
           .warnline{stroke:var(--ink-soft);stroke-width:1;stroke-dasharray:3 4}
@@ -79,32 +79,33 @@
           <text class="lbl" x="286" y="54">warn 26.5 V</text>
           <path class="tr" d="M0 40 L60 42 L120 39 L150 44 L180 96 L210 104 L260 101 L330 103"/>
           <text class="val" x="0" y="140">bus floor 25.67 V</text>
-          <text class="val" x="0" y="162">heater B 3.73 A</text>
-          <text class="lbl" x="0" y="182">healthy ON family 1.17 A · EPS-17 bar is 2×</text>
+          <text class="val" x="0" y="162">heater B 3.74 A</text>
+          <text class="lbl" x="0" y="182">healthy max 1.2 A · EPS-17 bar is 2×</text>
           <line x1="0" y1="200" x2="330" y2="200" stroke="var(--rule)"/>
-          <text class="val" x="0" y="226" fill="var(--met)">3.2× — bar met</text>
-          <text class="verd" x="0" y="256" fill="var(--met)">Inhibit Heater B.</text>
-          <text class="lbl" x="0" y="274">recommended · not sent</text>
+          <text class="val" x="0" y="226" fill="var(--met)">3.1× — bar met</text>
+          <text class="verd" x="0" y="256" fill="var(--met)">Turn off Heater B.</text>
+          <text class="lbl" x="0" y="274">replay: bus back to 27.86 V · not sent</text>
         </g>
         <line x1="360" y1="0" x2="360" y2="300" stroke="var(--rule)"/>
         <g transform="translate(390,0)" class="reveal reveal-2">
           <text class="lbl" x="0" y="14">INC-0212 · bus voltage warn</text>
           <line class="warnline" x1="0" y1="60" x2="330" y2="60"/>
-          <text class="lbl" x="286" y="54">warn 26.5 V</text>
+          <text class="lbl" x="254" y="54">warn 26.5 V</text>
           <path class="tr" d="M0 40 L60 42 L120 39 L150 44 L180 94 L210 102 L260 99 L330 101"/>
           <text class="val" x="0" y="140">bus floor 26.05 V</text>
-          <text class="val" x="0" y="162">heater B 2.04 A</text>
-          <text class="lbl" x="0" y="182">healthy ON family 1.17 A · EPS-17 bar is 2×</text>
+          <text class="val" x="0" y="162">heater B 2.05 A</text>
+          <text class="lbl" x="0" y="182">healthy max 1.2 A · EPS-17 bar is 2×</text>
           <line x1="0" y1="200" x2="330" y2="200" stroke="var(--rule)"/>
           <text class="val" x="0" y="226" fill="var(--held)">1.7× — below the bar</text>
           <text class="verd" x="0" y="256" fill="var(--held)">Hold. Do not command.</text>
-          <text class="lbl" x="0" y="274">no root cause · no fault id invented</text>
+          <text class="lbl" x="0" y="274">no fault id invented · case moves to Watching</text>
         </g>
       </svg>
-      <figcaption>Two cases, similar voltage drops. One meets the procedure’s inhibit threshold. The other does not, so the recommendation is to hold.</figcaption>
+      <figcaption>Two cases, similar voltage drops. One meets the procedure’s prime-suspect threshold. The other does not, so the recommendation is to hold.</figcaption>
     </figure>
     <p>The alarm’s shape alone cannot justify the same action in both cases. The investigation must account for the measurements and the procedure that governs the response.</p>
     <p>I built the hold case first. It made the central requirement concrete: ORBIT must explain when the evidence is insufficient, even when a plausible answer is available.</p>
+    <p>The hold case also keeps the simulator honest. Turning off the heater would lift the bus in the INC-0212 replay too, because removing a 2 A load always helps. That doesn’t make the heater the cause. ORBIT still recommends Hold and labels heater-off as EPS-17’s isolation test, which needs operator authorization.</p>
   </div>
 </section>
 
@@ -120,7 +121,8 @@
       <tr><td>Reviewer</td><td>To understand why that step was recommended, from the record alone.</td></tr>
       <tr><td>Maintainer</td><td>To detect regressions before releasing a change.</td></tr>
     </table>
-    <p>ORBIT gives all three the same structured case record: the evidence considered, the calculations performed, the procedures cited, and the proposed conclusion.</p>
+    <p>ORBIT gives all three the same structured case record: the evidence considered, the calculations performed, the procedures cited, the explanations weighed and ruled out, the decision taken, and its simulated outcome.</p>
+    <p>The record follows the case through its lifecycle: <b>open → needs decision → verifying or watching → closed</b>. A case isn’t done when ORBIT recommends something; it’s done when the operator has decided and the result has been checked.</p>
     <p>That record is also what the evaluation suite checks. The tests inspect the output a user would actually review.</p>
   </div>
 </section>
@@ -133,11 +135,12 @@
     <ol class="steps">
       <li><span class="k">01</span><span><b>Seal the window.</b> When a case opens, ORBIT cuts a fixed window from the archive tape and writes it as a sealed file. The investigation reads that file, so later review sees the same evidence.</span></li>
       <li><span class="k">02</span><span><b>Fetch the named procedure.</b> The investigator reads the one procedure that governs this alarm (for example EPS-17) and the one prior the report cites. Procedure thresholds are the criteria for a recommendation.</span></li>
-      <li><span class="k">03</span><span><b>Separate facts from explanations.</b> The report identifies what was observed, what was calculated, what a document says, and what remains a hypothesis.</span></li>
-      <li><span class="k">04</span><span><b>Recommend a next step—or a hold.</b> The case records a proposed action or explains why the available evidence does not support one. An operator reviews the result. ORBIT cannot send spacecraft commands.</span></li>
+      <li><span class="k">03</span><span><b>Weigh competing explanations.</b> Heater, payload, and battery are each checked against the procedure bars, with evidence for and against. Each line of evidence links to the moment on the chart where it shows up.</span></li>
+      <li><span class="k">04</span><span><b>Prove it in a replay.</b> Each tape is a seeded simulator run, so ORBIT can replay the window with the suspect fault removed, and with each option taken: turn off Heater B, safe the payload, or hold.</span></li>
+      <li><span class="k">05</span><span><b>Decide, verify, close.</b> The operator approves an option or holds. ORBIT records the decision and checks the simulated outcome against the procedure’s recovery step; a hold stays open as Watching. ORBIT cannot send spacecraft commands.</span></li>
     </ol>
     <figure class="fig-wide">
-      <svg viewBox="0 0 720 300" role="img" aria-label="Flow: seal a window file, read the named procedure and prior, write a tagged report, recommend or hold, then stop before the human command.">
+      <svg viewBox="0 0 720 300" role="img" aria-label="Flow: seal a window file, read the named procedure and prior, weigh tagged explanations, replay options in the simulator, decide and verify, then stop before the human command.">
         <defs><style>
           .nd{fill:none;stroke:var(--ink);stroke-width:1.5}
           .nt{font-family:var(--mono);font-size:11.5px;fill:var(--ink)}
@@ -165,14 +168,18 @@
         <path class="ar" d="M150 136 L196 136" marker-end="url(#a)"/>
         <path class="ar" d="M275 162 L275 194" marker-end="url(#a)"/>
         <rect class="nd" x="200" y="198" width="150" height="66"/>
-        <text class="nt" x="212" y="220">3 · tagged report</text>
-        <text class="ns" x="212" y="236">observed · derived</text>
-        <text class="ns" x="212" y="250">documented · hypothesis</text>
-        <path class="ar" d="M350 231 L396 231" marker-end="url(#a)"/>
+        <text class="nt" x="212" y="220">3 · explanations</text>
+        <text class="ns" x="212" y="236">for / against · tagged</text>
+        <text class="ns" x="212" y="250">recommend or hold</text>
+        <rect class="nd" x="400" y="110" width="160" height="52" stroke-dasharray="4 4"/>
+        <text class="nt" x="412" y="132">4 · simulator replay</text>
+        <text class="ns" x="412" y="148">what-if · each option</text>
+        <path class="ar" d="M350 214 L396 146" marker-end="url(#a)"/>
+        <path class="ar" d="M480 162 L480 194" marker-end="url(#a)"/>
         <rect class="nd" x="400" y="198" width="160" height="66"/>
-        <text class="nt" x="412" y="220">4 · recommend</text>
-        <text class="ns" x="412" y="236">or hold and say why</text>
-        <text class="ns" x="412" y="250">decision is filed</text>
+        <text class="nt" x="412" y="220">5 · decide · verify</text>
+        <text class="ns" x="412" y="236">approve an option or hold</text>
+        <text class="ns" x="412" y="250">replay checks recovery</text>
         <line x1="586" y1="14" x2="586" y2="286" stroke="var(--held)" stroke-width="2"/>
         <text class="ns" x="596" y="196" fill="var(--held)">ORBIT stops</text>
         <text class="ns" x="596" y="210" fill="var(--held)">here</text>
@@ -181,13 +188,14 @@
         <text class="ns" x="622" y="256" fill="var(--held)">human keystroke</text>
         <path class="ar" d="M560 231 L608 231" marker-end="url(#a)" stroke="var(--held)" stroke-dasharray="4 4"/>
       </svg>
-      <figcaption>The investigation works from a sealed window file and named documents. ORBIT stops before the uplink. An operator reviews the result; the system cannot send spacecraft commands.</figcaption>
+      <figcaption>The investigation works from a sealed window file and named documents, and previews options in a simulator. ORBIT stops before the uplink. An operator makes the decision; the system cannot send spacecraft commands.</figcaption>
     </figure>
 
     <h3>Where the AI fits</h3>
     <p>The agentic problem is deciding what to sample from the sealed tape, which named document to read, and whether those results meet the procedure’s threshold. The tools retrieve or calculate evidence; the model’s role is to use that evidence to guide an investigation.</p>
     <p>ORBIT separates the investigation workflow from the provider that performs it. The browser demo uses explicit rules to establish repeatable reference behavior. Separate LLM providers support command-line experiments with model-assisted investigation.</p>
     <p>The published evaluation results below cover the rules-based provider. Running the model providers through the same checks is a next step. The current score does not establish model reliability.</p>
+    <p>The simulator is deliberately not AI. Replaying a seeded physics run reproduces the sealed tape sample for sample, so the only difference in a what-if is the one thing that was changed. Its results are labeled <b>Simulated</b> and never mixed with telemetry: a replay is evidence about ORBIT’s model of the spacecraft, not about the spacecraft itself.</p>
   </div>
 </section>
 
@@ -227,14 +235,16 @@
     <table class="score">
       <tr><th>Kind</th><th>Role in ORBIT</th></tr>
       <tr><td>Alarm</td><td>The entry condition that opened the case—channel, time, and limit that crossed.</td></tr>
-      <tr><td>Case / incident</td><td>The persistent record tying snapshot, report, recommendation, and operator feedback together.</td></tr>
-      <tr><td>Claim</td><td>A statement in the report about evidence or interpretation. Every claim carries a source label.</td></tr>
+      <tr><td>Case / incident</td><td>The persistent record tying snapshot, report, explanations, decision, and verification together. It moves through a lifecycle: open, needs decision, verifying or watching, closed.</td></tr>
+      <tr><td>Claim</td><td>A statement about evidence or interpretation. Every claim carries a source label.</td></tr>
+      <tr><td>Explanation</td><td>A candidate cause—heater, payload, or battery—with its evidence for and against and a verdict: leading, below the bar, or ruled out.</td></tr>
       <tr><td>Recommendation</td><td>The proposed next step, or a hold when the governing threshold is unmet.</td></tr>
-      <tr><td>Assessment</td><td>The operator’s recorded agreement or disagreement. It stores judgment; it does not uplink a command.</td></tr>
+      <tr><td>Replay</td><td>A simulator run of the sealed window with one thing changed: the suspect fault removed, or an option taken. It is labeled Simulated and never treated as telemetry.</td></tr>
+      <tr><td>Decision</td><td>The option the operator approved, with their reason and its simulated outcome. Choosing something other than the recommendation is recorded as a disagreement. It stores judgment; it does not uplink a command.</td></tr>
     </table>
 
     <figure class="fig-wide">
-      <svg viewBox="0 0 720 290" role="img" aria-label="Ontology map: mission model and archive feed a sealed case snapshot; procedures and priors ground claims; claims support a recommendation or hold; assessment closes the record before any uplink.">
+      <svg viewBox="0 0 720 290" role="img" aria-label="Ontology map: mission model and archive feed a sealed case snapshot; procedures and priors ground claims; claims support a recommendation or hold; the operator's decision and its simulated verification close the record before any uplink.">
         <defs><style>
           .o-b{fill:none;stroke:var(--ink);stroke-width:1.5}
           .o-d{fill:none;stroke:var(--ink);stroke-width:1.5;stroke-dasharray:4 4}
@@ -273,8 +283,8 @@
         <text class="o-s" x="432" y="184">not an uplink</text>
         <path class="o-a" d="M500 198 L500 230" marker-end="url(#oa)"/>
         <rect class="o-b" x="420" y="234" width="160" height="42"/>
-        <text class="o-t" x="432" y="260">assessment</text>
-        <text class="o-s" x="532" y="260">filed</text>
+        <text class="o-t" x="432" y="252">decision</text>
+        <text class="o-s" x="432" y="268">+ simulated verify</text>
         <line x1="610" y1="20" x2="610" y2="270" stroke="var(--held)" stroke-width="2"/>
         <text class="o-s" x="622" y="150" fill="var(--held)">ORBIT stops</text>
         <text class="o-s" x="622" y="166" fill="var(--held)">before command</text>
@@ -290,19 +300,19 @@
       <li><span class="k">Review</span><span><b>Keep kinds separable in the report.</b> A reviewer should be able to tell whether a sentence is a sealed measurement, a calculation, a cited procedure step, or a proposed cause.</span></li>
       <li><span class="k">Hold</span><span><b>Make missing evidence nameable.</b> A hold is not a vague failure. It points at a missing kind—often a load that never cleared a documented threshold.</span></li>
       <li><span class="k">Eval</span><span><b>Give tests stable targets.</b> Outcome, refusal, and sourcing checks inspect these objects in the report a human would read, not private model reasoning.</span></li>
-      <li><span class="k">Boundary</span><span><b>Keep commanding out of scope.</b> Recommendation and assessment are first-class. Spacecraft uplink is not an ORBIT object.</span></li>
+      <li><span class="k">Boundary</span><span><b>Keep commanding out of scope.</b> Recommendation, decision, and replay are first-class. Spacecraft uplink is not an ORBIT object.</span></li>
     </ul>
-    <p>The next section covers the four source labels that stamp each claim. Those labels are the epistemic layer on top of this ontology—how far a statement sits from measurement.</p>
+    <p>The next section covers the source labels that stamp each claim. Those labels are the epistemic layer on top of this ontology—how far a statement sits from measurement.</p>
   </div>
 </section>
 
 <!-- LABELS -->
 <section class="blk">
-  <div class="rail"><b>Labels</b>Observed to hypothesis</div>
+  <div class="rail"><b>Labels</b>Observed to simulated</div>
   <div class="body">
     <h2>Every claim shows how it is supported</h2>
     <figure>
-      <svg viewBox="0 0 720 250" role="img" aria-label="Four source tags ordered by distance from measurement, with a line before hypothesis.">
+      <svg viewBox="0 0 720 300" role="img" aria-label="Source tags ordered by distance from measurement, with a line before hypothesis and simulated.">
         <defs><style>
           .tg{font-family:var(--mono);font-size:12px;fill:var(--ink)}
           .tx{font-family:var(--sans);font-size:13px;fill:var(--ink-soft)}
@@ -310,24 +320,28 @@
         </style></defs>
         <rect class="bx" x="0" y="10" width="470" height="42"/>
         <text class="tg" x="14" y="36">OBSERVED</text>
-        <text class="tx" x="130" y="36">HEATER_B_ENABLE commanded at 14:29:45 · command log</text>
+        <text class="tx" x="130" y="36">HEATER_B_ENABLE at 14:29:44 · command log</text>
         <rect class="bx" x="0" y="60" width="470" height="42"/>
         <text class="tg" x="14" y="86">DERIVED</text>
-        <text class="tx" x="130" y="86">3.73 A ÷ 1.17 A = 3.2× the healthy ON family</text>
+        <text class="tx" x="130" y="86">3.74 A ÷ 1.2 A = 3.1× the healthy maximum</text>
         <rect class="bx" x="0" y="110" width="470" height="42"/>
         <text class="tg" x="14" y="136">DOCUMENTED</text>
-        <text class="tx" x="130" y="136">EPS-17 §4 sets the inhibit limit at 2× · prior INC-0187</text>
+        <text class="tx" x="130" y="136">EPS-17 step 4: prime suspect at 2× · prior INC-0187</text>
         <line x1="0" y1="166" x2="700" y2="166" stroke="var(--held)" stroke-width="2"/>
         <text class="tg" x="0" y="182" fill="var(--held)">below this line, nothing is proven</text>
         <rect class="bx" x="0" y="192" width="470" height="42" stroke="var(--held)"/>
         <text class="tg" x="14" y="218" fill="var(--held)">HYPOTHESIS</text>
-        <text class="tx" x="130" y="218" fill="var(--held)">a partial short in Heater B is loading the bus</text>
+        <text class="tx" x="130" y="218" fill="var(--held)">Heater B overcurrent; science mode is a confounder</text>
+        <rect class="bx" x="0" y="244" width="470" height="42" stroke="var(--held)" stroke-dasharray="4 4"/>
+        <text class="tg" x="14" y="270" fill="var(--held)">SIMULATED</text>
+        <text class="tx" x="130" y="270" fill="var(--held)">replay with a healthy heater: no alarm</text>
+        <text class="tx" x="500" y="270">modelled</text>
         <text class="tx" x="500" y="36">measured</text>
         <text class="tx" x="500" y="86">calculated</text>
         <text class="tx" x="500" y="136">quoted</text>
         <text class="tx" x="500" y="218">proposed</text>
       </svg>
-      <figcaption>A reviewer reads down the page and sees where the record stops and the reasoning starts.</figcaption>
+      <figcaption>A reviewer reads down the page and sees where the record stops and the reasoning—or the model—starts.</figcaption>
     </figure>
     <table class="score">
       <tr><th>Label</th><th>Meaning</th></tr>
@@ -335,24 +349,28 @@
       <tr><td>Derived</td><td>Calculated from recorded evidence.</td></tr>
       <tr><td>Documented</td><td>Supported by a cited procedure or prior incident.</td></tr>
       <tr><td>Hypothesis</td><td>A proposed explanation that requires interpretation.</td></tr>
+      <tr><td>Simulated</td><td>From a simulator replay of the sealed window. Evidence about ORBIT’s model of the spacecraft, not a measurement.</td></tr>
     </table>
     <p>These labels help a reviewer distinguish measurements from conclusions. A citation establishes where a claim came from; it does not, by itself, establish that the claim is correct or applicable to this case.</p>
+    <p>On the case page, each label is backed by something you can open: evidence lines pin the moment on the chart, replays open inline beneath the claim they support, and an audit trail lists every read, calculation, and simulation in the order ORBIT ran them.</p>
   </div>
 </section>
 
 <!-- DECISIONS -->
 <section class="blk">
-  <div class="rail"><b>Design</b>Six constraints</div>
+  <div class="rail"><b>Design</b>Ten constraints</div>
   <div class="body">
     <h2>The decisions behind the design</h2>
     <ul class="claims">
-      <li><span class="k">Case log</span><span><b>Keep Postgres as a case log only.</b> Incidents and hypothesis feedback live in the database. Archive tapes, sealed windows, and procedures stay as files. ORBIT does not store a searchable document library or embeddings.</span></li>
+      <li><span class="k">Case log</span><span><b>Keep Postgres as a case log only.</b> Incidents, decisions, simulated verification, and hypothesis feedback live in the database. Archive tapes, sealed windows, and procedures stay as files. ORBIT does not store a searchable document library or embeddings.</span></li>
       <li><span class="k">Reproducible</span><span><b>Keep each case reproducible.</b> Opening a case writes a sealed window file. A reviewer returns to that file instead of relying on a changing archive query. If more evidence is needed, the case boundary must be revisited explicitly.</span></li>
       <li><span class="k">Named docs</span><span><b>Fetch the procedure the case already names.</b> The investigator reads EPS-17, PAY-04, or EPS-09 by id, and the one prior the report cites. Similarity search over a document index is out of scope.</span></li>
-      <li><span class="k">Thresholds</span><span><b>Take thresholds from procedures.</b> A model-generated explanation should not silently substitute a new threshold for the one specified in the procedure.</span></li>
+      <li><span class="k">Thresholds</span><span><b>Take thresholds from procedures.</b> A model-generated explanation should not silently substitute a new threshold for the one specified in the procedure. Today the rules encode those bars (EPS-17’s ≥2×) next to the investigator; reading them directly from the procedure files is the next step.</span></li>
+      <li><span class="k">One rule</span><span><b>Decide the cause in one place.</b> The report, the case page, and the decision record all use the same classifier, so the page can never disagree with the report it summarizes.</span></li>
       <li><span class="k">Hold</span><span><b>Make a hold a complete result.</b> When the evidence is insufficient, the report should state what is missing and avoid presenting a plausible cause as an established finding.</span></li>
-      <li><span class="k">Case</span><span><b>Organize the work around a case.</b> Evidence, recommendations, and operator feedback belong in one persistent record that can be reviewed after the response window has passed.</span></li>
-      <li><span class="k">No uplink</span><span><b>Keep spacecraft commanding outside the product.</b> ORBIT supports investigation and records decisions. It has no command-uplink capability.</span></li>
+      <li><span class="k">Case</span><span><b>Organize the work around the case lifecycle.</b> A recommendation is the middle of a case, not the end. The record carries the evidence, the explanations weighed, the decision, and whether the fix held, and it can be reviewed after the response window has passed.</span></li>
+      <li><span class="k">Replay</span><span><b>Prove it before acting, and label the proof.</b> Previews come from replaying the seeded simulator that produced the tape, with one change at a time. They are tagged Simulated, shown beside the claim they support, and never mixed with telemetry.</span></li>
+      <li><span class="k">No uplink</span><span><b>Keep spacecraft commanding outside the product.</b> ORBIT supports investigation, records decisions, and verifies them in simulation. It has no command-uplink capability.</span></li>
       <li><span class="k">One vehicle</span><span><b>Start with one simulated vehicle.</b> Limiting the initial scope makes it possible to inspect the behavior in detail before expanding to more varied systems and operating conditions.</span></li>
     </ul>
   </div>
@@ -382,8 +400,9 @@
     <div class="callout">
       <p>The rules-based provider passes all 55 checks across the five simulated scenarios and passes the release gate against the stored baseline.</p>
     </div>
+    <p>Separate unit tests cover the case page’s data: the cause it shows matches the report, every current quoted in an evidence line is a sample on the tape, load attribution adds up to the measured bus current, and each simulator replay reproduces its archive tape exactly before any change.</p>
     <p>That result demonstrates compliance with the current test suite. It does not establish performance on unseen flight data, validate an LLM provider, or demonstrate readiness for operational use.</p>
-    <p>The <a href="/app/trust">Trust page</a> exposes the individual checks and reads the same results artifact used by the release gate.</p>
+    <p>The <a href="https://github.com/pchung39/orbit/tree/master/eval">eval harness</a> exposes the individual checks: <code>python -m eval</code> writes the same results artifact the release gate reads.</p>
 
     <h3>How the release gate works</h3>
     <p>A candidate build is compared with the accepted baseline by check family. Designated failures in refusal, sourcing, or contrast checks block release, even if the overall score improves.</p>
@@ -438,6 +457,7 @@
 
     <h3>What I would test next</h3>
     <ol>
+      <li><b>Generated variants.</b> Use the simulator to generate hundreds of variations—heater draw from 1.2× to 3.5×, noise, shifted confounders, two faults at once—and report accuracy against fault size, so the weak spot near the 2× bar is visible instead of hidden behind five hand-built cases.</li>
       <li><b>Robustness to equivalent inputs.</b> Change units or channel names without changing their meaning. Where the relevant evidence is preserved, the decision should remain consistent. Changes to time windows or noise levels need their own expected outcomes because they can alter the evidence.</li>
       <li><b>Ambiguous and misleading evidence.</b> Add near-matching procedures, misleading prior incidents, missing telemetry, and cases with multiple plausible causes.</li>
       <li><b>Model-provider performance.</b> Run LLM providers against the same requirements, repeat the runs, and report model results separately from the rules baseline.</li>
@@ -459,13 +479,14 @@
       <li><b>Evidence completeness:</b> how often operators need information outside the saved case.</li>
       <li><b>Review quality:</b> whether reports are accepted without substantive corrections.</li>
       <li><b>Recommendation quality:</b> when operators accept, reject, or revise a recommendation—and why.</li>
+      <li><b>Preview fidelity:</b> how often the simulated outcome of an approved option matches what the spacecraft actually did once the operator sent the command.</li>
     </ul>
     <p>An override rate alone cannot distinguish trust from overreliance. I would review the underlying decisions and evidence, including whether holds were appropriate.</p>
     <div class="callout">
       <p>Any recommendation judged inconsistent with the governing procedure would pause the pilot for investigation. The goal is faster, better-supported decisions, with appropriate holds when the evidence is insufficient.</p>
     </div>
     <p class="foot">
-      <a href="/app">Open the desk</a> · <a href="/app/trust">Inspect the evaluations</a> · <a href="https://github.com/pchung39/orbit">View the source</a> · <a href="https://www.linkedin.com/in/paulchung39/">LinkedIn</a>
+      <a href="/app">Open the desk</a> · <a href="https://github.com/pchung39/orbit/tree/master/eval">Inspect the evaluations</a> · <a href="https://github.com/pchung39/orbit">View the source</a> · <a href="https://www.linkedin.com/in/paulchung39/">LinkedIn</a>
     </p>
   </div>
 </section>

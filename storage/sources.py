@@ -7,7 +7,6 @@ ORBIT does not downlink, detect, or keep the full archive in Postgres.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
@@ -17,7 +16,6 @@ from simulator.simulate import SPEC_PATH, load_and_validate
 from storage.evidence import (
     ARCHIVE as _TELEMETRY_CATALOG,
     ensure_archive_csv,
-    list_runs,
     write_sealed_window,
 )
 
@@ -57,29 +55,6 @@ ALARM_BIND: dict[str, dict[str, str]] = {
     },
 }
 
-_activity: list[dict[str, Any]] = []
-_last_sync: dict[str, str] = {}
-
-
-def _now_iso() -> str:
-    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-
-def _push_activity(connector_id: str, message: str, detail: dict[str, Any] | None = None) -> None:
-    _activity.insert(
-        0,
-        {
-            "at": _now_iso(),
-            "connector": connector_id,
-            "message": message,
-            "detail": detail or {},
-        },
-    )
-    del _activity[20:]
-
-
-def list_activity(limit: int = 20) -> list[dict[str, Any]]:
-    return list(_activity[: max(1, min(limit, 50))])
 
 
 def is_sealed_run_id(run_id: str) -> bool:
@@ -121,15 +96,6 @@ def list_archive_catalog() -> list[dict[str, Any]]:
                 entry["available"] = False
         out.append(entry)
     return out
-
-
-def archive_runs(conn: Any) -> list[dict[str, Any]]:
-    """Legacy: archive rows still cached in Postgres (demo inspect / seeds)."""
-    return [row for row in list_runs() if not is_sealed_run_id(row["id"])]
-
-
-def sealed_runs(conn: Any) -> list[dict[str, Any]]:
-    return [row for row in list_runs() if is_sealed_run_id(row["id"])]
 
 
 def bind_preview(alarm: str) -> dict[str, str] | None:
@@ -305,64 +271,5 @@ def seal_run_window(
         window,
         notes,
     )
-    n = len(window)
-    _push_activity(
-        "telemetry",
-        f"Fetched+sealed {sealed_id} from archive {source_run_id} · {format_clock(t0)}–{format_clock(t1)}",
-        {"sealed_run_id": sealed_id, "source_run_id": source_run_id, "frames": n},
-    )
     return sealed_id, notes
 
-
-def sync_telemetry(conn: Any) -> dict[str, Any]:
-    """Refresh upstream archive catalog (ensure tapes exist). Does not load full orbits into ORBIT."""
-    catalog = list_archive_catalog()
-    available = [row for row in catalog if row.get("available")]
-    at = _now_iso()
-    _last_sync["telemetry"] = at
-    _push_activity(
-        "telemetry",
-        f"Tape list updated · {len(available)}/{len(catalog)} reachable upstream",
-        {"runs": [row["id"] for row in available]},
-    )
-    return connector_telemetry(conn)
-
-
-def connector_telemetry(conn: Any) -> dict[str, Any]:
-    catalog = list_archive_catalog()
-    available = [row for row in catalog if row.get("available")]
-    sealed = sealed_runs(conn)
-    last = _last_sync.get("telemetry")
-    status = "ready" if available else "empty"
-    return {
-        "id": "telemetry",
-        "kind": "telemetry",
-        "role": "upstream",
-        "name": "Mission archive",
-        "description": (
-            "Tapes you can open a case from. Opening a case copies a warn±pad window and seals it. "
-            "Already-sealed cases do not change."
-        ),
-        "adapter": ADAPTER,
-        "auto": False,
-        "status": status,
-        "last_sync_at": last,
-        "next_sync_at": None,
-        "schedule": None,
-        "action_label": "Update tape list" if available else "Connect archive",
-        "stats": {
-            "catalog": len(available),
-            "sealed": len(sealed),
-            "label": f"{len(available)} upstream · {len(sealed)} sealed in ORBIT",
-        },
-    }
-
-
-def list_connectors(conn: Any) -> list[dict[str, Any]]:
-    return [connector_telemetry(conn)]
-
-
-def sync_connector(conn: Any, connector_id: str) -> dict[str, Any]:
-    if connector_id == "telemetry":
-        return sync_telemetry(conn)
-    raise ValueError(f"unknown connector {connector_id}")

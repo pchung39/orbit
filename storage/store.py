@@ -111,11 +111,14 @@ def events_for_run(spec: dict[str, Any], run_id: str) -> list[tuple[float, str, 
 
 _INCIDENT_COLS = (
     "id, title, run_id, alarm, status, opened_at, notes, filed_at, closeout, "
-    "investigation_report, investigated_at"
+    "investigation_report, investigated_at, decision, decision_note, decided_at, verify_result"
 )
 _INCIDENT_LIST_COLS = (
-    "id, title, run_id, alarm, status, opened_at, notes, filed_at"
+    "id, title, run_id, alarm, status, opened_at, notes, filed_at, decision"
 )
+
+# Lifecycle: open → recommended (needs decision) → verifying | watching → filed (closed).
+DECIDABLE = ("recommended", "verifying", "watching")
 
 
 def list_incidents(conn: psycopg.Connection) -> list[dict[str, Any]]:
@@ -248,7 +251,8 @@ def reset_demo_incidents(conn: psycopg.Connection) -> None:
         conn.execute(
             "UPDATE incidents SET title = %s, run_id = %s, alarm = %s, status = %s, "
             "opened_at = %s, notes = %s, filed_at = NULL, closeout = NULL, "
-            "investigation_report = NULL, investigated_at = NULL WHERE id = %s",
+            "investigation_report = NULL, investigated_at = NULL, decision = NULL, "
+            "decision_note = NULL, decided_at = NULL, verify_result = NULL WHERE id = %s",
             (title, run_id, alarm, status, opened, notes, incident_id),
         )
     conn.commit()
@@ -293,6 +297,35 @@ def save_investigation(
     conn.commit()
     row = get_incident(conn, incident_id)
     return dict(row) if row else None
+
+
+def decide_incident(
+    conn: psycopg.Connection,
+    incident_id: str,
+    *,
+    option: str,
+    note: str | None,
+    verify_result: dict[str, Any],
+) -> dict[str, Any]:
+    """Record the operator's decision and its simulated outcome. Nothing is uplinked."""
+    from datetime import datetime, timezone
+
+    row = get_incident(conn, incident_id)
+    if row is None:
+        raise ValueError(f"unknown incident {incident_id}")
+    if row["status"] not in DECIDABLE:
+        raise ValueError(f"{incident_id} is {row['status']}; investigate it before deciding")
+    status = "watching" if option == "hold" else "verifying"
+    decided_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.execute(
+        "UPDATE incidents SET status = %s, decision = %s, decision_note = %s, decided_at = %s, "
+        "verify_result = %s WHERE id = %s",
+        (status, option, (note or "").strip() or None, decided_at, json.dumps(verify_result), incident_id),
+    )
+    conn.commit()
+    out = get_incident(conn, incident_id)
+    assert out is not None
+    return dict(out)
 
 
 def file_incident(
@@ -396,103 +429,6 @@ def upsert_hypothesis_feedback(
     out = get_hypothesis_feedback(conn, incident_id)
     assert out is not None
     return out
-
-
-def store_trust_snapshot(conn: psycopg.Connection, spec: dict[str, Any]) -> dict[str, Any]:
-    """Counts and health signals for the trust / data-sources console."""
-    from storage.evidence import is_sealed_run_id, list_runs
-
-    runs = list_runs()
-    archive = [row for row in runs if not is_sealed_run_id(row["id"])]
-    incidents = list_incidents(conn)
-    inc_counts: dict[str, int] = {}
-    for row in incidents:
-        key = str(row.get("status") or "open")
-        inc_counts[key] = inc_counts.get(key, 0) + 1
-
-    channels = spec.get("channels") or {}
-    warn_channels = sum(1 for meta in channels.values() if meta.get("warn_limit") is not None)
-    samples = sum(int(row.get("samples") or 0) for row in archive)
-    events_n = sum(int(row.get("events") or 0) for row in runs)
-
-    return {
-        "mission": spec.get("mission", {}).get("name") or "Aurora-1",
-        "store": {
-            "linked": len(archive) > 0,
-            "runs": len(runs),
-            "telemetry_samples": samples,
-            "events": events_n,
-            "channels_in_spec": len(channels),
-            "warn_channels": warn_channels,
-        },
-        "incidents": {
-            "total": len(incidents),
-            "by_status": inc_counts,
-        },
-        "spec": {
-            "fault_families": len(spec.get("fault_library") or {}),
-            "procedures": len(spec.get("procedures_referenced") or {}),
-            "historical_incidents": len(spec.get("historical_incidents_to_author") or []),
-        },
-        "investigator": {
-            "provider_ui": "rules",
-            "provider_cli": "rules | anthropic | openai",
-            "paid_llm_in_ui": False,
-        },
-        "eval": {
-            "cases": 5,
-            "command": "python -m eval",
-            "provider_default": "rules",
-            "scorecard": _load_eval_scorecard(),
-            "candidate_available": _eval_candidate_available(),
-            "baseline_available": _eval_baseline_available(),
-            "comparison": _load_eval_comparison(),
-        },
-        "runs": runs,
-    }
-
-
-def _load_eval_scorecard() -> dict[str, Any] | None:
-    """Last full-suite scorecard written by `python -m eval` (if present)."""
-    path = ROOT / "eval" / "scorecard.json"
-    if not path.exists():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else None
-    except (OSError, ValueError):
-        return None
-
-
-def _load_eval_json(filename: str) -> dict[str, Any] | None:
-    path = ROOT / "eval" / filename
-    if not path.exists():
-        return None
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-        return data if isinstance(data, dict) else None
-    except (OSError, ValueError):
-        return None
-
-
-def _eval_candidate_available() -> bool:
-    return (ROOT / "eval" / "candidate.json").exists()
-
-
-def _eval_baseline_available() -> bool:
-    return (ROOT / "eval" / "baseline.json").exists()
-
-
-def _load_eval_baseline() -> dict[str, Any] | None:
-    return _load_eval_json("baseline.json")
-
-
-def _load_eval_candidate() -> dict[str, Any] | None:
-    return _load_eval_json("candidate.json")
-
-
-def _load_eval_comparison() -> dict[str, Any] | None:
-    return _load_eval_json("comparison.json")
 
 
 RUN_GENERATORS = {

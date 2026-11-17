@@ -304,8 +304,12 @@ def mix(lo: float, hi: float, frac: float) -> float:
 def apply_action(state: SimState, action: str) -> None:
     if action == "HEATER_B_ENABLE":
         state.force_heater = True
+    elif action == "HEATER_B_DISABLE":
+        state.force_heater = False
     elif action == "SCIENCE_MODE":
         state.payload_mode = "SCIENCE_MODE"
+    elif action == "PAYLOAD_STANDBY":
+        state.payload_mode = "STANDBY"
     else:
         raise ValueError(f"unknown command action: {action}")
 
@@ -431,7 +435,9 @@ def run_simulation(
 ) -> pd.DataFrame:
     assumptions = assumptions or Assumptions()
     faults = faults or []
-    commands = commands or []
+    # Time order matters: every tick re-applies all past commands, so the latest
+    # command on a target (e.g. HEATER_B_DISABLE after HEATER_B_ENABLE) wins.
+    commands = sorted(commands or [], key=lambda c: c[0])
     state = state or initial_state(assumptions)
     dt_s = float(spec["constants"]["default_sample_interval_s"])
     rng = np.random.default_rng(assumptions.rng_seed)

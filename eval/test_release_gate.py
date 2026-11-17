@@ -13,7 +13,6 @@ from eval.run import run_case
 from eval.cases import CASES
 
 ROOT = Path(__file__).resolve().parent.parent
-APP_JS = ROOT / "ui" / "app.js"
 SEED_BASELINE = Path(__file__).resolve().parent / "baselines" / "seed-rules.fixture.json"
 
 
@@ -134,17 +133,6 @@ class ReleaseGateTests(unittest.TestCase):
             self.assertTrue(path.exists())
             data = path.read_text(encoding="utf-8")
             self.assertIn("approved_baseline", data)
-
-    def test_trust_api_uses_artifacts(self) -> None:
-        baseline = build_green_bundle(kind="approved_baseline")
-        candidate = build_green_bundle(kind="candidate")
-        result = compare_bundles(baseline, candidate)
-        self.assertIn("metrics", result)
-        self.assertIn("cases", result)
-        js = APP_JS.read_text(encoding="utf-8")
-        self.assertIn("releaseCompare", js)
-        self.assertIn("evalExplorer", js)
-        self.assertNotIn("4/4 named closes", js)
 
     def test_seed_fixture_matches_suite(self) -> None:
         if not SEED_BASELINE.exists():

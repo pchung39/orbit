@@ -5,6 +5,7 @@ ORBIT still does not command the spacecraft. Filing records the decision.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 
@@ -47,6 +48,33 @@ def _feedback_section(feedback: dict[str, Any]) -> list[str]:
     return ["## Operator hypothesis review", "", line, ""]
 
 
+def _decision_section(incident: dict[str, Any]) -> list[str]:
+    verify = incident.get("verify_result")
+    if isinstance(verify, str):
+        try:
+            verify = json.loads(verify)
+        except ValueError:
+            verify = None
+    if not incident.get("decision") or not verify:
+        return []
+    lines = ["## Decision and verification", ""]
+    label = verify.get("label") or incident["decision"]
+    who = "ORBIT's recommendation" if verify.get("recommended") else "an alternative to ORBIT's recommendation"
+    lines.append(f"Operator approved **{label}**, {who}. **[OBSERVED — operator]**")
+    if incident.get("decision_note"):
+        lines.append(f"Reason: {incident['decision_note']} **[OBSERVED — operator]**")
+    if verify.get("simulated"):
+        lines.append(
+            f"Simulated from {verify.get('decision_clock')}: {verify.get('text')} **[SIMULATED]**"
+        )
+        if verify.get("step"):
+            lines.append(f"{verify['step']} **[DOCUMENTED]**")
+    else:
+        lines.append(f"{verify.get('text')} **[OBSERVED]**")
+    lines.append("")
+    return lines
+
+
 def _procedure_for_closeout(incident: dict[str, Any], report: str) -> str:
     for line in report.splitlines():
         if "**Procedure:**" in line:
@@ -76,7 +104,7 @@ def build_closeout(
         "|---|---|",
         f"| ID | {incident['id']} |",
         "| Mission | Aurora-1 |",
-        "| Status | filed — recommended action not sent |",
+        "| Status | filed — no command sent by ORBIT |",
         f"| Entry | `{incident['alarm']}` |",
         f"| Tape | `{incident['run_id']}` |",
         f"| Procedure used | {proc} |",
@@ -92,7 +120,8 @@ def build_closeout(
             f"{remark} **[OBSERVED — operator]**",
             "",
         ]
-    if feedback:
+    lines += _decision_section(incident)
+    if feedback and not incident.get("decision"):
         lines += _feedback_section(feedback)
     lines += [body, ""]
     return "\n".join(lines)

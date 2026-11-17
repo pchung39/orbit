@@ -16,6 +16,7 @@ function appPath(path = "") {
   return `${APP_BASE}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
+
 const TRACE_CATALOG = [
   { id: "EPS.bus_voltage", title: "Bus voltage", color: "var(--ch-bus)" },
   { id: "EPS.battery_voltage", title: "Battery voltage", color: "var(--ch-batt)" },
@@ -102,16 +103,40 @@ function limitPhrase(ch) {
   return `limit ${fmt(limit, 1)}${ch.unit ? ` ${ch.unit}` : ""}`;
 }
 
+/** Case lifecycle. Every status maps to exactly one sidebar stage. */
+const STAGES = [
+  { id: "decide", label: "Needs decision", tone: "warn", statuses: ["open", "recommended"] },
+  { id: "watching", label: "Watching", tone: "info", statuses: ["watching"] },
+  { id: "verifying", label: "Verifying", tone: "signal", statuses: ["verifying"] },
+  { id: "closed", label: "Closed", tone: "mute", statuses: ["filed"] },
+];
+
+function stageOf(status) {
+  const st = status || "open";
+  return STAGES.find((s) => s.statuses.includes(st)) || STAGES[0];
+}
+
 function statusLabel(status) {
-  if (status === "recommended") return "Ready for review";
-  if (status === "filed") return "Assessment recorded";
-  return "Not investigated";
+  const st = status || "open";
+  if (st === "open") return "Not investigated";
+  return stageOf(st).label;
 }
 
 function incStatusChip(status) {
   const st = status || "open";
-  const cls = st === "recommended" ? "ready" : st;
+  const cls = st === "open" ? "open" : `stage-${stageOf(st).id}`;
   return `<span class="chip chip-${cls} inc-status">${escapeHtml(statusLabel(st))}</span>`;
+}
+
+function renderSideStages() {
+  const all = state.incidents || [];
+  for (const stage of STAGES) {
+    const n = all.filter((item) => stage.statuses.includes(item.status || "open")).length;
+    const badge = document.querySelector(`[data-stage-n="${stage.id}"]`);
+    if (badge) badge.textContent = n ? String(n) : "";
+    const btn = document.querySelector(`[data-stage="${stage.id}"]`);
+    btn?.classList.toggle("is-on", state.view === "incidents" && state.incidentFilter === stage.id);
+  }
 }
 
 function sourceRunId(runId, notes) {
@@ -172,9 +197,7 @@ function tapeGroupLabel(key) {
 const TAPE_GROUP_ORDER = ["fault1", "eps204", "marg001", "pay002", "batt003", "nominal", "other"];
 
 function statusRank(status) {
-  if (status === "recommended") return 0;
-  if (status === "filed") return 2;
-  return 1;
+  return STAGES.indexOf(stageOf(status));
 }
 
 function openedClock(iso) {
@@ -227,7 +250,7 @@ function familyLine(item, all) {
 function rowCta(item) {
   if (DEMO_MODE) return { jump: "investigation", label: "Investigate" };
   if (item.status === "filed") return { jump: "closeout", label: "Read close-out" };
-  if (item.status === "recommended") return { jump: "action", label: "Record assessment" };
+  if (item.status === "recommended") return { jump: "action", label: "Decide" };
   return { jump: "investigation", label: "Investigate" };
 }
 
@@ -245,23 +268,7 @@ function rowInvestigateBtn(incidentId) {
   return `<button type="button" class="inc-investigate"${disabled} data-investigate="${escapeHtml(incidentId)}">Investigate</button>`;
 }
 
-function stopInvestigationAnimation() {
-  if (investigationStepTimer) {
-    window.clearInterval(investigationStepTimer);
-    investigationStepTimer = null;
-  }
-}
 
-function renderInvestigationProgress() {
-  const body = $("findings-body");
-  if (!body || !state.investigating) return;
-  body.innerHTML = `<div class="investigation-progress" aria-live="polite" aria-busy="true">
-    <p class="investigation-progress-kicker">Investigation in progress</p>
-    <p class="investigation-progress-copy">Reviewing case evidence and preparing the report.</p>
-  </div>`;
-  document.body.classList.add("is-investigating");
-  announceLive("Investigation in progress. Reviewing case evidence and preparing the report.");
-}
 
 function announceLive(message) {
   const el = $("investigation-live");
@@ -272,224 +279,15 @@ function announceLive(message) {
   }, 20);
 }
 
-function workingGuess(a) {
-  if (!a) return null;
-  const heaterA = a.heaterAAtCmd ?? a.heaterA;
-  const ratio = a.ratioAtCmd ?? a.ratio;
-  if (a.suspect) {
-    return {
-      suspect: `Heater B ${fmt(heaterA, 2)} A · ${fmt(ratio, 1)}× healthy max`,
-      last: a.science ? `SCIENCE_MODE at ${clock(a.science.time_s)}` : a.heaterCmd ? "HEATER_B_ENABLE" : "—",
-      decoy: Boolean(a.science),
-      recommend: "Inhibit Heater B",
-      withheld: false,
-    };
-  }
-  if (a.payloadSuspect) {
-    return {
-      suspect: `Payload ${fmt(a.payloadA, 2)} A · ${fmt(a.payloadRatio, 1)}× science`,
-      last: a.science ? `SCIENCE_MODE at ${clock(a.science.time_s)}` : "—",
-      decoy: Boolean(a.heaterCmd),
-      recommend: "Safe payload to STANDBY",
-      withheld: false,
-    };
-  }
-  if (a.batterySuspect) {
-    return {
-      suspect: "Pack sag · load currents healthy",
-      last: a.heaterCmd ? `HEATER_B_ENABLE at ${clock(a.heaterCmd.time_s)}` : "—",
-      decoy: Boolean(a.heaterCmd),
-      recommend: "Continue EPS-09 · no inhibit",
-      withheld: false,
-    };
-  }
-  if (a.withheld) {
-    return {
-      suspect: ratio != null
-        ? `Heater B ${fmt(heaterA, 2)} A · ${fmt(ratio, 1)}× — below ≥2× threshold`
-        : "No load ≥2× healthy",
-      last: a.science ? `SCIENCE_MODE at ${clock(a.science.time_s)}` : a.heaterCmd ? "HEATER_B_ENABLE" : "—",
-      decoy: Boolean(a.science),
-      recommend: "Hold · do not command",
-      withheld: true,
-    };
-  }
-  return {
-    suspect: "No load ≥2× healthy",
-    last: a.science ? "SCIENCE_MODE" : a.heaterCmd ? "HEATER_B_ENABLE" : "—",
-    decoy: false,
-    recommend: "Keep reading",
-    withheld: false,
-  };
-}
 
-function activeFeedbackVerdict() {
-  return state.feedback?.verdict || "";
-}
 
-function isHoldFeedback(a, fb) {
-  return Boolean(a?.withheld || fb?.hypothesis_key === "WITHHELD");
-}
 
-function feedbackVerdictLabel(verdict, isHold) {
-  if (isHold) {
-    return verdict === "confirmed" ? "Agreed with hold" : "Disagreed with hold";
-  }
-  return verdict === "confirmed" ? "Agreed with assessment" : "Disagreed with assessment";
-}
 
-function feedbackFormHtml({ editable, compact, noteId = "feedback-note", mode = "hypothesis" }) {
-  const fb = state.feedback;
-  const verdict = activeFeedbackVerdict();
-  const note = fb?.note || "";
-  const isHold = mode === "hold";
-  const kicker = "Your review";
-  const aria = isHold ? "Agree or disagree with the hold recommendation" : "Agree or disagree with the assessment";
-  const hint = "Saved with this case. Does not change the recommendation or send a command.";
-  if (!editable) {
-    if (!fb) return "";
-    const hold = isHoldFeedback(analysis(), fb);
-    const label = feedbackVerdictLabel(verdict, hold);
-    const key = hold ? "Hold · do not command" : fb.hypothesis_key || "";
-    return `<div class="guess-feedback is-readonly">
-      <p class="guess-kicker">${escapeHtml(label)}</p>
-      <p class="guess-fb-key">${escapeHtml(key)}</p>
-      ${note ? `<p class="guess-fb-note">${escapeHtml(note)}</p>` : ""}
-    </div>`;
-  }
-  return `<div class="guess-feedback ${compact ? "is-compact" : ""}">
-    <p class="guess-kicker">${escapeHtml(kicker)}</p>
-    <div class="fb-toggle" role="group" aria-label="${escapeHtml(aria)}">
-      <button type="button" class="fb-opt ${verdict === "confirmed" ? "is-on" : ""}" data-fb-verdict="confirmed">Agree</button>
-      <button type="button" class="fb-opt ${verdict === "rejected" ? "is-on" : ""}" data-fb-verdict="rejected">Disagree</button>
-    </div>
-    <label class="fb-note-label">Note <span class="opt">optional · stored with this case</span>
-      <textarea class="feedback-note" id="${noteId}" rows="2" placeholder="${isHold ? "Why hold was or was not the right call…" : "Why you agree or disagree…"}">${escapeHtml(note)}</textarea>
-    </label>
-    ${compact ? "" : `<p class="hint fb-hint">${escapeHtml(hint)}</p>`}
-    <div class="guess-feedback-actions">
-      <button type="button" class="btn btn-ghost btn-sm fb-save" data-save-feedback ${state.feedbackSaving ? "disabled" : ""}>${state.feedbackSaving ? "Saving…" : fb ? "Update assessment" : "Save assessment"}</button>
-    </div>
-  </div>`;
-}
 
-function renderFileSlipFeedback() {
-  const root = $("file-feedback");
-  if (!root) return;
-  const filed = state.incident?.status === "filed";
-  const a = analysis();
-  const mode = a?.withheld ? "hold" : "hypothesis";
-  if (filed) {
-    root.innerHTML = feedbackFormHtml({ editable: false, compact: true, mode });
-    return;
-  }
-  if (state.feedback) {
-    const hold = isHoldFeedback(a, state.feedback);
-    const label = hold ? "Decision review" : "Hypothesis review";
-    const key = hold ? "Hold · do not command" : state.feedback.hypothesis_key;
-    root.innerHTML = `<div class="file-fb-summary">
-      <p class="pick-label">${escapeHtml(label)}</p>
-      <p class="guess-fb-key">${escapeHtml(key)} · ${escapeHtml(state.feedback.verdict)}</p>
-      ${state.feedback.note ? `<p class="guess-fb-note">${escapeHtml(state.feedback.note)}</p>` : ""}
-    </div>`;
-    return;
-  }
-  root.innerHTML = feedbackFormHtml({ editable: true, compact: true, noteId: "file-feedback-note", mode });
-}
 
-async function saveFeedback(scopeEl) {
-  if (!state.incidentId || state.feedbackSaving || state.incident?.status === "filed") return;
-  const scope = scopeEl || $("decide-feedback-root");
-  const on = scope?.querySelector("[data-fb-verdict].is-on");
-  if (!on) {
-    window.alert("Choose Agree or Disagree first.");
-    return;
-  }
-  const noteEl = scope.querySelector(".feedback-note");
-  const note = noteEl?.value.trim() || null;
-  state.feedbackSaving = true;
-  renderDecision(analysis());
-  renderFileSlipFeedback();
-  try {
-    const res = await fetch(apiUrl(`/incidents/${encodeURIComponent(state.incidentId)}/feedback`), {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ verdict: on.dataset.fbVerdict, note }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || `feedback ${res.status}`);
-    }
-    const data = await res.json();
-    state.feedback = data.feedback;
-    if (state.incident) state.incident.feedback = data.feedback;
-  } catch (err) {
-    window.alert(err.message || "Could not save feedback");
-  } finally {
-    state.feedbackSaving = false;
-    renderDecision(analysis());
-    renderFileSlipFeedback();
-  }
-}
 
-function hypothesisContextHtml(a, g) {
-  if (!g) return "";
-  const lastLabel = a?.science && g.last.includes("SCIENCE_MODE")
-    ? `${g.last} · most recent mode change`
-    : g.last;
-  return `<dl class="hyp-context">
-    <div><dt>${g.withheld ? "Status" : "Suspect load"}</dt><dd>${escapeHtml(g.suspect)}</dd></div>
-    <div><dt>Last command</dt><dd>${escapeHtml(lastLabel)}</dd></div>
-  </dl>`;
-}
 
-function renderDecisionContext(a) {
-  const hypRoot = $("decide-hypothesis");
-  const fbRoot = $("decide-feedback-root");
-  const inc = state.incident;
-  const filed = inc?.status === "filed";
-  const g = workingGuess(a);
-  const showHyp = Boolean(a && g && inc && !filed && hasSuccessfulInvestigation());
 
-  if (hypRoot) {
-    if (showHyp) {
-      hypRoot.hidden = false;
-      hypRoot.innerHTML = hypothesisContextHtml(a, g);
-    } else {
-      hypRoot.hidden = true;
-      hypRoot.innerHTML = "";
-    }
-  }
-
-  if (fbRoot) {
-    const showFb = inc && !filed && hasSuccessfulInvestigation();
-    const mode = g?.withheld ? "hold" : "hypothesis";
-    if (showFb) {
-      fbRoot.hidden = false;
-      fbRoot.innerHTML = feedbackFormHtml({ editable: true, compact: false, noteId: "decide-feedback-note", mode });
-    } else if (filed && (state.feedback || inc?.feedback)) {
-      fbRoot.hidden = false;
-      fbRoot.innerHTML = feedbackFormHtml({
-        editable: false,
-        compact: false,
-        mode: isHoldFeedback(a, state.feedback || inc?.feedback) ? "hold" : "hypothesis",
-      });
-    } else {
-      fbRoot.hidden = true;
-      fbRoot.innerHTML = "";
-    }
-  }
-
-  const review = $("decide-review");
-  if (review) review.hidden = Boolean(fbRoot?.hidden && $("file-incident")?.hidden);
-}
-
-function caseFactHtml(k, v, tone, sub) {
-  return `<div class="fact ${tone ? `is-${tone}` : ""}">
-    <dt>${escapeHtml(k)}</dt>
-    <dd>${escapeHtml(v)}${sub ? `<span class="sub">${escapeHtml(sub)}</span>` : ""}</dd>
-  </div>`;
-}
 
 function tapeCopy(run) {
   const id = run?.id ? String(run.id) : "";
@@ -545,10 +343,6 @@ const PROC_BOOK = {
   },
 };
 
-function tracesToDraw() {
-  const alarm = alarmChannel();
-  return TRACE_CATALOG.map((ch) => ({ ...ch, primary: ch.id === alarm }));
-}
 
 const state = {
   view: "home",
@@ -577,25 +371,7 @@ const state = {
   filing: false,
   feedback: null,
   feedbackSaving: false,
-  trust: null,
-  trustLoading: false,
-  trustSub: "overview",
-  releaseCaseId: null,
-  releaseCompare: null,
-  evalExplorer: null,
-  releaseLoading: false,
-  releaseCase: null,
-  sources: null,
-  sourcesLoading: false,
-  sourcesSyncing: null,
   archiveCatalog: [],
-  sourceExplorer: {
-    category: "datasets",
-    selectedId: null,
-    listScroll: 0,
-    detailOpen: false,
-  },
-  maintStatus: null,
   inspector: {
     open: false,
     runId: null,
@@ -879,397 +655,36 @@ function renderMd(src, opts = {}) {
   return out.join("");
 }
 
-function sectionTitle(block) {
-  const m = block.match(/^#{1,2}\s+(.+)/);
-  return m ? m[1].trim() : "";
-}
 
-function pullTags(raw) {
-  const tags = [];
-  const text = raw
-    .replace(/\*\*\[([^\]]+)\]\*\*/g, (_, tag) => {
-      tags.push(tag);
-      return "";
-    })
-    .replace(/\[([A-Z /—-]+)\]/g, (_, tag) => {
-      tags.push(tag);
-      return "";
-    })
-    .replace(/\s+/g, " ")
-    .trim();
-  return { text, tags };
-}
 
-function firstClock(text) {
-  const m = text.match(/\b(\d{2}:\d{2}:\d{2})\b/);
-  return m ? m[1] : "";
-}
 
-function clockToS(hhmmss) {
-  const parts = hhmmss.split(":").map(Number);
-  return parts[0] * 3600 + parts[1] * 60 + parts[2];
-}
 
-function pinTimePool() {
-  const pool = [];
-  for (const e of state.workspace?.events || []) {
-    if (e.time_s != null) pool.push(Number(e.time_s));
-  }
-  const a = analysis();
-  if (a?.warn?.time_s != null) pool.push(Number(a.warn.time_s));
-  if (a?.t != null) pool.push(Number(a.t));
-  for (const spec of tracesToDraw()) {
-    for (const row of series(spec.id)) {
-      if (row.time_s != null) pool.push(Number(row.time_s));
-    }
-  }
-  return pool;
-}
 
-function nearestPinTime(target, pool) {
-  if (!pool.length) return target;
-  const want = clock(target);
-  const sameClock = pool.filter((t) => clock(t) === want);
-  const list = sameClock.length ? sameClock : pool;
-  return list.reduce((best, t) => (Math.abs(t - target) < Math.abs(best - target) ? t : best), list[0]);
-}
 
 /** Map a clock string or approximate time_s to the nearest sample/event in this workspace. */
-function resolvePinTime(raw) {
-  if (raw == null || raw === "") return null;
-  const text = String(raw).trim();
-  let target = text.includes(":") ? clockToS(text) : Number(text);
-  if (Number.isNaN(target)) return null;
-  return nearestPinTime(target, pinTimePool());
-}
 
-function isPinnedAt(t) {
-  const pin = state.pinT;
-  return pin != null && t != null && Math.abs(Number(pin) - Number(t)) < 2.6;
-}
 
-function timelinePinTime(text, kids = []) {
-  const clockTime = firstClock(text) || firstClock(kids[0] || "");
-  if (clockTime) return resolvePinTime(clockTime);
-  if (/\bat the warn\b/i.test(text)) {
-    const a = analysis();
-    return a?.t != null ? resolvePinTime(a.t) : null;
-  }
-  return null;
-}
 
-function isLeadUpPinned(t) {
-  const id = `tl:${t}`;
-  if (state.pinSource) return state.pinSource === id;
-  return isPinnedAt(t);
-}
 
-function isEvPinned(id) {
-  return state.pinSource === id;
-}
 
-function tagClass(tag) {
-  const key = tag.toLowerCase();
-  if (key.includes("hypothesis")) return "hypothesis";
-  if (key.includes("derived")) return "derived";
-  if (key.includes("documented")) return "documented";
-  return "observed";
-}
 
-function tagsHtml(tags) {
-  return tags
-    .map((tag) => {
-      const cls = tagClass(tag);
-      const title = TAG_MEANING[cls] || "";
-      return `<span class="tag tag-${cls}" title="${escapeHtml(title)}" tabindex="0">${escapeHtml(tag)}</span>`;
-    })
-    .join("");
-}
 
-function parseNumbered(block) {
-  const items = [];
-  for (const line of block.split("\n")) {
-    const numbered = line.match(/^\s*(\d+)\.\s+(.*)$/);
-    if (numbered) {
-      items.push({ n: Number(numbered[1]), raw: numbered[2], kids: [] });
-      continue;
-    }
-    const kid = line.match(/^\s+-\s+(.*)$/);
-    if (kid && items.length) items.at(-1).kids.push(kid[1]);
-  }
-  return items;
-}
 
-function parseKid(raw) {
-  const clock = firstClock(raw);
-  const rest = clock ? raw.replace(clock, "").trim() : raw;
-  return { clock, html: inlineMd(rest) };
-}
 
-function itemKind(text, tags) {
-  const blob = `${text} ${tags.join(" ")}`.toLowerCase();
-  if (blob.includes("crossed warn") || blob.includes("warn at")) return "warn";
-  if (blob.includes("derived")) return "derived";
-  if (blob.includes("documented") && !blob.includes("observed")) return "documented";
-  return "observed";
-}
 
-function renderLeadFinding(block) {
-  const rows = [];
-  for (const line of block.split("\n")) {
-    const m = line.match(/^\s*-\s+\*\*(.+?):\*\*\s+(.*)$/) || line.match(/^\s*-\s+\*\*(.+?)\*\*:\s+(.*)$/);
-    if (m) rows.push({ k: m[1], v: m[2] });
-  }
-  if (!rows.length) return `<article class="finding md">${renderMd(block)}</article>`;
-  return `<article class="finding lead">
-    <h3>${escapeHtml(sectionTitle(block) || "Investigation")}</h3>
-    <dl class="lead-grid">
-      ${rows
-        .map((row) => `<div><dt>${escapeHtml(row.k)}</dt><dd>${inlineMd(row.v)}</dd></div>`)
-        .join("")}
-    </dl>
-  </article>`;
-}
 
-function evTimeCell(clockTime, pinTs, pinId, on) {
-  if (!clockTime) return `<td class="ev-time"></td>`;
-  if (pinTs == null) return `<td class="ev-time"><span class="ev-clock">${clockTime}</span></td>`;
-  return `<td class="ev-time"><button type="button" class="ev-clock" data-t="${pinTs}" data-pin-id="${pinId}" aria-pressed="${on}" title="Show ${clockTime} on the telemetry charts">${clockTime}</button></td>`;
-}
 
-function renderTimelineFinding(block) {
-  const items = parseNumbered(block);
-  const rows = items
-    .map((item) => {
-      const { text, tags } = pullTags(item.raw);
-      const kind = itemKind(text, tags);
-      const rowId = `ev:${item.n}`;
-      const pinTs = timelinePinTime(text, item.kids);
-      const on = isEvPinned(rowId);
-      const clockTime = firstClock(text) || firstClock(item.kids[0] || "") || (pinTs != null ? clock(pinTs) : "");
-      const timed = pinTs != null;
-      const rowPin = timed ? ` data-t="${pinTs}" data-pin-id="${rowId}"` : "";
-      const cls = ["ev-row", `ev-${kind}`, timed ? "is-timed" : "", on ? "is-on" : "", item.kids.length ? "has-kids" : ""]
-        .filter(Boolean)
-        .join(" ");
-      const main = `<tr class="${cls}"${rowPin}>
-        ${evTimeCell(clockTime, pinTs, rowId, on)}
-        <td class="ev-finding">${inlineMd(text)}</td>
-        <td class="ev-source">${tagsHtml(tags)}</td>
-      </tr>`;
-      const kids = item.kids
-        .map((kid, kidIdx) => {
-          const parsed = parseKid(kid);
-          const kidId = `${rowId}:kid:${kidIdx}`;
-          const kidTs = parsed.clock ? resolvePinTime(parsed.clock) : null;
-          const kidOn = isEvPinned(kidId);
-          const kidCls = ["ev-row", "ev-sub", kidTs != null ? "is-timed" : "", kidOn ? "is-on" : "", kidIdx === item.kids.length - 1 ? "is-last-sub" : ""]
-            .filter(Boolean)
-            .join(" ");
-          const kidPin = kidTs != null ? ` data-t="${kidTs}" data-pin-id="${kidId}"` : "";
-          return `<tr class="${kidCls}"${kidPin}>
-            ${evTimeCell(parsed.clock, kidTs, kidId, kidOn)}
-            <td class="ev-finding"><span class="ev-sub-mark" aria-hidden="true">↳</span>${parsed.html}</td>
-            <td class="ev-source"></td>
-          </tr>`;
-        })
-        .join("");
-      return main + kids;
-    })
-    .join("");
-  return `<article class="finding evidence">
-    <h3>Event timeline</h3>
-    <p class="hint">Select a row with a time to show that moment on the telemetry charts.</p>
-    <div class="ev-wrap">
-      <table class="ev-table">
-        <thead>
-          <tr>
-            <th scope="col" class="ev-time">Time</th>
-            <th scope="col" class="ev-finding">Finding</th>
-            <th scope="col" class="ev-source">Source</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
-  </article>`;
-}
 
-function niceTicks(min, max, count = 4) {
-  if (min === max) {
-    min -= 1;
-    max += 1;
-  }
-  const span = max - min;
-  const step = span / count;
-  const mag = 10 ** Math.floor(Math.log10(step));
-  const err = step / mag;
-  const nice = err >= 7.5 ? 10 * mag : err >= 3 ? 5 * mag : err >= 1.5 ? 2 * mag : mag;
-  const start = Math.ceil(min / nice) * nice;
-  const ticks = [];
-  for (let v = start; v <= max + nice * 0.01; v += nice) ticks.push(v);
-  return ticks;
-}
 
-function pathFrom(points, x, y) {
-  return points
-    .map((p, i) => `${i ? "L" : "M"}${x(p.time_s).toFixed(2)} ${y(p.value_num).toFixed(2)}`)
-    .join(" ");
-}
 
-const charts = {};
 
-function drawTrace(el, channelId, title, color, primary) {
-  const rows = series(channelId).filter((r) => r.value_num != null);
-  const [t0, t1] = domain();
-  const vis = inDomain(rows, [t0, t1]);
-  const ch = meta(channelId);
-  const a = analysis();
-  const W = 920;
-  const H = primary ? 148 : 118;
-  const pad = { l: 44, r: 12, t: 10, b: 22 };
-  const ys = vis.map((r) => r.value_num);
-  let yMin = ys.length ? Math.min(...ys) : 0;
-  let yMax = ys.length ? Math.max(...ys) : 1;
-  if (ch.warn_limit != null) {
-    yMin = Math.min(yMin, ch.warn_limit);
-    yMax = Math.max(yMax, ch.warn_limit);
-  }
-  const padY = (yMax - yMin) * 0.12 || 0.2;
-  yMin -= padY;
-  yMax += padY;
-  const x = (t) => pad.l + ((t - t0) / Math.max(t1 - t0, 1e-6)) * (W - pad.l - pad.r);
-  const y = (v) => pad.t + (1 - (v - yMin) / Math.max(yMax - yMin, 1e-6)) * (H - pad.t - pad.b);
-  charts[channelId] = { t0, t1, x, y, pad, H, W, rows, color, unit: ch.unit || "" };
-  const ticks = niceTicks(yMin, yMax, 3);
-  const events = [
-    ...(a?.events || []),
-    ...(a?.warn ? [{ time_s: a.warn.time_s, detail: "WARN", kind: "warn" }] : []),
-  ];
-  const marks = events
-    .filter((e) => e.time_s >= t0 && e.time_s <= t1)
-    .map((e) => {
-      const xx = x(e.time_s);
-      const warn = e.kind === "warn" || e.detail?.includes("WARN");
-      return `<line x1="${xx}" x2="${xx}" y1="${pad.t}" y2="${H - pad.b}" stroke="${warn ? "var(--warn)" : "var(--line-2)"}" stroke-dasharray="${warn ? "0" : "3 4"}" stroke-width="1"/>`;
-    })
-    .join("");
-  const warnLine =
-    ch.warn_limit != null
-      ? `<line x1="${pad.l}" x2="${W - pad.r}" y1="${y(ch.warn_limit)}" y2="${y(ch.warn_limit)}" stroke="var(--warn)" stroke-dasharray="4 4" stroke-width="1" opacity="0.85"/>`
-      : "";
-  const d = vis.length ? pathFrom(vis, x, y) : "";
-  const area = vis.length
-    ? `${d} L${x(vis.at(-1).time_s).toFixed(2)} ${H - pad.b} L${x(vis[0].time_s).toFixed(2)} ${H - pad.b} Z`
-    : "";
-  const yLabels = ticks
-    .map((v) => `<text x="${pad.l - 6}" y="${y(v) + 3}" text-anchor="end" fill="var(--mute)" font-size="10" font-family="IBM Plex Mono, ui-monospace, monospace">${fmt(v, Math.abs(v) >= 10 ? 0 : 1)}</text>`)
-    .join("");
-  el.innerHTML = `
-    <div class="trace-head">
-      <h3>${title}</h3>
-      <span class="now">—</span>
-    </div>
-    <svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}">
-      ${yLabels}
-      ${warnLine}
-      ${marks}
-      ${area ? `<path d="${area}" fill="${color}" opacity="0.12"></path>` : ""}
-      ${d ? `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.6"></path>` : ""}
-      <g class="pin-g"></g>
-      <g class="hover-g"></g>
-      <text x="${pad.l}" y="${H - 6}" fill="var(--mute)" font-size="10" font-family="IBM Plex Mono, ui-monospace, monospace">${clock(t0)}</text>
-      <text x="${W - pad.r}" y="${H - 6}" text-anchor="end" fill="var(--mute)" font-size="10" font-family="IBM Plex Mono, ui-monospace, monospace">${clock(t1)}</text>
-      <rect class="hit" x="${pad.l}" y="${pad.t}" width="${W - pad.l - pad.r}" height="${H - pad.t - pad.b}" fill="transparent" pointer-events="all"/>
-    </svg>
-  `;
-  const hit = el.querySelector(".hit");
-  hit.addEventListener("mousemove", (ev) => {
-    const rect = hit.getBoundingClientRect();
-    const frac = Math.min(1, Math.max(0, (ev.clientX - rect.left) / rect.width));
-    state.hoverT = t0 + frac * (t1 - t0);
-    updateReadouts();
-  });
-  hit.addEventListener("mouseleave", () => {
-    state.hoverT = null;
-    updateReadouts();
-  });
-  hit.addEventListener("click", () => {
-    pinTape(state.hoverT);
-  });
-}
 
-function traceCard(id) {
-  return $("trace-stack")?.querySelector(`[data-ch="${id}"]`);
-}
 
-function pinTape(t, { scroll = false, source = null } = {}) {
-  const n = resolvePinTime(t);
-  if (n == null || Number.isNaN(n)) return;
-  state.pinT = n;
-  state.pinSource = source;
-  state.hoverT = null;
-  renderMode(analysis());
-  renderTraces();
-  renderTimeline(analysis());
-  updateReadouts();
-  if (state.view === "case") {
-    state.evidenceOpen = true;
-    syncEvidenceBundle();
-  }
-  if (state.report) renderFindings();
-  if (scroll) $("traces")?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
 
-function updateReadouts() {
-  const a = analysis();
-  if (state.view === "home" || state.view === "incidents") {
-    return;
-  }
-  const tPin = state.pinT ?? a?.t;
-  const tHover = state.hoverT;
-  const t = tHover ?? tPin;
-  const parts = tracesToDraw().map((ch) => {
-    const row = sampleAt(series(ch.id), t);
-    const unit = meta(ch.id).unit || "";
-    return `${ch.title} ${fmt(row?.value_num)} ${unit}`;
-  });
-  const hoverRead = $("hover-read");
-  if (hoverRead) hoverRead.textContent = t != null ? `${clock(t)}  ·  ${parts.join("   ")}` : "";
-  tracesToDraw().forEach((spec) => {
-    const el = traceCard(spec.id);
-    const c = charts[spec.id];
-    if (!el || !c) return;
-    const now = sampleAt(c.rows, t);
-    const nowEl = el.querySelector(".now");
-    if (nowEl) nowEl.textContent = now ? `${fmt(now.value_num)} ${c.unit}` : "—";
-    const pinG = el.querySelector(".pin-g");
-    if (pinG) {
-      pinG.innerHTML =
-        tPin == null
-          ? ""
-          : `<line x1="${c.x(tPin)}" x2="${c.x(tPin)}" y1="${c.pad.t}" y2="${c.H - c.pad.b}" stroke="var(--signal)" stroke-width="1.5"/>`;
-    }
-    const hoverG = el.querySelector(".hover-g");
-    if (!hoverG) return;
-    if (tHover == null) {
-      hoverG.innerHTML = "";
-      return;
-    }
-    const sample = sampleAt(c.rows, tHover);
-    const xx = c.x(tHover);
-    const cy = sample ? c.y(sample.value_num) : c.pad.t;
-    hoverG.innerHTML = `<line x1="${xx}" x2="${xx}" y1="${c.pad.t}" y2="${c.H - c.pad.b}" stroke="var(--ink)" stroke-width="1" opacity="0.4"/>${
-      sample ? `<circle cx="${xx}" cy="${cy}" r="3.2" fill="${c.color}"/>` : ""
-    }`;
-  });
-}
 
 const INC_FILTERS = [
   { id: "all", label: "All", match: () => true },
-  { id: "open", label: "Not investigated", match: (item) => item.status !== "filed" && item.status !== "recommended" },
-  { id: "ready", label: "Ready for review", match: (item) => item.status === "recommended" },
-  { id: "filed", label: "Assessment recorded", match: (item) => item.status === "filed" },
+  ...STAGES.map((stage) => ({ id: stage.id, label: stage.label, match: (item) => stage.statuses.includes(item.status || "open") })),
 ];
 
 const INC_CATEGORY_ORDER = ["bus", "payload", "battery", "other"];
@@ -1316,14 +731,8 @@ function incidentSearchText(item, all) {
 function renderIncFilters(all, counts) {
   const root = $("inc-filters");
   if (!root) return;
-  const statusCounts = {
-    all: counts.nAll,
-    open: counts.nOpen,
-    ready: counts.nReady,
-    filed: counts.nFiled,
-  };
   const statusOpts = INC_FILTERS.map((f) => {
-    const n = statusCounts[f.id] ?? 0;
+    const n = counts[f.id] ?? 0;
     const selected = state.incidentFilter === f.id ? " selected" : "";
     return `<option value="${escapeHtml(f.id)}"${selected}>${escapeHtml(f.label)} (${n})</option>`;
   }).join("");
@@ -1433,22 +842,12 @@ function sortIncidents(rows) {
   return copy;
 }
 
-function groupIncidentsByTape(rows) {
-  const groups = new Map();
-  for (const item of rows) {
-    const key = tapeGroupKey(item);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key).push(item);
-  }
-  const ordered = [
-    ...TAPE_GROUP_ORDER.filter((key) => groups.has(key)),
-    ...[...groups.keys()].filter((key) => !TAPE_GROUP_ORDER.includes(key)).sort(),
-  ];
-  return ordered.map((key) => ({
-    key,
-    label: tapeGroupLabel(key),
-    items: groups.get(key),
-  }));
+function groupIncidentsByStage(rows) {
+  return STAGES.map((stage) => ({
+    key: stage.id,
+    label: stage.label,
+    items: rows.filter((item) => stage.statuses.includes(item.status || "open")),
+  })).filter((group) => group.items.length);
 }
 
 function renderSideRecent() {
@@ -1478,14 +877,10 @@ function renderSideRecent() {
 
 function renderIncidents() {
   const all = [...state.incidents];
-  const count = (id) => all.filter(INC_FILTERS.find((f) => f.id === id).match).length;
-  const nOpen = count("open");
-  const nReady = count("ready");
-  const nFiled = count("filed");
+  const counts = Object.fromEntries(INC_FILTERS.map((f) => [f.id, all.filter(f.match).length]));
   const rows = sortIncidents(filterIncidents(all));
 
-  const tabN = $("tab-incidents-n");
-  if (tabN) tabN.textContent = nOpen + nReady ? String(nOpen + nReady) : "";
+  renderSideStages();
   renderSideRecent();
 
   const hero = $("inc-head");
@@ -1496,15 +891,13 @@ function renderIncidents() {
       <div class="inc-head-copy">
         <p class="inc-kicker"><span class="live-dot" aria-hidden="true"></span>Aurora-1 · case log</p>
         <h1 class="inc-title">Incidents</h1>
-        <p class="inc-sub">Every alarm you've opened, grouped by archive tape.</p>
+        <p class="inc-sub">Every alarm you've opened, grouped by where it is in its lifecycle.</p>
       </div>
       <div class="inc-pills">
-        ${pill("ready", "ready", nReady, "ready")}
-        ${pill("open", "open", nOpen, "not investigated")}
-        ${pill("filed", "filed", nFiled, "recorded")}
+        ${STAGES.map((stage) => pill(stage.id, stage.tone, counts[stage.id], stage.label.toLowerCase())).join("")}
       </div>`;
   }
-  renderIncFilters(all, { nOpen, nReady, nFiled, nAll: all.length });
+  renderIncFilters(all, counts);
 
   renderIncidentList(rows, all);
 }
@@ -1520,13 +913,13 @@ function renderIncidentList(rows, all) {
   const cols = `<div class="inc-cols" aria-hidden="true">
     <span>Case</span><span>Details</span><span>Status</span>
   </div>`;
-  const grouped = groupIncidentsByTape(rows);
+  const grouped = groupIncidentsByStage(rows);
   const useFlat = grouped.length === 1;
   list.innerHTML = useFlat
     ? `${cols}${rows.map((item) => incRow(item, all)).join("")}`
     : grouped
         .map(
-          (group) => `<section class="inc-group tape-${escapeHtml(String(group.key).replace(/[^a-z0-9_-]/gi, ""))}">
+          (group) => `<section class="inc-group stage-${escapeHtml(group.key)}">
         <header class="inc-group-head">
           <h2 class="inc-group-title">${escapeHtml(group.label)}</h2>
           <span class="inc-group-n">${group.items.length} case${group.items.length === 1 ? "" : "s"}</span>
@@ -1739,129 +1132,10 @@ function closeSlip() {
   $("slip").hidden = true;
 }
 
-function openFileSlip() {
-  if (!state.incidentId || state.incident?.status === "filed") return;
-  $("file-slip-id").textContent = state.incident?.id || "INC-····";
-  $("file-slip-action").textContent = $("decide-title").textContent || "Recommended action";
-  $("file-note").value = "";
-  renderFileSlipFeedback();
-  $("file-slip").hidden = false;
-  $("file-note").focus();
-}
 
-function closeFileSlip() {
-  $("file-slip").hidden = true;
-}
 
-function trustTone(ok, warn) {
-  if (ok) return "ok";
-  if (warn) return "warn";
-  return "bad";
-}
 
-async function loadTrust() {
-  state.trustLoading = true;
-  state.releaseCompare = null;
-  state.evalExplorer = null;
-  renderTrust();
-  try {
-    const [trustRes, sourcesRes, compareRes, explorerRes] = await Promise.all([
-      fetch(apiUrl("/trust")),
-      fetch(apiUrl("/sources")),
-      fetch(apiUrl("/eval/compare")),
-      fetch(apiUrl("/eval/explorer")),
-    ]);
-    if (!trustRes.ok) throw new Error(`trust ${trustRes.status}`);
-    state.trust = await trustRes.json();
-    if (sourcesRes.ok) {
-      state.sources = await sourcesRes.json();
-    } else {
-      state.sources = null;
-    }
-    if (compareRes.ok) {
-      state.releaseCompare = await compareRes.json();
-    } else {
-      state.releaseCompare = {
-        error: `compare ${compareRes.status}`,
-        recommendation: "INSUFFICIENT_COVERAGE",
-        explanation: "Could not load release comparison.",
-        metrics: [],
-        cases: { improved: 0, unchanged: 0, regressed: 0, rows: [] },
-        blockers: [],
-        warnings: [],
-      };
-    }
-    if (explorerRes.ok) {
-      state.evalExplorer = await explorerRes.json();
-    } else {
-      state.evalExplorer = null;
-    }
-  } catch (err) {
-    state.trust = null;
-    state.sources = null;
-    state.releaseCompare = {
-      error: err.message,
-      recommendation: "INSUFFICIENT_COVERAGE",
-      explanation: "Trust or release API unavailable.",
-      metrics: [],
-      cases: { improved: 0, unchanged: 0, regressed: 0, rows: [] },
-      blockers: [],
-      warnings: [],
-    };
-    state.evalExplorer = null;
-    if ($("trust-head")) {
-      $("trust-head").innerHTML = `<h1>Can I trust this?</h1><p class="trust-head-lede">${escapeHtml(err.message)}</p>`;
-    }
-  } finally {
-    state.trustLoading = false;
-    await loadArchiveCatalog();
-    renderTrust();
-    if (state.view === "home") renderHomeProof();
-  }
-}
 
-async function syncSource(connectorId) {
-  if (state.sourcesSyncing) return;
-  state.sourcesSyncing = connectorId;
-  state.maintStatus = {
-    tone: "loading",
-    message: "Refreshing dataset catalog…",
-  };
-  renderTrust();
-  try {
-    const res = await fetch(apiUrl(`/sources/${encodeURIComponent(connectorId)}/sync`), { method: "POST" });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || `sync ${res.status}`);
-    }
-    const data = await res.json();
-    if (!state.sources) state.sources = { connectors: [], activity: [] };
-    state.sources.activity = data.activity || state.sources.activity || [];
-    state.sources.connectors = (state.sources.connectors || []).map((c) =>
-      c.id === data.connector?.id ? data.connector : c
-    );
-    if (data.connector && !(state.sources.connectors || []).some((c) => c.id === data.connector.id)) {
-      state.sources.connectors = [...(state.sources.connectors || []), data.connector];
-    }
-    state.maintStatus = {
-      tone: "ok",
-      message: "Dataset catalog refreshed. Saved snapshots and cases were not changed.",
-    };
-    await loadTrust();
-    await loadBootstrapLists();
-    if (connectorId === "telemetry") await loadArchiveCatalog();
-  } catch (err) {
-    state.maintStatus = {
-      tone: "bad",
-      message: err.message || "Could not update source",
-    };
-    window.alert(err.message || "Could not update source");
-    renderTrust();
-  } finally {
-    state.sourcesSyncing = null;
-    renderTrust();
-  }
-}
 
 async function loadArchiveCatalog() {
   try {
@@ -1884,21 +1158,6 @@ async function loadBootstrapLists() {
   }
 }
 
-function formatSyncAt(iso) {
-  if (!iso) return "Never";
-  try {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString(undefined, {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch (err) {
-    return iso;
-  }
-}
 
 function formatMissionSpan(start, end) {
   if (!start && !end) return "—";
@@ -1906,1014 +1165,43 @@ function formatMissionSpan(start, end) {
   return `${start || end} UTC`;
 }
 
-function incidentsForRun(runId) {
-  return (state.incidents || []).filter((item) => item.run_id === runId);
-}
-
-function ingestedRunIds() {
-  const fromTrust = (state.trust?.runs || [])
-    .map((run) => String(run.id))
-    .filter((id) => !id.startsWith("sealed_"));
-  const fromRuns = (state.runs || []).map((run) => String(run.id)).filter((id) => !id.startsWith("sealed_"));
-  return new Set([...fromTrust, ...fromRuns]);
-}
-
-function explorerDatasets() {
-  return sortTapes(archiveRunsOnly());
-}
-
-function explorerSnapshots() {
-  const sealed = (state.trust?.runs || []).filter((run) => String(run.id).startsWith("sealed_"));
-  return [...sealed].sort((a, b) => String(a.id).localeCompare(String(b.id)));
-}
-
-function explorerCounts() {
-  return {
-    datasets: explorerDatasets().length,
-    snapshots: explorerSnapshots().length,
-  };
-}
-
-function rememberExplorerListScroll() {
-  const list = $("source-explorer-list");
-  if (list) state.sourceExplorer.listScroll = list.scrollTop;
-}
-
-function restoreExplorerListScroll() {
-  const list = $("source-explorer-list");
-  if (list) list.scrollTop = state.sourceExplorer.listScroll || 0;
-}
-
-function setExplorerCategory(category) {
-  if (state.sourceExplorer.category === category) return;
-  rememberExplorerListScroll();
-  state.sourceExplorer.category = category;
-  state.sourceExplorer.selectedId = null;
-  state.sourceExplorer.detailOpen = false;
-  state.sourceExplorer.listScroll = 0;
-  renderSourceExplorer();
-}
-
-function selectExplorerRecord(id, { openDetail = true } = {}) {
-  rememberExplorerListScroll();
-  state.sourceExplorer.selectedId = id;
-  state.sourceExplorer.detailOpen = Boolean(openDetail);
-  renderSourceExplorer();
-}
-
-function closeExplorerDetail() {
-  state.sourceExplorer.detailOpen = false;
-  renderSourceExplorer();
-}
-
-function openSlipFromDataset(runId) {
-  const bound = (state.alarms || []).find((alarm) => alarm.bind?.run_id === runId);
-  openSlip();
-  if (bound) setPick("alarm", bound.id);
-  setPick("run", runId);
-  syncSuggestedTitle();
-}
-
-function openInspectorForSnapshot(run) {
-  const defaults = defaultInspectForRun(sourceRunId(run.id, run.notes));
-  openInspector({
-    runId: run.id,
-    channel: defaults.channel,
-    alarm: defaults.alarm,
-    window: "full",
-    savedClockStart: run.clock_start || null,
-    savedClockEnd: run.clock_end || null,
-    savedChannelValues: run.samples ?? null,
-  });
-}
-
-function renderMaintenance() {
-  const actions = $("source-maint-actions");
-  const status = $("source-maint-status");
-  const activityRoot = $("source-maint-activity");
-  const activityList = $("source-maint-activity-list");
-  if (!actions) return;
-
-  const connectors = state.sources?.connectors || [];
-  const byId = Object.fromEntries(connectors.map((c) => [c.id, c]));
-  const telemetry = byId.telemetry;
-  const syncing = state.sourcesSyncing;
-  const telemetryBusy = syncing === "telemetry";
-  const anyBusy = Boolean(syncing);
-
-  const telemetryLabel = telemetryBusy
-    ? "Refreshing…"
-    : "Refresh dataset catalog";
-
-  actions.innerHTML = `
-    <div class="source-maint-item">
-      <button type="button" class="text-btn" data-source-sync="telemetry" ${anyBusy || !telemetry ? "disabled" : ""}>${escapeHtml(telemetryLabel)}</button>
-      <p>Re-checks which upstream telemetry datasets are available for opening cases. Does not replace saved snapshots or change existing cases or reports.</p>
-      ${telemetry?.stats?.label ? `<p class="source-maint-meta">${escapeHtml(telemetry.stats.label)}${telemetry.last_sync_at ? ` · last ${escapeHtml(formatSyncAt(telemetry.last_sync_at))}` : ""}</p>` : ""}
-    </div>`;
-
-  if (status) {
-    if (state.maintStatus?.message) {
-      status.hidden = false;
-      status.className = `source-maint-status is-${state.maintStatus.tone || "ok"}`;
-      status.textContent = state.maintStatus.message;
-    } else {
-      status.hidden = true;
-      status.textContent = "";
-    }
-  }
-
-  const activity = state.sources?.activity || [];
-  if (activityRoot && activityList) {
-    activityRoot.hidden = activity.length === 0;
-    activityList.innerHTML = activity
-      .slice(0, 6)
-      .map(
-        (ev) => `<li><span class="when">${escapeHtml(formatSyncAt(ev.at))}</span>
-          <span class="conn">${escapeHtml(ev.connector === "telemetry" ? "datasets" : ev.connector || "")}</span>
-          <span class="msg">${escapeHtml(ev.message || "")}</span></li>`
-      )
-      .join("");
-  }
-}
-
-function renderExplorerDatasetDetail(run) {
-  const copy = tapeCopy(run);
-  const ingested = ingestedRunIds().has(run.id);
-  const span = formatMissionSpan(run.clock_start, run.clock_end);
-  const steps = run.samples != null ? `${Number(run.samples).toLocaleString()} time steps` : "—";
-  const simNote = run.notes || copy.note || "";
-  return `
-    <div class="source-detail-head">
-      <p class="source-detail-kicker">Dataset</p>
-      <h3>${escapeHtml(copy.title)}</h3>
-      <p class="source-detail-id"><code>${escapeHtml(run.id)}</code></p>
-    </div>
-    <dl class="source-detail-facts">
-      <div><dt>Available range</dt><dd>${escapeHtml(span)}</dd></div>
-      <div><dt>Recorded samples</dt><dd>${escapeHtml(steps)} <span class="source-detail-hint">CSV time steps in the upstream tape</span></dd></div>
-      <div><dt>Origin</dt><dd>Mission archive (upstream)</dd></div>
-    </dl>
-    ${
-      simNote
-        ? `<details class="source-sim-notes"><summary>Simulation notes</summary><p>${escapeHtml(simNote)}</p><p class="source-detail-hint">Authored scenario context — not an investigation finding.</p></details>`
-        : ""
-    }
-    <div class="source-detail-actions">
-      <button type="button" class="btn" data-explorer-open-case="${escapeHtml(run.id)}">Open case from dataset</button>
-      ${
-        ingested
-          ? `<button type="button" class="text-btn" data-explorer-inspect-dataset="${escapeHtml(run.id)}">Inspect dataset</button>`
-          : `<p class="source-detail-hint">Raw source browsing creates no case. Use Open case from dataset to start the existing create flow.</p>`
-      }
-    </div>`;
-}
-
-function renderExplorerSnapshotDetail(run) {
-  const copy = tapeCopy(run);
-  const span = formatMissionSpan(run.clock_start, run.clock_end);
-  const linked = incidentsForRun(run.id);
-  const values =
-    run.samples != null
-      ? `${Number(run.samples).toLocaleString()} time steps`
-      : "—";
-  const linkedHtml = linked.length
-    ? `<ul class="source-linked-cases">${linked
-        .map(
-          (inc) => `<li><button type="button" class="text-btn" data-explorer-open-incident="${escapeHtml(inc.id)}">Open linked case ${escapeHtml(inc.id)}</button></li>`
-        )
-        .join("")}</ul>`
-    : `<p class="source-detail-hint">No linked case recorded</p>`;
-  return `
-    <div class="source-detail-head">
-      <p class="source-detail-kicker">Saved snapshot</p>
-      <h3>${escapeHtml(copy.title)}</h3>
-      <p class="source-detail-id"><code>${escapeHtml(run.id)}</code></p>
-    </div>
-    <dl class="source-detail-facts">
-      <div><dt>Saved window</dt><dd>${escapeHtml(span)}</dd></div>
-      <div><dt>Stored window</dt><dd>${escapeHtml(values)} <span class="source-detail-hint">time steps in the sealed file</span></dd></div>
-      <div><dt>Source dataset</dt><dd><code>${escapeHtml(sourceRunId(run.id, run.notes) || "—")}</code></dd></div>
-      <div><dt>Linked incident</dt><dd>${linked.length ? escapeHtml(linked.map((i) => i.id).join(", ")) : "None recorded"}</dd></div>
-    </dl>
-    <div class="source-detail-actions">
-      <button type="button" class="btn" data-explorer-inspect-snapshot="${escapeHtml(run.id)}">Inspect samples</button>
-      ${linkedHtml}
-    </div>`;
-}
-
-function renderSourceExplorer() {
-  const root = $("source-explorer");
-  if (!root) return;
-
-  if (state.trustLoading && !state.trust) {
-    root.innerHTML = `<p class="trust-empty">Loading sources…</p>`;
-    renderMaintenance();
-    return;
-  }
-  if (!state.trust && !state.archiveCatalog?.length) {
-    root.innerHTML = `<p class="trust-empty">Sources unavailable. Is the API running?</p>`;
-    renderMaintenance();
-    return;
-  }
-
-  const counts = explorerCounts();
-  const category = state.sourceExplorer.category === "snapshots" ? "snapshots" : "datasets";
-  const selectedId = state.sourceExplorer.selectedId;
-  const detailOpen = state.sourceExplorer.detailOpen;
-
-  let records = [];
-  let intro = "";
-  if (category === "datasets") {
-    records = explorerDatasets();
-    intro = "Source telemetry available for creating an investigation.";
-  } else {
-    records = explorerSnapshots();
-    intro = "Saved telemetry windows available for investigation and review.";
-  }
-
-  const selected = records.find((run) => run.id === selectedId) || null;
-
-  const tabs = `
-    <div class="source-cats" role="tablist" aria-label="Source categories">
-      <button type="button" role="tab" id="source-cat-datasets" aria-selected="${category === "datasets"}" class="source-cat ${category === "datasets" ? "is-on" : ""}" data-explorer-cat="datasets">Datasets <span class="source-cat-count">${counts.datasets}</span></button>
-      <button type="button" role="tab" id="source-cat-snapshots" aria-selected="${category === "snapshots"}" class="source-cat ${category === "snapshots" ? "is-on" : ""}" data-explorer-cat="snapshots">Saved snapshots <span class="source-cat-count">${counts.snapshots}</span></button>
-    </div>`;
-
-  let listHtml = "";
-  if (!records.length) {
-    listHtml =
-      category === "datasets"
-        ? `<p class="trust-empty">No datasets in the catalog yet. Refresh the dataset catalog under Data maintenance.</p>`
-        : `<p class="trust-empty">No saved snapshots yet. Opening a case saves a telemetry window here.</p>`;
-  } else if (category === "datasets") {
-    listHtml = `<div class="source-list-head source-list-head-datasets" aria-hidden="true"><span>Name</span><span>Range</span><span>Time steps</span></div>
-      ${records
-        .map((run) => {
-          const copy = tapeCopy(run);
-          const on = run.id === selectedId ? "is-on" : "";
-          return `<button type="button" class="source-row source-row-dataset ${on}" data-explorer-select="${escapeHtml(run.id)}" aria-pressed="${run.id === selectedId}">
-            <span class="source-row-main">
-              <strong>${escapeHtml(copy.title)}</strong>
-              <code class="source-row-id">${escapeHtml(run.id)}</code>
-            </span>
-            <span class="source-row-meta">${escapeHtml(formatMissionSpan(run.clock_start, run.clock_end))}</span>
-            <span class="source-row-count">${run.samples != null ? Number(run.samples).toLocaleString() : "—"}</span>
-          </button>`;
-        })
-        .join("")}`;
-  } else if (category === "snapshots") {
-    listHtml = `<div class="source-list-head source-list-head-snapshots" aria-hidden="true"><span>Source</span><span>Saved window</span><span>Time steps</span></div>
-      ${records
-        .map((run) => {
-          const copy = tapeCopy(run);
-          const on = run.id === selectedId ? "is-on" : "";
-          const linked = incidentsForRun(run.id);
-          return `<button type="button" class="source-row source-row-snapshot ${on}" data-explorer-select="${escapeHtml(run.id)}" aria-pressed="${run.id === selectedId}">
-            <span class="source-row-main">
-              <strong>${escapeHtml(copy.title)}</strong>
-              <code class="source-row-id">${escapeHtml(run.id)}</code>
-              ${linked.length ? `<span class="source-row-link">${escapeHtml(linked.map((i) => i.id).join(", "))}</span>` : `<span class="source-row-link is-muted">No linked case recorded</span>`}
-            </span>
-            <span class="source-row-meta">${escapeHtml(formatMissionSpan(run.clock_start, run.clock_end))}</span>
-            <span class="source-row-count" title="Time steps in the sealed window">${run.samples != null ? Number(run.samples).toLocaleString() : "—"}</span>
-          </button>`;
-        })
-        .join("")}`;
-  }
-
-  let detailHtml = "";
-  if (!selected) {
-    detailHtml = `<div class="source-detail-empty"><p>Select a source to inspect its contents and metadata.</p></div>`;
-  } else if (category === "datasets") {
-    detailHtml = renderExplorerDatasetDetail(selected);
-  } else {
-    detailHtml = renderExplorerSnapshotDetail(selected);
-  }
-
-  root.innerHTML = `
-    ${tabs}
-    <p class="source-intro">${escapeHtml(intro)}</p>
-    <div class="source-browser ${detailOpen && selected ? "is-detail-open" : ""}">
-      <div class="source-list" id="source-explorer-list" role="listbox" aria-label="${escapeHtml(category)}">${listHtml}</div>
-      <aside class="source-detail ${category === "snapshots" ? "is-snap" : "is-data"}" id="source-explorer-detail" aria-live="polite">
-        <button type="button" class="source-detail-back text-btn" data-explorer-detail-back ${detailOpen && selected ? "" : "hidden"}>Back to list</button>
-        ${detailHtml}
-      </aside>
-    </div>`;
-
-  restoreExplorerListScroll();
-  renderMaintenance();
-}
-
-function renderConnectors() {
-  renderSourceExplorer();
-}
-
-function releaseVerdictTone(rec) {
-  if (rec === "PASS") return "pass";
-  if (rec === "BLOCKED") return "blocked";
-  return "insufficient";
-}
-
-const EVAL_METRIC_COPY = {
-  diagnosis: {
-    title: "Names the fault",
-    gloss: "When something broke, the report said what.",
-  },
-  withhold: {
-    title: "Holds when unsure",
-    gloss: "Thin evidence. It does not invent a cause.",
-  },
-  false_inhibit: {
-    title: "Leaves a healthy heater",
-    gloss: "Never recommends shutting one down that isn’t the fault.",
-  },
-  provenance: {
-    title: "Stamps every claim",
-    gloss: "Observed, derived, documented, hypothesis — on the sentence.",
-  },
-};
-
-const EVAL_CASE_COPY = {
-  eps204: {
-    n: "01",
-    title: "Science was on. The heater still failed.",
-    note: "Don’t blame the payload.",
-  },
-  fault1: {
-    n: "02",
-    title: "Payload was idle. The heater still failed.",
-    note: "The heater is the load.",
-  },
-  pay002: {
-    n: "03",
-    title: "Heater was already off. The payload failed.",
-    note: "Don’t shut a heater that isn’t running.",
-  },
-  batt003: {
-    n: "04",
-    title: "Currents were healthy. The pack sagged.",
-    note: "Leave the heater alone.",
-  },
-  marg001: {
-    n: "05",
-    title: "It looked like a heater. The report held.",
-    note: "Thin evidence. Don’t invent a cause.",
-  },
-};
-
-const EVAL_CHECK_COPY = {
-  tagged_claims: { title: "Stamps every claim", gloss: "Observed, derived, documented, hypothesis." },
-  provenance_roles: { title: "Facts stay facts", gloss: "Timeline is observed. The cause is a hypothesis." },
-  cites_heater_current: { title: "Cites the heater", gloss: "Current at the warn is in the report." },
-  heater_is_suspect: { title: "Names the heater", gloss: "The heater is the suspect." },
-  recommends_inhibit_heater: { title: "Says inhibit the heater", gloss: "Recommend it. Do not send it." },
-  does_not_close_on_payload: { title: "Doesn’t blame the payload", gloss: "Science mode is not the cause." },
-  cites_payload_current: { title: "Cites the payload", gloss: "Current at the warn is in the report." },
-  payload_is_suspect: { title: "Names the payload", gloss: "The payload is the suspect." },
-  recommends_safe_payload: { title: "Says safe the payload", gloss: "Recommend it. Do not send it." },
-  cites_battery_voltage: { title: "Cites the pack", gloss: "Voltage at the warn is in the report." },
-  does_not_safe_payload: { title: "Leaves the payload alone", gloss: "Does not recommend safing it." },
-  does_not_inhibit_heater: { title: "Leaves the heater alone", gloss: "Does not recommend shutting it down." },
-  stops_without_commanding: { title: "Stops at a human", gloss: "No uplink language." },
-  cites_procedure: { title: "Cites the procedure", gloss: "The book is in the report." },
-  cites_similar_incident: { title: "Cites a prior", gloss: "A similar close is in the report." },
-  cites_warn_clock: { title: "Cites the warn time", gloss: "The crossing clock is in the report." },
-  no_hypothesis_section: { title: "No invented cause", gloss: "Does not write a hypothesis close." },
-  no_root_cause_asserted: { title: "Does not name a fault", gloss: "No FAULT id as confirmed cause." },
-  no_prime_suspect: { title: "Does not pick a culprit", gloss: "Evidence is too thin to name one." },
-  cites_marginal_ratio: { title: "Cites the thin ratio", gloss: "Heater current is below the inhibit bar." },
-  states_threshold: { title: "States the threshold", gloss: "Names the ≥2× overcurrent bar." },
-  names_confounder: { title: "Names the decoy", gloss: "Science mode is named, not treated as proof." },
-  rules_out_similar: { title: "Rules out the prior", gloss: "The similar close is a non-match." },
-  lists_next_checks: { title: "Lists what to check next", gloss: "Follow-ups instead of a forced close." },
-  recommends_hold: { title: "Recommends hold", gloss: "No inhibit. No safing. No FAULT id." },
-};
-
-function evalCheckCopy(id, fallback) {
-  return EVAL_CHECK_COPY[id] || { title: fallback || id, gloss: "" };
-}
-
-function evalMetricCopy(id, fallback) {
-  return EVAL_METRIC_COPY[id] || { title: fallback || id, gloss: "" };
-}
-
-function evalCaseCopy(id, fallbackLabel) {
-  return EVAL_CASE_COPY[id] || { title: fallbackLabel || id, note: id };
-}
-
-function metricShortLabel(id, fallback) {
-  return evalMetricCopy(id, fallback).title;
-}
-
-function buildScorecardHtml(trust, cmp, explorer, loading) {
-  const sc = trust?.eval?.scorecard;
-  const cmpData = cmp || {};
-  const ex = explorer || {};
-  const rec = cmpData.recommendation ?? ex.recommendation;
-  const hasBaseline = Boolean(cmpData.baseline?.baseline_id || cmpData.baseline?.run_id);
-  const hasCompare = Boolean(rec);
-  const releaseTone = rec ? releaseVerdictTone(rec) : null;
-  const baselineRunId = cmpData.baseline?.run_id;
-  const candidateRunId = cmpData.candidate?.run_id || ex.run?.run_id;
-  const isBenchmark = Boolean(
-    hasBaseline && baselineRunId && candidateRunId && baselineRunId === candidateRunId
-  );
-
-  let verdictLabel = "—";
-  let headline = "No benchmark yet";
-  if (loading && !sc) {
-    verdictLabel = "…";
-    headline = "Reading the eval";
-  } else if (rec === "BLOCKED" || (sc && !sc.ok && rec !== "PASS")) {
-    verdictLabel = "Blocked";
-    headline = "Fails the benchmark";
-  } else if (rec === "INSUFFICIENT_COVERAGE" || (!hasBaseline && !rec && !sc?.ok)) {
-    verdictLabel = "No benchmark";
-    headline = "No benchmark yet";
-  } else if (isBenchmark) {
-    verdictLabel = "Benchmark";
-    headline = "This run is the benchmark";
-  } else if (rec === "PASS" || sc?.ok) {
-    verdictLabel = "Pass";
-    headline = "Clears the benchmark";
-  }
-  const verdictTone =
-    rec === "BLOCKED" || (sc && !sc.ok) ? "blocked" : rec === "INSUFFICIENT_COVERAGE" || (!hasBaseline && !rec) ? "pending" : "pass";
-  const lede = isBenchmark
-    ? "Later evals have to match this. Name the fault, hold when unsure, leave a healthy heater, stamp every claim."
-    : hasBaseline
-      ? "This run against the benchmark. Name the fault, hold when unsure, leave a healthy heater, stamp every claim."
-      : "Five scenarios. Pass them, then make this the benchmark.";
-
-  if (loading && !sc) {
-    return `<article class="panel trust-eval is-loading" id="trust-scorecard">
-      <div class="eval-mast">
-        <div class="eval-mast-row">
-          <p class="panel-kicker">Eval</p>
-          <span class="chip chip-ready">${escapeHtml(verdictLabel)}</span>
-        </div>
-        <h2>${headline}</h2>
-        <p class="hint">Loading the suite…</p>
-      </div>
-    </article>`;
-  }
-
-  const scoreRates = sc
-    ? [sc.diagnosis, sc.withhold, sc.false_inhibit, sc.provenance].filter(Boolean)
-    : [];
-  const cmpMetrics = cmpData.metrics || [];
-  const metricById = Object.fromEntries(cmpMetrics.map((m) => [m.id, m]));
-  const rateSource = scoreRates.length
-    ? scoreRates.map((r) => {
-        const cm = metricById[r.id];
-        return {
-          id: r.id,
-          label: r.label,
-          display: r.display || `${r.passed}/${r.total}`,
-          ok: r.passed === r.total,
-          delta: cm?.delta,
-          baseline: cm && cm.baseline_passed != null ? `${cm.baseline_passed}/${cm.baseline_total}` : null,
-        };
-      })
-    : cmpMetrics.map((m) => ({
-        id: m.id,
-        label: m.label,
-        display: `${m.candidate_passed}/${m.candidate_total}`,
-        ok: m.candidate_passed === m.candidate_total,
-        delta: m.delta,
-        baseline: m.baseline_passed != null ? `${m.baseline_passed}/${m.baseline_total}` : null,
-      }));
-
-  const metricHtml = rateSource.length
-    ? `<div class="eval-rates">${rateSource
-        .map((r) => {
-          const copy = evalMetricCopy(r.id, r.label);
-          const tone = r.delta < 0 ? "is-regressed" : r.delta > 0 ? "is-improved" : r.ok ? "is-ok" : "is-fail";
-          const ref =
-            r.baseline && r.delta
-              ? `<span class="eval-rate-ref">${r.delta > 0 ? "Up" : "Down"} from ${escapeHtml(r.baseline)} on the benchmark</span>`
-              : "";
-          return `<div class="eval-rate ${tone}">
-            <p class="eval-rate-n">${escapeHtml(r.display)}</p>
-            <p class="eval-rate-title">${escapeHtml(copy.title)}</p>
-            <p class="eval-rate-gloss">${escapeHtml(copy.gloss)}</p>
-            ${ref}
-          </div>`;
-        })
-        .join("")}</div>`
-    : "";
-
-  const compareLane =
-    !hasBaseline && hasCompare && rec === "INSUFFICIENT_COVERAGE"
-      ? `<p class="hint eval-baseline-note">No benchmark yet. Pass the suite, then make this the benchmark.</p>`
-      : loading && !hasBaseline
-        ? `<p class="hint eval-baseline-note">Checking for a benchmark…</p>`
-        : "";
-
-  const explorerCases = ex.cases?.length ? ex.cases : null;
-  const cmpCaseRows = cmpData.cases?.rows?.length ? cmpData.cases.rows : null;
-  const scCaseRows = sc?.cases?.length ? sc.cases : null;
-
-  const caseRows = explorerCases
-    ? explorerCases.map((row) => ({
-        id: row.id,
-        label: row.label,
-        candidate_ok: row.ok,
-        passed: row.passed,
-        total: row.total,
-        critical_failure: row.critical_failure,
-      }))
-    : cmpCaseRows
-      ? cmpCaseRows
-      : (scCaseRows || []).map((row) => ({
-          id: row.id,
-          label: row.label,
-          candidate_ok: row.ok,
-          passed: row.passed,
-          total: row.total,
-          critical_failure: false,
-        }));
-
-  const caseTable =
-    caseRows.length > 0
-      ? `<div class="eval-flights">
-          ${caseRows
-            .map((row, i) => {
-              const mark = row.candidate_ok ? "pass" : "fail";
-              const copy = evalCaseCopy(row.id, row.label);
-              const n = copy.n || String(i + 1).padStart(2, "0");
-              const critical = row.critical_failure ? `<span class="eval-flight-crit">Critical</span>` : "";
-              return `<button type="button" class="eval-flight is-${mark}" data-release-case="${escapeHtml(row.id)}">
-                <span class="eval-flight-n">${escapeHtml(n)}</span>
-                <span class="eval-flight-copy">
-                  <strong>${escapeHtml(copy.title)}</strong>
-                  <span>${escapeHtml(copy.note)}</span>
-                </span>
-                ${critical}
-                <span class="chip ${mark === "pass" ? "chip-filed" : "chip-crit"}">${mark === "pass" ? "Pass" : "Fail"}</span>
-              </button>`;
-            })
-            .join("")}
-        </div>`
-      : "";
-
-  const blockers = cmpData.blockers || [];
-  const warnings = cmpData.warnings || [];
-  const coverage = cmpData.coverage_issues || [];
-  let calloutHtml = "";
-  if (cmpData.error) {
-    calloutHtml = `<div class="eval-callout is-error"><strong>Comparison unavailable</strong><p>${escapeHtml(cmpData.error)}</p></div>`;
-  } else if (rec === "BLOCKED" && blockers.length) {
-    calloutHtml = `<div class="eval-callout is-blocked"><strong>A safety check failed</strong><ul>${blockers
-      .map((b) => {
-        const flight = evalCaseCopy(b.case_id, b.case_id);
-        return `<li>${escapeHtml(flight.title)} — ${escapeHtml(b.detail || b.check_id || "")}</li>`;
-      })
-      .join("")}</ul></div>`;
-  } else if (rec === "INSUFFICIENT_COVERAGE" && coverage.length) {
-    calloutHtml = `<div class="eval-callout is-insufficient"><strong>The suite is too thin</strong><ul>${coverage
-      .map((issue) => `<li>${escapeHtml(issue)}</li>`)
-      .join("")}</ul></div>`;
-  } else if (warnings.length) {
-    calloutHtml = `<div class="eval-callout is-warn"><strong>Warnings</strong><ul>${warnings
-      .map((w) => `<li>${escapeHtml(w.message || "")}</li>`)
-      .join("")}</ul></div>`;
-  }
-
-  const thisRunLine = ex.run
-    ? `${ex.run.provider || sc?.provider || "rules"} · ${formatSyncAt(ex.run.generated_at || sc?.generated_at)}`
-    : sc
-      ? `${sc.provider || "rules"} · ${formatSyncAt(sc.generated_at)}`
-      : loading
-        ? "Loading…"
-        : "—";
-  const benchmarkLine = hasBaseline
-    ? isBenchmark
-      ? "This run"
-      : `${cmpData.baseline?.agent?.provider || "rules"} · ${formatSyncAt(cmpData.baseline?.approved_at || cmpData.baseline?.generated_at)}`
-    : "None yet";
-
-  const canPromote = rec === "PASS" && !isBenchmark;
-  const benchAct = canPromote
-    ? `<button type="button" class="btn-bar" data-promote-baseline>Make this the benchmark</button>`
-    : isBenchmark
-      ? `<span class="eval-bench-now">Current benchmark</span>`
-      : rec === "PASS" && !hasBaseline
-        ? `<button type="button" class="btn-bar" data-promote-baseline>Make this the benchmark</button>`
-        : "";
-
-  const foot = `<div class="eval-bench">
-    <div class="eval-bench-side">
-      <span class="k">This run</span>
-      <span class="v">${escapeHtml(thisRunLine)}</span>
-    </div>
-    <span class="eval-bench-vs">vs</span>
-    <div class="eval-bench-side${isBenchmark ? " is-current" : ""}">
-      <span class="k">Benchmark</span>
-      <span class="v">${escapeHtml(benchmarkLine)}</span>
-    </div>
-    ${benchAct ? `<div class="eval-bench-act">${benchAct}</div>` : ""}
-  </div>`;
-
-  const scoreBody = sc || rateSource.length
-    ? `${metricHtml}
-      ${calloutHtml}
-      ${compareLane}
-      ${caseTable}
-      ${foot}`
-    : `${compareLane}
-      ${calloutHtml}
-      <p class="hint">No harness results yet.</p>`;
-
-  const releaseClass = releaseTone ? ` release-${releaseTone}` : "";
-  const chipCls = verdictTone === "pass" ? "chip-filed" : verdictTone === "blocked" ? "chip-crit" : "chip-ready";
-  return `<article class="panel trust-eval ${releaseClass}" id="trust-scorecard">
-    <div class="eval-mast">
-      <div class="eval-mast-row">
-        <p class="panel-kicker">Eval</p>
-        <span class="chip ${chipCls}">${escapeHtml(verdictLabel)}</span>
-      </div>
-      <h2>${headline}</h2>
-      <p class="hint">${lede}</p>
-    </div>
-    ${scoreBody}
-  </article>`;
-}
-
-function renderTrust() {
-  if (state.trustSub === "releaseCase") {
-    _syncTrustPanels();
-    return;
-  }
-
-  const t = state.trust;
-  const head = $("trust-head");
-  if (!head) return;
-
-  if (state.trustLoading && !t) {
-    head.innerHTML = `<p class="trust-kicker"><span class="live-dot" aria-hidden="true"></span>Aurora-1 · trust</p><h1>Can I trust this?</h1><p class="trust-head-lede">Checking sources…</p>`;
-    const slot = $("trust-scorecard-slot");
-    if (slot) {
-      slot.innerHTML = buildScorecardHtml(null, state.releaseCompare, state.evalExplorer, true);
-    }
-    renderSourceExplorer();
-    _syncTrustPanels();
-    return;
-  }
-  if (!t) {
-    head.innerHTML = `<p class="trust-kicker"><span class="live-dot" aria-hidden="true"></span>Aurora-1 · trust</p><h1>Can I trust this?</h1><p class="trust-head-lede">Could not load store status. Is Postgres running?</p>`;
-    const slot = $("trust-scorecard-slot");
-    if (slot) slot.innerHTML = buildScorecardHtml(null, state.releaseCompare, state.evalExplorer, false);
-    renderSourceExplorer();
-    _syncTrustPanels();
-    return;
-  }
-
-  const storeTone = trustTone(t.store?.linked);
-  const archiveLabel = t.store?.linked ? "Archive linked" : "Archive unlinked";
-  const investigatorLabel = `Investigator: ${t.investigator?.provider_ui || "rules"}`;
-
-  head.innerHTML = `
-    <p class="trust-kicker"><span class="live-dot" aria-hidden="true"></span>Aurora-1 · trust</p>
-    <h1>Can I trust this?</h1>
-    <p class="trust-head-lede">Every recommendation is built from a sealed telemetry window, with each claim tagged by source and a human making the final call. ORBIT never sends commands.</p>
-    <div class="trust-summary">
-      <span class="trust-pill is-${storeTone}"><span class="dot"></span>${escapeHtml(archiveLabel)}</span>
-      <span class="trust-pill is-ok"><span class="dot"></span>${escapeHtml(investigatorLabel)}</span>
-      <span class="trust-pill is-ok"><span class="dot"></span>${escapeHtml(t.mission || "Aurora-1")}</span>
-    </div>`;
-
-  const slot = $("trust-scorecard-slot");
-  if (slot) {
-    slot.innerHTML = buildScorecardHtml(t, state.releaseCompare, state.evalExplorer, false);
-  }
-
-  renderSourceExplorer();
-  _syncTrustPanels();
-}
-
-function _syncTrustPanels() {
-  const releaseCase = state.trustSub === "releaseCase";
-  const overview = state.trustSub === "overview";
-  $("trust-score-panel")?.toggleAttribute("hidden", !overview);
-  $("trust-release-case-panel")?.toggleAttribute("hidden", !releaseCase);
-  $("trust-head")?.toggleAttribute("hidden", releaseCase);
-  $("trust-sources-panel")?.toggleAttribute("hidden", !overview);
-}
-
-async function loadReleaseCase(caseId) {
-  state.releaseLoading = true;
-  state.releaseCaseId = caseId;
-  renderReleaseCase();
-  try {
-    const res = await fetch(apiUrl(`/eval/cases/${encodeURIComponent(caseId)}`));
-    if (!res.ok) throw new Error(`case ${res.status}`);
-    state.releaseCase = await res.json();
-  } catch (err) {
-    state.releaseCase = { error: err.message, id: caseId };
-  } finally {
-    state.releaseLoading = false;
-    renderReleaseCase();
-  }
-}
-
-function highlightProvenanceTags(text) {
-  const escaped = escapeHtml(text || "");
-  return escaped.replace(/\[(OBSERVED|DERIVED|DOCUMENTED|HYPOTHESIS)\]/gi, (_, tag) => {
-    const upper = tag.toUpperCase();
-    return `<span class="provenance-tag is-${upper}">[${upper}]</span>`;
-  });
-}
-
-function formatEvalInline(escaped) {
-  return escaped
-    .replace(
-      /\[(OBSERVED|DERIVED|DOCUMENTED|HYPOTHESIS)\]/gi,
-      (_, tag) => {
-        const upper = tag.toUpperCase();
-        return `<span class="provenance-tag is-${upper}">[${upper}]</span>`;
-      }
-    )
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
-}
-
-function formatEvalDocument(text) {
-  const raw = String(text || "")
-    .replace(/\r\n/g, "\n")
-    .trim();
-  if (!raw) return "";
-  const lines = escapeHtml(raw).split("\n");
-  const out = [];
-  let list = null;
-  const closeList = () => {
-    if (!list) return;
-    out.push(list === "ul" ? "</ul>" : "</ol>");
-    list = null;
-  };
-  const openList = (kind) => {
-    if (list === kind) return;
-    closeList();
-    out.push(kind === "ul" ? "<ul>" : "<ol>");
-    list = kind;
-  };
-
-  for (const line of lines) {
-    const heading = line.match(/^#{1,2}\s+(.+)$/);
-    const bullet = line.match(/^\s*[-*]\s+(.+)$/);
-    const numbered = line.match(/^\s*\d+\.\s+(.+)$/);
-    if (heading) {
-      closeList();
-      const level = line.startsWith("##") ? "h4" : "h3";
-      out.push(`<${level}>${formatEvalInline(heading[1])}</${level}>`);
-    } else if (bullet) {
-      openList("ul");
-      out.push(`<li>${formatEvalInline(bullet[1])}</li>`);
-    } else if (numbered) {
-      openList("ol");
-      out.push(`<li>${formatEvalInline(numbered[1])}</li>`);
-    } else if (!line.trim()) {
-      closeList();
-    } else {
-      closeList();
-      out.push(`<p>${formatEvalInline(line)}</p>`);
-    }
-  }
-  closeList();
-  return out.join("");
-}
-
-function buildEvalCheckStackHtml(checksEnriched) {
-  if (!checksEnriched?.length) return `<p class="eval-block-lede">No checks on this run.</p>`;
-  return `<div class="eval-flights">${checksEnriched
-    .map((c, i) => {
-      const mark = c.passed ? "pass" : "fail";
-      const copy = evalCheckCopy(c.id, c.label);
-      const n = String(i + 1).padStart(2, "0");
-      const critical = c.critical ? `<span class="eval-flight-crit">Critical</span>` : "";
-      const result = c.detail ? `<p>${escapeHtml(c.detail)}</p>` : "";
-      return `<details class="eval-flight is-${mark}${c.critical ? " is-critical" : ""}">
-        <summary>
-          <span class="eval-flight-n">${n}</span>
-          <span class="eval-flight-copy">
-            <strong>${escapeHtml(copy.title)}</strong>
-            <span>${escapeHtml(copy.gloss)}</span>
-          </span>
-          ${critical}
-          <span class="chip ${mark === "pass" ? "chip-filed" : "chip-crit"}">${mark === "pass" ? "Pass" : "Fail"}</span>
-        </summary>
-        ${result ? `<div class="eval-flight-body">${result}</div>` : ""}
-      </details>`;
-    })
-    .join("")}</div>`;
-}
-
-function buildEvalPageHtml(caseId, cand, data, loading) {
-  const contract = cand?.contract || {};
-  const copy = evalCaseCopy(caseId, contract.label || (loading ? "Loading" : "Eval"));
-  const observed = cand?.observed || {};
-  const ok = cand?.ok;
-  const hasCritical = (data?.critical_failures || []).length > 0;
-  const chipCls = loading ? "chip-ready" : ok === true ? "chip-filed" : ok === false ? "chip-crit" : "chip-ready";
-  const chipLabel = loading ? "…" : ok === true ? "Pass" : ok === false ? "Fail" : "—";
-  const releaseClass = ok === false || hasCritical ? "release-blocked" : ok === true ? "release-pass" : loading ? "release-insufficient" : "";
-  const kicker = copy.n ? `Eval · ${copy.n}` : "Eval";
-
-  const rates = loading
-    ? ""
-    : `<div class="eval-rates">
-        <div class="eval-rate">
-          <p class="eval-rate-n">${escapeHtml(observed.warn_clock || "—")}</p>
-          <p class="eval-rate-title">Warn</p>
-          <p class="eval-rate-gloss">First crossing on the sealed window.</p>
-        </div>
-        <div class="eval-rate">
-          <p class="eval-rate-n">${observed.heater_a != null ? escapeHtml(fmt(observed.heater_a, 2)) : "—"}</p>
-          <p class="eval-rate-title">Heater</p>
-          <p class="eval-rate-gloss">Amps at the warn.</p>
-        </div>
-        <div class="eval-rate">
-          <p class="eval-rate-n">${observed.payload_a != null ? escapeHtml(fmt(observed.payload_a, 2)) : "—"}</p>
-          <p class="eval-rate-title">Payload</p>
-          <p class="eval-rate-gloss">Amps at the warn.</p>
-        </div>
-        <div class="eval-rate">
-          <p class="eval-rate-n">${observed.has_science ? "On" : "Off"}</p>
-          <p class="eval-rate-title">Science</p>
-          <p class="eval-rate-gloss">Mode at the warn.</p>
-        </div>
-      </div>`;
-
-  if (loading) {
-    return `<p class="case-back"><button type="button" class="text-btn" data-trust-back>Eval</button></p>
-    <article class="panel trust-eval eval-page is-loading ${releaseClass}">
-      <div class="eval-mast">
-        <div class="eval-mast-row">
-          <p class="panel-kicker">${escapeHtml(kicker)}</p>
-          <span class="chip ${chipCls}">${chipLabel}</span>
-        </div>
-        <h1>${escapeHtml(copy.title)}</h1>
-        <p class="hint">Reading this scenario…</p>
-      </div>
-    </article>`;
-  }
-
-  if (data?.error) {
-    return `<p class="case-back"><button type="button" class="text-btn" data-trust-back>Eval</button></p>
-    <article class="panel trust-eval eval-page release-blocked">
-      <div class="eval-mast">
-        <div class="eval-mast-row">
-          <p class="panel-kicker">${escapeHtml(kicker)}</p>
-          <span class="chip chip-crit">Fail</span>
-        </div>
-        <h1>${escapeHtml(copy.title)}</h1>
-        <p class="hint">${escapeHtml(data.error)}</p>
-      </div>
-    </article>`;
-  }
-
-  const checks = data?.checks_enriched?.length ? data.checks_enriched : (cand?.checks || []).map((c) => ({ ...c, label: c.id }));
-  const passed = cand?.passed;
-  const total = cand?.total;
-  const checkCount =
-    passed != null && total != null
-      ? `<span class="eval-block-count">${escapeHtml(String(passed))}/${escapeHtml(String(total))}</span>`
-      : "";
-
-  const report = cand?.report
-    ? `<section class="eval-block">
-        <header class="eval-block-head">
-          <h2>The report</h2>
-        </header>
-        <div class="eval-doc">${formatEvalDocument(cand.report)}</div>
-      </section>`
-    : "";
-
-  const checksBlock = `<section class="eval-block">
-      <header class="eval-block-head">
-        <h2>Checks</h2>
-        ${checkCount}
-      </header>
-      ${buildEvalCheckStackHtml(checks)}
-    </section>`;
-
-  const hold = cand?.withhold_explanation
-    ? `<section class="eval-block">
-        <header class="eval-block-head">
-          <h2>Hold</h2>
-        </header>
-        <div class="eval-doc">${formatEvalDocument(cand.withhold_explanation)}</div>
-      </section>`
-    : "";
-
-  const comparison = data?.comparison;
-  const benchStatus = comparison
-    ? comparison.status === "unchanged"
-      ? "Unchanged"
-      : comparison.status === "regressed"
-        ? "Regressed"
-        : comparison.status === "improved"
-          ? "Improved"
-          : comparison.status || "—"
-    : data?.baseline_available
-      ? "—"
-      : "No benchmark";
-  const regress =
-    comparison?.check_regressions?.length
-      ? ` · ${comparison.check_regressions.length} check${comparison.check_regressions.length === 1 ? "" : "s"} down`
-      : "";
-  const foot = `<div class="eval-bench">
-      <div class="eval-bench-side">
-        <span class="k">This scenario</span>
-        <span class="v">${passed != null && total != null ? `${escapeHtml(String(passed))} / ${escapeHtml(String(total))} checks` : "—"}</span>
-      </div>
-      <span class="eval-bench-vs">vs</span>
-      <div class="eval-bench-side${comparison?.status === "unchanged" || ok ? " is-current" : ""}">
-        <span class="k">Benchmark</span>
-        <span class="v">${escapeHtml(benchStatus)}${escapeHtml(regress)}</span>
-      </div>
-    </div>`;
-
-  return `<p class="case-back"><button type="button" class="text-btn" data-trust-back>Eval</button></p>
-  <article class="panel trust-eval eval-page ${releaseClass}">
-    <div class="eval-mast">
-      <div class="eval-mast-row">
-        <p class="panel-kicker">${escapeHtml(kicker)}</p>
-        <span class="chip ${chipCls}">${chipLabel}</span>
-        ${hasCritical ? `<span class="chip chip-crit">Critical</span>` : ""}
-      </div>
-      <h1>${escapeHtml(copy.title)}</h1>
-      ${copy.note ? `<p class="hint">${escapeHtml(copy.note)}</p>` : ""}
-    </div>
-    ${rates}
-    ${report}
-    ${checksBlock}
-    ${hold}
-    ${foot}
-  </article>`;
-}
-
-function renderReleaseCase() {
-  const slot = $("trust-release-case-slot");
-  if (!slot) return;
-  _syncTrustPanels();
-
-  const caseId = state.releaseCaseId || "—";
-
-  if (state.releaseLoading) {
-    slot.innerHTML = buildEvalPageHtml(caseId, null, null, true);
-    return;
-  }
-
-  const data = state.releaseCase;
-  if (!data || data.error) {
-    slot.innerHTML = buildEvalPageHtml(caseId, null, data, false);
-    return;
-  }
-
-  slot.innerHTML = buildEvalPageHtml(caseId, data.candidate || {}, data, false);
-}
-
-function enterTrustOverview() {
-  state.trustSub = "overview";
-  state.releaseCaseId = null;
-  setView("trust");
-  if (!state.trust) loadTrust();
-  else renderTrust();
-  $("stage").scrollTop = 0;
-  syncUrl("trust");
-}
-
-function enterTrustReleaseCase(caseId) {
-  state.trustSub = "releaseCase";
-  state.releaseCaseId = caseId;
-  setView("trust");
-  _syncTrustPanels();
-  loadReleaseCase(caseId);
-  $("stage").scrollTop = 0;
-  syncUrl("trust");
-}
-
-async function promoteBaseline() {
-  if (!window.confirm("Make this run the benchmark? Later evals will be scored against it.")) return;
-  try {
-    const res = await fetch(apiUrl("/eval/baseline/promote"), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note: "promoted from Trust release view" }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `promote ${res.status}`);
-    }
-    await loadTrust();
-    window.alert("This run is now the benchmark.");
-  } catch (err) {
-    window.alert(err.message);
-  }
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 function defaultInspectForRun(runId) {
   if (runId === "pay002" || runId === "inc0191") {
@@ -3026,7 +1314,7 @@ function renderInspector() {
   }
   if (data?.error) {
     meta.textContent = data.error;
-    eventsRoot.innerHTML = `<p class="trust-empty">${escapeHtml(data.error)}</p>`;
+    eventsRoot.innerHTML = `<p class="inspector-empty">${escapeHtml(data.error)}</p>`;
     samplesRoot.innerHTML = "";
     return;
   }
@@ -3074,7 +1362,7 @@ function renderInspector() {
             </li>`
           )
           .join("")}</ul>`
-      : `<p class="trust-empty">No commands or mode changes in this window.</p>`;
+      : `<p class="inspector-empty">No commands or mode changes in this window.</p>`;
 
   const unit = inspectUnit(data);
   const crossT = data.crossing?.time_s;
@@ -3096,7 +1384,7 @@ function renderInspector() {
     .join("");
   samplesRoot.innerHTML = rows
     ? `<div class="inspector-cols"><span>Clock</span><span>Value</span><span>Ch</span></div>${rows}`
-    : `<p class="trust-empty">No samples in this window.</p>`;
+    : `<p class="inspector-empty">No samples in this window.</p>`;
 
   const samplesTitle = $("inspector-samples-title");
   if (samplesTitle) {
@@ -3117,10 +1405,8 @@ function setView(view) {
   document.body.classList.toggle("view-home", view === "home");
   document.body.classList.toggle("view-incidents", view === "incidents");
   document.body.classList.toggle("view-case", view === "case");
-  document.body.classList.toggle("view-trust", view === "trust");
   $("tab-home")?.classList.toggle("is-on", view === "home");
-  $("tab-incidents")?.classList.toggle("is-on", view === "incidents");
-  $("tab-trust")?.classList.toggle("is-on", view === "trust");
+  renderSideStages();
   renderSideRecent();
   const skip = $("skip");
   if (skip) {
@@ -3129,17 +1415,13 @@ function setView(view) {
         ? "#incidents-desk"
         : view === "case"
           ? "#stage"
-          : view === "trust"
-            ? "#trust-desk"
-            : "#home";
+          : "#home";
     skip.textContent =
       view === "incidents"
         ? "Skip to incidents"
         : view === "case"
           ? "Skip to case"
-          : view === "trust"
-            ? "Skip to trust"
-            : "Skip to overview";
+          : "Skip to overview";
   }
 }
 
@@ -3148,12 +1430,6 @@ let syncingFromHistory = false;
 
 function pathForView(view, incidentId = state.incidentId) {
   if (view === "incidents") return appPath("/incidents");
-  if (view === "trust") {
-    if (state.trustSub === "releaseCase" && state.releaseCaseId) {
-      return appPath(`/trust/cases/${encodeURIComponent(state.releaseCaseId)}`);
-    }
-    return appPath("/trust");
-  }
   if (view === "case" && incidentId) return appPath(`/incidents/${encodeURIComponent(incidentId)}`);
   return appPath();
 }
@@ -3165,7 +1441,7 @@ function syncUrl(view, { replace = false } = {}) {
   const same = location.pathname === path || location.pathname === `${path}/`;
   const method = replace || same ? "replaceState" : "pushState";
   history[method](
-    { view, incidentId, trustSub: state.trustSub, releaseCaseId: state.releaseCaseId },
+    { view, incidentId },
     "",
     path
   );
@@ -3183,25 +1459,12 @@ function parsePath(pathname) {
   if (caseMatch) {
     return { view: "case", incidentId: decodeURIComponent(caseMatch[1]) };
   }
-  if (path === "/incidents") return { view: "incidents", incidentId: null, trustSub: "overview", releaseCaseId: null };
-  const releaseCaseMatch = path.match(/^\/trust\/(?:release\/)?cases\/([^/]+)$/);
-  if (releaseCaseMatch) {
-    return {
-      view: "trust",
-      incidentId: null,
-      trustSub: "releaseCase",
-      releaseCaseId: decodeURIComponent(releaseCaseMatch[1]),
-    };
-  }
-  if (path === "/trust/release" || path === "/trust/release/") {
-    return { view: "trust", incidentId: null, trustSub: "overview", releaseCaseId: null };
-  }
-  if (path === "/trust") return { view: "trust", incidentId: null, trustSub: "overview", releaseCaseId: null };
-  return { view: "home", incidentId: null, trustSub: "overview", releaseCaseId: null };
+  if (path === "/incidents") return { view: "incidents", incidentId: null };
+  return { view: "home", incidentId: null };
 }
 
 async function routeFromPath(pathname, { replace = false } = {}) {
-  const { view, incidentId, trustSub, releaseCaseId } = parsePath(pathname);
+  const { view, incidentId } = parsePath(pathname);
   syncingFromHistory = true;
   try {
     if (view === "case" && incidentId) {
@@ -3212,12 +1475,6 @@ async function routeFromPath(pathname, { replace = false } = {}) {
       }
     } else if (view === "incidents") {
       enterIncidents();
-    } else if (view === "trust") {
-      if (trustSub === "releaseCase" && releaseCaseId) {
-        enterTrustReleaseCase(releaseCaseId);
-      } else {
-        enterTrustOverview();
-      }
     } else {
       enterHome();
     }
@@ -3226,8 +1483,6 @@ async function routeFromPath(pathname, { replace = false } = {}) {
       {
         view: state.view,
         incidentId: state.view === "case" ? state.incidentId : null,
-        trustSub: state.trustSub,
-        releaseCaseId: state.releaseCaseId,
       },
       "",
       path
@@ -3240,7 +1495,6 @@ async function routeFromPath(pathname, { replace = false } = {}) {
 function enterHome() {
   setView("home");
   renderHome();
-  updateReadouts();
   $("stage").scrollTop = 0;
   syncUrl("home");
 }
@@ -3248,7 +1502,6 @@ function enterHome() {
 function enterIncidents() {
   setView("incidents");
   renderIncidents();
-  updateReadouts();
   $("stage").scrollTop = 0;
   syncUrl("incidents");
 }
@@ -3259,108 +1512,16 @@ function enterCase() {
   syncUrl("case");
 }
 
-function enterTrust() {
-  enterTrustOverview();
-}
 
-async function goTrust() {
-  enterTrust();
-}
 
-function syncFold(id, open, toggleId, stateLabelId) {
-  const bundle = $(id);
-  const toggle = $(toggleId);
-  const stateLabel = $(stateLabelId);
-  if (!bundle) return;
-  if (bundle.classList.contains("is-pinned")) {
-    bundle.classList.remove("is-collapsed");
-    return;
-  }
-  bundle.classList.toggle("is-collapsed", !open);
-  if (toggle) toggle.setAttribute("aria-expanded", open ? "true" : "false");
-  if (stateLabel) stateLabel.textContent = open ? "Hide" : "Show";
-}
 
-function syncEvidenceBundle() {
-  state.evidenceOpen = true;
-  syncFold("evidence", true, "evidence-toggle", "evidence-toggle-state");
-}
 
-function syncProcedureBundle() {
-  syncFold("procedure", state.procedureOpen, "procedure-toggle", "procedure-toggle-state");
-}
 
-function syncCaseFolds() {
-  syncEvidenceBundle();
-  syncProcedureBundle();
-}
 
-function showProcedure() {
-  state.procedureOpen = true;
-  syncProcedureBundle();
-  $("procedure")?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
 
-function showReport() {
-  $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
-}
 
-function investigationFailed() {
-  return Boolean(state.report) && /^#\s*Could not investigate/i.test(String(state.report).trim());
-}
 
-function hasSuccessfulInvestigation() {
-  if (state.investigating) return false;
-  if (state.incident?.status === "filed") return true;
-  if (!state.report || investigationFailed()) return false;
-  return true;
-}
 
-function updateInvestigationChrome() {
-  const hasReport = hasSuccessfulInvestigation();
-  const filed = state.incident?.status === "filed";
-  document.body.classList.toggle("has-investigation", hasReport);
-  document.body.classList.toggle("is-investigating", state.investigating);
-  document.body.classList.toggle("has-report", Boolean(state.report) || state.investigating);
-  const hero = $("investigation");
-  if (hero) hero.classList.toggle("has-report", hasReport && !state.investigating);
-  const heading = $("investigation-heading");
-  const hint = $("investigation-hint");
-  const support = $("investigation-support");
-  if (heading) {
-    heading.textContent = state.investigating ? "Investigating…" : "Full report";
-  }
-  if (hint) {
-    hint.textContent = state.investigating
-      ? "Reviewing telemetry, commands, and procedures."
-      : "Source-tagged findings from the rules-based investigator.";
-  }
-  if (support) {
-    support.hidden = true;
-  }
-  const rerun = $("rerun-investigation");
-  if (rerun) {
-    rerun.hidden = DEMO_MODE || filed || !hasReport;
-    rerun.disabled = state.investigating;
-  }
-  const assemble = $("assemble");
-  if (assemble) {
-    assemble.hidden = !DEMO_MODE && (filed || hasReport);
-    assemble.disabled = state.investigating || !state.incidentId;
-    assemble.classList.toggle("is-secondary", hasReport && !state.investigating);
-    assemble.textContent = state.investigating
-      ? "Investigation in progress"
-      : hasReport
-        ? "Re-run investigation"
-        : "Run investigation";
-  }
-  const teaser = $("investigation-teaser");
-  if (teaser) {
-    teaser.hidden = true;
-    teaser.textContent = "";
-  }
-  syncCaseFolds();
-}
 
 function renderHomeStart() {
   const root = $("home-start");
@@ -3393,9 +1554,11 @@ function renderHomeDesk() {
   const root = $("home-desk");
   if (!root) return;
   const all = state.incidents;
-  const openN = all.filter((item) => item.status === "open").length;
-  const readyN = all.filter((item) => item.status === "recommended").length;
-  const filedN = all.filter((item) => item.status === "filed").length;
+  const inStage = (id) => all.filter((item) => STAGES.find((s) => s.id === id).statuses.includes(item.status || "open")).length;
+  const decideN = inStage("decide");
+  const watchN = inStage("watching");
+  const verifyN = inStage("verifying");
+  const closedN = inStage("closed");
   const rows = deskQueueItems(8);
   const list = rows.length
     ? rows
@@ -3423,9 +1586,10 @@ function renderHomeDesk() {
     </button>`;
   root.innerHTML = `
     <div class="home-stats">
-      ${stat("ready", "ready", readyN, "Ready for review", readyN ? "Recommendations waiting on you" : "Nothing waiting")}
-      ${stat("open", "open", openN, "Not investigated", openN ? "Run an investigation to start" : "All caught up")}
-      ${stat("filed", "filed", filedN, "Recorded", "Assessments saved with the case")}
+      ${stat("decide", "open", decideN, "Needs decision", decideN ? "Investigate or decide" : "Nothing waiting")}
+      ${stat("watching", "ready", watchN, "Watching", watchN ? "Held until the evidence clears a bar" : "No holds")}
+      ${stat("verifying", "filed", verifyN, "Verifying", verifyN ? "Decided; ready to close" : "Nothing to verify")}
+      ${stat("closed", "closed", closedN, "Closed", "Decisions on record")}
     </div>
     <div class="home-queue">
       <div class="home-desk-head">
@@ -3442,17 +1606,10 @@ function renderHomeDesk() {
     </div>`;
 }
 
-function renderHomeProof() {
-  const root = $("home-proof");
-  if (!root) return;
-  root.hidden = true;
-  root.innerHTML = "";
-}
 
 function renderHome() {
   renderHomeStart();
   renderHomeDesk();
-  renderHomeProof();
 }
 
 async function loadDesk(runId) {
@@ -3479,790 +1636,23 @@ async function goIncidents() {
 }
 
 
-function renderCaseNext() {
-  const headerNext = $("case-next");
-  if (headerNext) {
-    headerNext.hidden = true;
-    headerNext.innerHTML = "";
-  }
-  const root = $("case-demo-next");
-  if (root) {
-    root.hidden = true;
-    root.innerHTML = "";
-  }
-}
 
-function renderAlarm(a) {
-  const hero = $("alarm");
-  const inc = state.incident;
-  const alarm = alarmChannel();
-  const st = inc?.status || "";
-  $("alarm-kicker").textContent = inc ? inc.id : "Case";
-  const chip = $("status-chip");
-  if (chip) {
-    if (inc && st) {
-      chip.hidden = false;
-      chip.textContent = statusLabel(st);
-      chip.className = `chip chip-${st === "recommended" ? "ready" : st}`;
-    } else {
-      chip.hidden = true;
-      chip.textContent = "";
-      chip.className = "chip";
-    }
-  }
-  document.body.classList.toggle("is-filed", st === "filed");
-  const filedLine = $("case-filed");
-  if (filedLine) filedLine.hidden = st !== "filed";
-  $("alarm-title").textContent = inc ? caseHeadline(inc) : "Select a case";
-  const when = a?.warn ? clock(a.warn.time_s) : openedClock(inc?.opened_at);
-  $("case-meta").innerHTML = "";
-  if (!a) {
-    $("alarm-lede").textContent = inc
-      ? [when ? `Opened ${when}` : "", readableChannel(alarm)].filter(Boolean).join(" · ")
-      : "Open a case from an alarm you already have. ORBIT does not detect anomalies.";
-    $("alarm-lede").hidden = false;
-    hero.classList.remove("is-warn", "is-ok");
-    renderCaseNext();
-    return;
-  }
-  const v = a.warn?.value_num ?? sampleAt(series(alarm), a.t)?.value_num;
-  const ch = meta(alarm);
-  const crossed = Boolean(a.warn);
-  const limit = limitPhrase(ch);
-  $("alarm-lede").hidden = true;
-  $("alarm-lede").textContent = "";
-  $("case-meta").innerHTML = `
-    <div class="case-reading ${crossed ? "is-warn" : "is-ok"}">
-      <span class="case-reading-dot" aria-hidden="true"></span>
-      <span class="case-reading-label">${escapeHtml(readableChannel(alarm))}</span>
-      <span class="case-reading-value">${v == null ? "—" : escapeHtml(fmt(v, 2))}${ch.unit ? `<small>${escapeHtml(ch.unit)}</small>` : ""}</span>
-      ${limit ? `<span class="case-reading-limit">${escapeHtml(limit)}</span>` : ""}
-    </div>
-    ${when ? `<span class="case-reading-time">${escapeHtml(crossed ? `Warned ${when}` : `Opened ${when}`)}</span>` : ""}`;
-  hero.classList.toggle("is-warn", crossed);
-  hero.classList.toggle("is-ok", !crossed);
-  renderCaseNext();
-}
 
-/* Same 62% tick as the overview meters: the limit always lands in the same place,
-   so the bar reads as distance from the limit rather than an absolute value. */
-function renderAlarmMargin(value, ch) {
-  const el = $("alarm-meter");
-  if (!el) return;
-  const limit = ch.warn_limit == null ? null : Number(ch.warn_limit);
-  if (value == null || limit == null || !Number.isFinite(limit) || limit === 0) {
-    el.hidden = true;
-    return;
-  }
-  const below = ch.limit_direction === "below";
-  const ratio = value / limit;
-  const fill = Math.min(100, (below ? 1 / Math.max(ratio, 1e-6) : ratio) * 62);
-  const past = below ? limit - value : value - limit;
-  const pct = Math.abs(past / limit) * 100;
-  el.hidden = false;
-  el.querySelector("i").style.width = `${fill.toFixed(0)}%`;
-  const crossed = past > 0;
-  const direction = below
-    ? (crossed ? "below threshold" : "above threshold")
-    : (crossed ? "above threshold" : "below threshold");
-  el.querySelector(".pct").textContent = `${pct.toFixed(pct < 10 ? 1 : 0)}% ${direction}`;
-}
 
-function renderCompare(a) {
-  const root = $("compare-grid");
-  if (!a) {
-    root.innerHTML = "";
-    return;
-  }
-  const concluded = hasSuccessfulInvestigation();
-  const healthyMin = meta("THM.heater_b_current").nominal_range?.[0];
-  const cards = [
-    {
-      k: "Heater B",
-      v: a.heaterA,
-      unit: "A",
-      why: concluded && a.heaterMarginal
-        ? `Elevated (~${fmt(a.ratio, 1)}× healthy max ${fmt(a.healthyMax, 1)} A) but below EPS-17’s ≥2× threshold.`
-        : `Healthy ON range ${fmt(healthyMin, 1)}–${fmt(a.healthyMax, 1)} A (ratio uses healthy max ${fmt(a.healthyMax, 1)} A). Values shown at first warning.`,
-      ratio: a.ratio != null ? `${fmt(a.ratio, 1)}× healthy max` : "",
-      cls: concluded ? (a.suspect ? "suspect" : a.heaterMarginal ? "marginal" : "") : "",
-    },
-    {
-      k: "Payload",
-      v: a.payloadA,
-      unit: "A",
-      why: concluded && a.payloadSuspect
-        ? `SCIENCE_MODE draw is ${fmt(a.payloadRatio, 1)}× the ${fmt(a.payloadHealthy, 1)} A healthy baseline.`
-        : a.science
-          ? `Most recent mode change: SCIENCE_MODE at ${clock(a.science.time_s)}. Relevance depends on measured current vs ~${fmt(a.payloadHealthy, 1)} A science.`
-          : "Payload never left STANDBY in this run.",
-      ratio: a.payloadRatio != null ? `${fmt(a.payloadRatio, 1)}× science` : a.mode?.value_text || "",
-      cls: concluded ? (a.payloadSuspect ? "suspect-payload" : a.science && !a.suspect ? "confounder" : "") : "",
-    },
-    a.batterySuspect
-      ? {
-          k: "Battery",
-          v: sampleAt(series("EPS.battery_voltage"), a.t)?.value_num,
-          unit: "V",
-          why: "Pack sagged with healthy load currents. That is IR, not a load to inhibit.",
-          ratio: "EPS-09",
-          cls: "suspect-battery",
-        }
-      : {
-          k: "Bus current",
-          v: a.busI?.value_num,
-          unit: "A",
-          why: `Warn at ${fmt(meta("EPS.bus_current").warn_limit, 1)} A. Sum of loads, not a cause.`,
-          ratio: "",
-          cls: "",
-        },
-  ];
-  root.innerHTML = cards
-    .map(
-      (c) => `<article class="card ${c.cls}">
-        <p class="k">${c.k}</p>
-        <p class="v">${fmt(c.v, 2)}<small>${c.unit}</small></p>
-        ${c.ratio ? `<p class="ratio">${escapeHtml(c.ratio)}</p>` : ""}
-        <p class="why">${escapeHtml(c.why)}</p>
-      </article>`
-    )
-    .join("");
-}
 
-function renderTimeline(a) {
-  const root = $("timeline");
-  if (!a) {
-    root.innerHTML = "";
-    return;
-  }
-  const lastCmd = a.windowEvents.reduce((best, e) => (!best || e.time_s >= best.time_s ? e : best), null);
-  // SUSPECT only when ratio clears ≥2× — not on enable/mode event name alone.
-  const suspectDetail = a.suspect ? "HEATER_B_ENABLE" : a.payloadSuspect ? "SCIENCE_MODE" : "";
-  const items = a.windowEvents.map((e) => {
-    const mode = e.detail === "SCIENCE_MODE" || e.event_type === "mode_change";
-    return {
-      t: e.time_s,
-      title: e.detail,
-      sub: `${e.event_type} · ${e.channel || ""}`.trim(),
-      kind: mode ? "mode" : "command",
-      suspect: Boolean(suspectDetail && e.detail === suspectDetail),
-      last: lastCmd && e.detail === lastCmd.detail && Math.abs(e.time_s - lastCmd.time_s) < 1,
-      warn: false,
-      marginal: a.heaterMarginal && e.detail === "HEATER_B_ENABLE",
-    };
-  });
-  if (a.warn) {
-    items.push({
-      t: a.warn.time_s,
-      title: `${alarmChannel()} WARN`,
-      sub: `${fmt(a.warn.value_num, 2)} ${meta(alarmChannel()).unit || ""} · first crossing`,
-      kind: "warn",
-      suspect: false,
-      last: false,
-      warn: true,
-      marginal: false,
-    });
-  }
-  items.sort((x, y) => x.t - y.t);
-  const pin = state.pinT;
-  root.innerHTML = items
-    .map((item) => {
-      const pinId = `tl:${item.t}`;
-      const on = isLeadUpPinned(item.t);
-      const concluded = hasSuccessfulInvestigation();
-      const modeChange = item.title === "SCIENCE_MODE";
-      const tags = [
-        concluded && item.suspect ? `<span class="crumb-tag is-suspect">Suspect</span>` : "",
-        concluded && item.marginal && !item.suspect ? `<span class="crumb-tag is-marginal">Elevated</span>` : "",
-        item.last && modeChange ? `<span class="crumb-tag is-last">Most recent mode change</span>` : "",
-        item.last && !modeChange && !item.suspect ? `<span class="crumb-tag is-last">Most recent command</span>` : "",
-        item.warn ? `<span class="crumb-tag is-warn">Warning</span>` : "",
-      ].join("");
-      const suspectCls = concluded && item.suspect ? "is-suspect" : "";
-      const margCls = concluded && item.marginal && !item.suspect ? "is-marginal" : "";
-      return `<li class="tl-item kind-${item.kind} ${item.warn ? "is-warn" : ""} ${suspectCls} ${margCls} ${item.last && !item.suspect ? "is-last" : ""} ${on ? "is-on" : ""}" data-t="${item.t}" data-pin-id="${pinId}">
-        <button type="button" class="tl-row ${on ? "is-on" : ""}">
-          <span class="tl-time">${clock(item.t)}</span>
-          <span class="tl-track" aria-hidden="true"><i class="tl-dot"></i></span>
-          <span class="tl-main">
-            <strong class="tl-title">${escapeHtml(item.title)}</strong>
-            ${tags ? `<span class="tl-tags">${tags}</span>` : ""}
-          </span>
-        </button>
-      </li>`;
-    })
-    .join("") || `<li><p class="empty">No commands in the window.</p></li>`;
-}
 
-function renderMode(a) {
-  const rows = series("PAY.mode");
-  const [t0, t1] = domain();
-  const vis = inDomain(rows, [t0, t1]);
-  if (!vis.length) {
-    $("mode-strip").innerHTML = "";
-    return;
-  }
-  const W = 920;
-  const padL = 44;
-  const padR = 12;
-  const x = (t) => padL + ((t - t0) / Math.max(t1 - t0, 1e-6)) * (W - padL - padR);
-  let html = "";
-  for (let i = 0; i < vis.length; i += 1) {
-    const cur = vis[i];
-    const next = vis[i + 1];
-    const x1 = x(cur.time_s);
-    const x2 = x(next ? next.time_s : t1);
-    const science = cur.value_text === "SCIENCE_MODE";
-    html += `<rect x="${x1}" y="4" width="${Math.max(x2 - x1, 0.8)}" height="10" fill="${science ? "var(--payload)" : "var(--line-2)"}" opacity="${science ? 0.55 : 0.9}"/>`;
-  }
-  $("mode-strip").innerHTML = `<svg viewBox="0 0 ${W} 18" preserveAspectRatio="none" aria-label="Payload mode">
-    <text x="0" y="13" fill="var(--mute)" font-size="10" font-family="var(--sans)">PAY.mode</text>
-    ${html}
-  </svg>`;
-}
 
-function renderTraces() {
-  const root = $("trace-stack");
-  const a = analysis();
-  $("trace-caption").textContent = a?.warn
-    ? `Pinned at ${clock(state.pinT ?? a.t)}. Dashed lines are commands; the solid line is the first warning.`
-    : "One shared time axis.";
-  root.innerHTML = tracesToDraw().map(
-    (t) => `<article class="trace ${t.primary ? "primary" : ""}" data-ch="${t.id}"></article>`
-  ).join("");
-  tracesToDraw().forEach((t) => {
-    const el = root.querySelector(`[data-ch="${t.id}"]`);
-    drawTrace(el, t.id, t.title, t.color, t.primary);
-  });
-  updateReadouts();
-}
 
-function renderProc(a) {
-  const id = procedureId(a);
-  const book = PROC_BOOK[id];
-  $("proc-id").textContent = id;
-  $("proc-title").textContent = book.title;
-  $("proc-aka").textContent = book.aka;
-  $("proc-applies").textContent = book.applies;
-  $("proc-entry").innerHTML = book.entry;
-  $("proc-goal").textContent = book.goal;
-  const title = $("procedure-toggle-title");
-  if (title) title.textContent = `${id} · procedure`;
-  const named = Boolean(a?.suspect || a?.payloadSuspect || a?.batterySuspect);
-  const ready = hasSuccessfulInvestigation();
-  const status = ready
-    ? {
-        confirm: a?.warn ? "Evidence present" : "",
-        commands: a?.windowEvents.length ? "Evidence present" : "",
-        currents: a?.heaterA != null || a?.payloadA != null ? "Evidence present" : "",
-        ratio: named ? "Threshold met" : a?.withheld ? "Below threshold" : "",
-        payload: a ? "Reviewed" : "",
-        action: named ? "Not sent" : a?.withheld ? "Hold" : "",
-      }
-    : {
-        confirm: "",
-        commands: "",
-        currents: "",
-        ratio: "",
-        payload: "",
-        action: "",
-      };
-  $("proc").innerHTML = book.steps.map((step) => {
-    const label = status[step.id];
-    const done = label === "Evidence present" || label === "Threshold met" || label === "Reviewed";
-    const blocked = label === "Hold" || label === "Below threshold";
-    const human = step.human && Boolean(label) && !blocked;
-    return `<li class="${done ? "is-done" : ""} ${human ? "is-action" : ""} ${blocked ? "is-blocked" : ""}">
-      <span class="proc-n">${step.n}</span>
-      <span class="proc-text">${escapeHtml(step.label)}${blocked && step.human ? " <em>Threshold not met — do not command yet</em>" : ""}</span>
-      <span class="proc-state">${escapeHtml(label)}</span>
-    </li>`;
-  }).join("");
-}
 
-function resultEvidencePin(t, label) {
-  if (t == null) return "";
-  return `<button type="button" class="result-link result-pin" data-t="${t}" data-pin-id="result:${t}">${escapeHtml(label)}</button>`;
-}
 
-function resultProvenanceLabel(tag) {
-  if (!tag) return "";
-  return String(tag)
-    .split(/\s*\/\s*/)
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const cls = tagClass(part);
-      const title = TAG_MEANING[cls] || "";
-      return `<span class="result-prov is-${cls}" title="${escapeHtml(title)}" tabindex="0">${escapeHtml(part.toUpperCase())}</span>`;
-    })
-    .join("");
-}
 
-function buildResultSummary(a) {
-  if (!a || !hasSuccessfulInvestigation()) return "";
-  const heaterA = a.heaterAAtCmd ?? a.heaterA;
-  const ratio = a.ratioAtCmd ?? a.ratio;
-  const heaterT = a.heaterCmd?.time_s ?? a.t;
-  const warnT = a.warn?.time_s ?? a.t;
-  const payloadT = a.science?.time_s ?? a.t;
-  if (a.suspect) {
-    return {
-      status: "Investigation complete · Awaiting operator review",
-      heading: "Recommended next step: inhibit Heater B",
-      summary: "Heater B’s current exceeds the procedure’s threshold for identifying a suspect load. The payload current is near its expected science-mode level.",
-      evidence: [
-        {
-          html: `Heater B: <strong>${fmt(heaterA, 2)} A</strong> at ${a.heaterCmd ? "heater enable" : "first warning"} (${clock(heaterT)}) — approximately <strong>${fmt(ratio, 1)}×</strong> the upper healthy reference of <strong>${fmt(a.healthyMax, 1)} A</strong>.`,
-          t: heaterT,
-          tag: "OBSERVED / DERIVED",
-        },
-        {
-          html: `Procedure EPS-17: identifies a load drawing at least <strong>2×</strong> its healthy reference as the prime suspect.`,
-          t: null,
-          tag: "DOCUMENTED",
-          action: "procedure",
-          actionLabel: "Read EPS-17",
-        },
-        {
-          html: `Payload: <strong>${fmt(a.payloadA, 2)} A</strong> at the warning, near the expected science-mode current (~${fmt(a.payloadHealthy, 1)} A).`,
-          t: warnT,
-          tag: "OBSERVED",
-        },
-      ],
-      uncertaintyTitle: "What remains unconfirmed",
-      uncertainty: "The evidence supports Heater B as the suspect load. Confirmation of the physical fault and recovery after intervention are not established by this report.",
-    };
-  }
-  if (a.withheld) {
-    return {
-      status: "Investigation complete · Awaiting operator review",
-      heading: "Recommended next step: hold — do not command",
-      summary: "Heater current is elevated but does not meet EPS-17’s ≥2× threshold for recommending an inhibit. The case stays open for more evidence.",
-      evidence: [
-        {
-          html: `Heater B: <strong>${fmt(heaterA, 2)} A</strong> (~<strong>${fmt(ratio, 1)}×</strong> healthy max <strong>${fmt(a.healthyMax, 1)} A</strong>) — below the ≥2× procedure threshold.`,
-          t: heaterT,
-          tag: "OBSERVED / DERIVED",
-        },
-        {
-          html: `Procedure EPS-17: requires at least <strong>2×</strong> healthy reference before recommending an inhibit.`,
-          t: null,
-          tag: "DOCUMENTED",
-          action: "procedure",
-          actionLabel: "Read EPS-17",
-        },
-        {
-          html: a.science
-            ? `SCIENCE_MODE is present, but payload current (<strong>${fmt(a.payloadA, 2)} A</strong>) is not ≥2× science and cannot close the case alone.`
-            : `No load clears the ≥2× bar in the sealed window.`,
-          t: payloadT,
-          tag: "DOCUMENTED",
-        },
-      ],
-      uncertaintyTitle: "What remains missing",
-      uncertainty: "A load meeting the ≥2× threshold, or an authorized diagnostic, would change this recommendation. Hold is not an investigation failure.",
-    };
-  }
-  if (a.payloadSuspect) {
-    return {
-      status: "Investigation complete · Awaiting operator review",
-      heading: "Recommended next step: safe payload to STANDBY",
-      summary: "Payload current meets the procedure threshold. Heater current does not support a heater inhibit.",
-      evidence: [
-        {
-          html: `Payload: <strong>${fmt(a.payloadA, 2)} A</strong> (~<strong>${fmt(a.payloadRatio, 1)}×</strong> science baseline ${fmt(a.payloadHealthy, 1)} A).`,
-          t: warnT,
-          tag: "OBSERVED / DERIVED",
-        },
-        {
-          html: `Heater B remains below the ≥2× inhibit threshold.`,
-          t: heaterT,
-          tag: "OBSERVED",
-        },
-      ],
-      uncertaintyTitle: "What remains unconfirmed",
-      uncertainty: "Physical fault confirmation and recovery after intervention are not established by this report.",
-    };
-  }
-  if (a.batterySuspect) {
-    return {
-      status: "Investigation complete · Awaiting operator review",
-      heading: "Recommended next step: continue EPS-09",
-      summary: "Pack voltage sagged with healthy load currents. Do not inhibit the heater or payload.",
-      evidence: [
-        {
-          html: `Battery voltage crossed its warning with load currents remaining healthy.`,
-          t: warnT,
-          tag: "OBSERVED",
-        },
-      ],
-      uncertaintyTitle: "What remains unconfirmed",
-      uncertainty: "Pack health checkout remains an operator follow-up. This report does not confirm a completed recovery.",
-    };
-  }
-  return {
-    status: "Investigation complete · Awaiting operator review",
-    heading: "Recommended next step: keep reading",
-    summary: "No load currently meets a procedure threshold for action.",
-    evidence: [],
-    uncertaintyTitle: "What remains unconfirmed",
-    uncertainty: "Additional measurements or an authorized diagnostic may change the recommendation.",
-  };
-}
 
-function renderResultSummary(a) {
-  const root = $("result-summary");
-  if (!root) return;
-  if (!hasSuccessfulInvestigation() || !a) {
-    root.hidden = true;
-    root.innerHTML = "";
-    return;
-  }
-  const model = buildResultSummary(a);
-  if (!model) {
-    root.hidden = true;
-    root.innerHTML = "";
-    return;
-  }
-  const rows = model.evidence || [];
-  const evidence = rows
-    .map((row, i) => {
-      let action = "";
-      if (row.action === "procedure") {
-        action = `<button type="button" class="result-link" data-jump-procedure>${escapeHtml(row.actionLabel || "Read procedure")}</button>`;
-      } else if (row.t != null) {
-        action = resultEvidencePin(row.t, `View at ${clock(row.t)}`);
-      }
-      return `<li class="result-beat">
-        <span class="result-beat-n" aria-hidden="true">${String(i + 1).padStart(2, "0")}</span>
-        <div class="result-beat-body">
-          <p class="result-beat-copy">${row.html}</p>
-          <div class="result-beat-meta">
-            ${resultProvenanceLabel(row.tag)}
-            ${action}
-          </div>
-        </div>
-      </li>`;
-    })
-    .join("");
-  root.hidden = false;
-  root.innerHTML = `
-    <section class="decide-block result-brief">
-      <h3 class="decide-block-title">Supporting evidence${rows.length ? `<span class="decide-block-count">${rows.length}</span>` : ""}</h3>
-      ${
-        evidence
-          ? `<ol class="result-beats" aria-label="Supporting evidence">${evidence}</ol>`
-          : `<p class="result-brief-empty">No decisive measurements were attached to this summary.</p>`
-      }
-    </section>
-    <aside class="decide-block result-open">
-      <h3 class="decide-block-title">${escapeHtml(model.uncertaintyTitle)}</h3>
-      <p class="result-open-copy">${escapeHtml(model.uncertainty)}</p>
-    </aside>`;
-}
 
-function renderDecision(a) {
-  const status = $("decide-meta");
-  const fileBtn = $("file-incident");
-  const openPane = $("decide-open");
-  const filedPane = $("decide-filed");
-  const panel = $("action");
-  const filed = state.incident?.status === "filed";
-  const ready = hasSuccessfulInvestigation();
-  openPane.hidden = filed;
-  filedPane.hidden = !filed;
-  fileBtn.hidden = filed || !ready;
-  fileBtn.disabled = Boolean(state.filing);
-  fileBtn.textContent = state.filing ? "Recording…" : "Record assessment";
-  panel?.classList.toggle("is-pending", !filed && !ready);
-  if (filed) {
-    const note = (state.incident.notes || "").trim();
-    const box = $("operator-note");
-    if (note && !note.startsWith("Canonical")) {
-      box.hidden = false;
-      box.textContent = note;
-    } else {
-      box.hidden = true;
-    }
-    const badge = $("filed-feedback-badge");
-    const fb = state.feedback || state.incident?.feedback;
-    if (badge) {
-      if (fb?.verdict) {
-        badge.hidden = false;
-        const hold = isHoldFeedback(a, fb);
-        badge.textContent = hold
-          ? `${feedbackVerdictLabel(fb.verdict, true)} · hold`
-          : `${feedbackVerdictLabel(fb.verdict, false)} · ${fb.hypothesis_key}`;
-      } else {
-        badge.hidden = true;
-        badge.textContent = "";
-      }
-    }
-  }
-  const statusLine = $("decide-status-line");
-  if (!ready) {
-    if (statusLine) statusLine.textContent = "Pending";
-    if (state.investigating) {
-      $("decide-title").textContent = "Investigating…";
-      $("decide-sub").textContent = "The recommendation appears here when the report is ready.";
-    } else if (investigationFailed()) {
-      $("decide-title").textContent = "Investigation did not complete";
-      $("decide-sub").textContent = "Evidence on this page is unchanged. Re-run to generate a new report; any previous successful report remains available only if still stored on the case.";
-    } else {
-      $("decide-title").textContent = "Not investigated yet";
-      $("decide-sub").textContent = "Run the investigation to get a recommendation backed by the case evidence. ORBIT never sends commands.";
-    }
-    status.textContent = "";
-    fileBtn.hidden = true;
-    renderResultSummary(null);
-    renderDecisionContext(null);
-    renderCaseNext();
-    return;
-  }
-  if (!a) {
-    if (statusLine) statusLine.textContent = "Pending";
-    $("decide-title").textContent = "Pending investigation";
-    $("decide-sub").textContent = "Select a case to see a next step.";
-    status.textContent = "";
-    fileBtn.hidden = true;
-    renderResultSummary(null);
-    renderDecisionContext(null);
-    renderCaseNext();
-    return;
-  }
-  if (statusLine) {
-    statusLine.textContent = filed ? "Recorded" : "Awaiting review";
-  }
-  const model = buildResultSummary(a);
-  if (a.suspect) {
-    $("decide-title").textContent = "Inhibit Heater B";
-    $("decide-sub").textContent = model.summary;
-    status.textContent = "";
-    if (filed) {
-      $("filed-action-title").textContent = "Inhibit Heater B";
-      $("filed-action-sub").textContent = "Saved with this case. ORBIT did not uplink a command. Recording does not confirm that the physical anomaly is resolved.";
-    }
-  } else if (a.payloadSuspect) {
-    $("decide-title").textContent = "Safe payload to STANDBY";
-    $("decide-sub").textContent = model.summary;
-    status.textContent = "";
-    if (filed) {
-      $("filed-action-title").textContent = "Safe payload to STANDBY";
-      $("filed-action-sub").textContent = "Saved with this case. ORBIT did not uplink a command.";
-    }
-  } else if (a.batterySuspect) {
-    $("decide-title").textContent = "Continue EPS-09";
-    $("decide-sub").textContent = model.summary;
-    status.textContent = "";
-    if (filed) {
-      $("filed-action-title").textContent = "Continue EPS-09";
-      $("filed-action-sub").textContent = "Saved with this case. ORBIT did not uplink a command.";
-    }
-  } else if (!a.warn) {
-    $("decide-title").textContent = "No action";
-    $("decide-sub").textContent = "No warning on this case.";
-    status.textContent = "";
-    if (filed) $("filed-action-title").textContent = "No action";
-  } else if (a.withheld) {
-    $("decide-title").textContent = "Hold — do not command";
-    $("decide-sub").textContent = model.summary;
-    status.textContent = "No command";
-    if (filed) {
-      $("filed-action-title").textContent = "Hold — do not command";
-      $("filed-action-sub").textContent = "Threshold not met. Saved with this case. ORBIT did not uplink a command.";
-    }
-  } else {
-    $("decide-title").textContent = "Keep reading";
-    $("decide-sub").textContent = model.summary;
-    status.textContent = "";
-    if (filed) $("filed-action-title").textContent = "Keep reading";
-  }
-  renderResultSummary(a);
-  renderDecisionContext(a);
-  renderCaseNext();
-}
 
-function renderFindings() {
-  const body = $("findings-body");
-  updateInvestigationChrome();
-  if (state.investigating) {
-    renderInvestigationProgress();
-    return;
-  }
-  if (state.report) {
-    const sections = state.report.split(/\n(?=## )/);
-    body.innerHTML = sections
-      .map((raw) => raw.trim())
-      .filter((block) => {
-        if (!block) return false;
-        const title = sectionTitle(block);
-        if (/^tool log$/i.test(title) || /^hypothesis$/i.test(title) || /recommended human decision/i.test(title)) {
-          return false;
-        }
-        // Keep the Investigation heading block when it has body copy (scope bullets
-        // or short no-crossing reports). Empty H1-only stubs before ## Timeline stay hidden.
-        if (/^#\s+Investigation\b/i.test(block)) {
-          return block.replace(/^#[^\n]*\n*/, "").trim().length > 0;
-        }
-        return true;
-      })
-      .map((block) => {
-        const title = sectionTitle(block);
-        if (/^timeline$/i.test(title)) return renderTimelineFinding(block);
-        return `<article class="finding md">${renderMd(block, { skipTitle: true })}</article>`;
-      })
-      .join("");
-    return;
-  }
-  if (!analysis()) {
-    body.innerHTML = `<div class="investigation-empty"><p>Select a case to begin.</p></div>`;
-    return;
-  }
-  body.innerHTML = `<div class="investigation-empty">
-    <p>No report yet.</p>
-  </div>`;
-}
 
-function renderCase() {
-  const a = analysis();
-  renderAlarm(a);
-  renderCompare(a);
-  renderTimeline(a);
-  renderMode(a);
-  renderTraces();
-  renderProc(a);
-  renderDecision(a);
-  renderFindings();
-}
 
-async function openIncident(incidentId, jump) {
-  try {
-    await loadIncident(incidentId);
-    const ready = hasSuccessfulInvestigation();
-    const actionInRail = window.matchMedia("(min-width: 1360px)").matches;
-    if (jump === "closeout") {
-      showReport();
-    } else if (jump === "action" || (ready && jump !== "investigation" && jump !== "findings" && jump !== "evidence" && jump !== "procedure")) {
-      if (!actionInRail) $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if (jump === "findings" || jump === "investigation") {
-      $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if (jump === "evidence") {
-      state.evidenceOpen = true;
-      syncEvidenceBundle();
-      $("evidence")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if (jump === "procedure") {
-      showProcedure();
-    } else if (!jump && ready) {
-      if (!actionInRail) $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if (!jump) {
-      $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  } catch (err) {
-    const lede = $("alarm-lede");
-    if (lede) {
-      lede.hidden = false;
-      lede.textContent = `Could not open ${incidentId}: ${err.message}`;
-    }
-  }
-}
 
-async function loadIncident(incidentId) {
-  state.incidentId = incidentId;
-  state.incident = state.incidents.find((item) => item.id === incidentId) || null;
-  state.feedback = state.incident?.feedback || null;
-  state.runId = state.incident?.run_id || null;
-  state.report = null;
-  state.pinT = null;
-  state.pinSource = null;
-  state.hoverT = null;
-  enterCase();
-  $("stage").scrollTop = 0;
-  renderIncidents();
-  const res = await fetch(apiUrl(`/incidents/${encodeURIComponent(incidentId)}/workspace`));
-  if (!res.ok) throw new Error(`workspace ${res.status}`);
-  state.workspace = await res.json();
-  if (state.workspace.incident) {
-    state.incident = state.workspace.incident;
-    state.feedback = state.incident.feedback || state.feedback;
-    const inc = state.incident;
-    if (inc.investigation_report) {
-      state.report = inc.investigation_report;
-    } else if (inc.status === "filed" && inc.closeout) {
-      state.report = inc.closeout;
-    }
-  }
-  state.procedureOpen = false;
-  state.runId = state.workspace.run_id;
-  const a = analysis();
-  const seed = a?.warn?.time_s ?? a?.heaterCmd?.time_s ?? null;
-  state.pinT = seed != null ? resolvePinTime(seed) : null;
-  state.pinSource = null;
-  renderCase();
-  syncCaseFolds();
-}
 
-async function runInvestigation(incidentId) {
-  const id = incidentId || state.incidentId;
-  if (!id || state.investigating) return;
-  try {
-    if (state.incidentId !== id) {
-      await loadIncident(id);
-    }
-    $("alarm")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    await assemble();
-  } catch (err) {
-    window.alert(`Could not open ${id}: ${err.message}`);
-  }
-}
-
-async function assemble() {
-  if (!state.incidentId || state.investigating) return;
-  const previousReport = state.report;
-  state.investigating = true;
-  state.report = null;
-  renderFindings();
-  renderDecision(analysis());
-  try {
-    const res = await fetch(apiUrl(`/incidents/${encodeURIComponent(state.incidentId)}/investigate`), {
-      method: "POST",
-    });
-    if (!res.ok) throw new Error(`investigate ${res.status}`);
-    const data = await res.json();
-    state.report = data.report;
-    applyIncidentPatch(state.incidentId, {
-      status: data.status || "recommended",
-      investigation_report: data.report,
-      investigated_at: data.investigated_at || null,
-    });
-    renderIncidents();
-    renderAlarm(analysis());
-    renderDecision(analysis());
-    announceLive("Investigation complete. Recommendation ready for review.");
-  } catch (err) {
-    state.report = previousReport
-      ? previousReport
-      : `# Could not investigate\n\n${err.message}`;
-    if (previousReport) {
-      announceLive(`Investigation failed. Previous report remains available. ${err.message}`);
-      window.alert(`Investigation failed. The previous report remains on screen.\n\n${err.message}`);
-    } else {
-      state.report = `# Could not investigate\n\n${err.message}`;
-      announceLive(`Investigation failed. ${err.message}`);
-    }
-  } finally {
-    stopInvestigationAnimation();
-    state.investigating = false;
-    renderFindings();
-    renderDecision(analysis());
-    renderCompare(analysis());
-    renderTimeline(analysis());
-    renderProc(analysis());
-    syncCaseFolds();
-    const target = hasSuccessfulInvestigation() ? $("action") : $("investigation");
-    target?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-}
 
 async function createIncident(ev) {
   ev.preventDefault();
@@ -4303,39 +1693,6 @@ async function createIncident(ev) {
   await loadIncident(created.id);
 }
 
-async function fileIncident(ev) {
-  if (ev) ev.preventDefault();
-  if (!state.incidentId || state.filing || state.incident?.status === "filed") return;
-  state.filing = true;
-  const confirmBtn = $("confirm-file");
-  confirmBtn.disabled = true;
-  confirmBtn.textContent = "Recording…";
-  try {
-    const res = await fetch(apiUrl(`/incidents/${encodeURIComponent(state.incidentId)}/file`), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note: $("file-note").value.trim() || null }),
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({ detail: res.statusText }));
-      window.alert(err.detail || "Could not file close-out");
-      return;
-    }
-    const data = await res.json();
-    const filed = data.incident;
-    applyIncidentPatch(filed.id, filed);
-    closeFileSlip();
-    renderIncidents();
-    renderAlarm(analysis());
-    renderDecision(analysis());
-    $("alarm").scrollIntoView({ behavior: "smooth", block: "start" });
-  } finally {
-    state.filing = false;
-    confirmBtn.disabled = false;
-    confirmBtn.textContent = "Record assessment";
-    renderDecision(analysis());
-  }
-}
 
 
 function bind() {
@@ -4345,8 +1702,12 @@ function bind() {
     });
   });
   $("tab-home").addEventListener("click", () => goHome());
-  $("tab-incidents").addEventListener("click", () => goIncidents());
-  $("tab-trust").addEventListener("click", () => goTrust());
+  $("side-stages").addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-stage]");
+    if (!btn) return;
+    state.incidentFilter = btn.dataset.stage;
+    goIncidents();
+  });
   $("back-incidents").addEventListener("click", () => goIncidents());
   $("go-home-brand").addEventListener("click", () => goHome());
   $("side-recent")?.addEventListener("click", (ev) => {
@@ -4358,10 +1719,6 @@ function bind() {
     if (goInc) {
       if (goInc.dataset.goIncidents) state.incidentFilter = goInc.dataset.goIncidents;
       goIncidents();
-      return;
-    }
-    if (ev.target.closest("[data-go-trust]")) {
-      goTrust();
       return;
     }
     if (ev.target.closest("[data-open-slip]")) {
@@ -4431,10 +1788,6 @@ function bind() {
     ev.preventDefault();
     openIncident(row.dataset.openCase, row.dataset.jump);
   });
-  $("procedure-toggle")?.addEventListener("click", () => {
-    state.procedureOpen = !state.procedureOpen;
-    syncProcedureBundle();
-  });
   $("inc-search-form")?.addEventListener("submit", (ev) => ev.preventDefault());
   $("inc-q")?.addEventListener("input", () => {
     state.incidentQuery = $("inc-q").value;
@@ -4452,96 +1805,6 @@ function bind() {
     const clear = $("inc-clear");
     if (clear) clear.hidden = true;
     renderIncidents();
-  });
-  $("trust-desk").addEventListener("click", (ev) => {
-    const syncBtn = ev.target.closest("[data-source-sync]");
-    if (syncBtn) {
-      syncSource(syncBtn.dataset.sourceSync);
-      return;
-    }
-    const cat = ev.target.closest("[data-explorer-cat]");
-    if (cat) {
-      setExplorerCategory(cat.dataset.explorerCat);
-      return;
-    }
-    const select = ev.target.closest("[data-explorer-select]");
-    if (select) {
-      selectExplorerRecord(select.dataset.explorerSelect, { openDetail: true });
-      return;
-    }
-    if (ev.target.closest("[data-explorer-detail-back]")) {
-      closeExplorerDetail();
-      return;
-    }
-    const openCase = ev.target.closest("[data-explorer-open-case]");
-    if (openCase) {
-      openSlipFromDataset(openCase.dataset.explorerOpenCase);
-      return;
-    }
-    const inspectDataset = ev.target.closest("[data-explorer-inspect-dataset]");
-    if (inspectDataset) {
-      openInspector({ runId: inspectDataset.dataset.explorerInspectDataset, window: "full" });
-      return;
-    }
-    const inspectSnapshot = ev.target.closest("[data-explorer-inspect-snapshot]");
-    if (inspectSnapshot) {
-      const run = explorerSnapshots().find((row) => row.id === inspectSnapshot.dataset.explorerInspectSnapshot);
-      if (run) openInspectorForSnapshot(run);
-      else openInspector({ runId: inspectSnapshot.dataset.explorerInspectSnapshot, window: "full" });
-      return;
-    }
-    const openIncident = ev.target.closest("[data-explorer-open-incident]");
-    if (openIncident) {
-      loadIncident(openIncident.dataset.explorerOpenIncident);
-      return;
-    }
-    if (ev.target.closest("[data-trust-back]")) {
-      enterTrustOverview();
-      return;
-    }
-    const releaseCase = ev.target.closest("[data-release-case]");
-    if (releaseCase) {
-      enterTrustReleaseCase(releaseCase.dataset.releaseCase);
-      return;
-    }
-    if (ev.target.closest("[data-promote-baseline]:not(:disabled)")) {
-      promoteBaseline();
-      return;
-    }
-    const tape = ev.target.closest("[data-trust-tape]");
-    if (tape) {
-      loadDesk(tape.dataset.trustTape).then(() => {
-        if (state.view === "trust") renderTrust();
-      });
-      return;
-    }
-    const inspect = ev.target.closest("[data-trust-inspect]");
-    if (inspect) {
-      const run = explorerSnapshots().find((row) => row.id === inspect.dataset.trustInspect);
-      if (run) openInspectorForSnapshot(run);
-      else openInspector({ runId: inspect.dataset.trustInspect });
-      return;
-    }
-  });
-  $("trust-desk").addEventListener("keydown", (ev) => {
-    const cat = ev.target.closest("[data-explorer-cat]");
-    if (cat && (ev.key === "ArrowRight" || ev.key === "ArrowLeft")) {
-      ev.preventDefault();
-      const order = ["datasets", "snapshots"];
-      const idx = order.indexOf(cat.dataset.explorerCat);
-      const next = order[(idx + (ev.key === "ArrowRight" ? 1 : order.length - 1)) % order.length];
-      setExplorerCategory(next);
-      $(`source-cat-${next}`)?.focus();
-    }
-  });
-  $("inspect-tape-btn")?.addEventListener("click", () => {
-    if (!state.runId && !state.incident) return;
-    openInspector({
-      runId: state.runId,
-      channel: alarmChannel(),
-      alarm: alarmChannel(),
-      window: state.window,
-    });
   });
   $("inspector-close")?.addEventListener("click", closeInspector);
   $("tape-inspector")?.addEventListener("click", (ev) => {
@@ -4587,120 +1850,9 @@ function bind() {
     if ((input.value || "").trim()) input.dataset.userEdited = "true";
     else delete input.dataset.userEdited;
   });
-  $("timeline").addEventListener("click", (ev) => {
-    const node = ev.target.closest("[data-t]");
-    if (!node) return;
-    ev.preventDefault();
-    pinTape(node.dataset.t, { scroll: true, source: node.dataset.pinId || null });
-  });
-  $("case-desk").addEventListener("click", (ev) => {
-    if (ev.target.closest("[data-go-trust]")) {
-      goTrust();
-      return;
-    }
-    if (ev.target.closest("[data-jump-procedure]")) {
-      state.procedureOpen = true;
-      syncProcedureBundle();
-      $("procedure")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    const resultPin = ev.target.closest(".result-pin[data-t]");
-    if (resultPin) {
-      pinTape(resultPin.dataset.t, { scroll: true, source: resultPin.dataset.pinId || null });
-      return;
-    }
-    const openCase = ev.target.closest("[data-open-case]");
-    if (openCase) {
-      openIncident(openCase.dataset.openCase, openCase.dataset.jump);
-      return;
-    }
-    const verdict = ev.target.closest("[data-fb-verdict]");
-    if (verdict) {
-      verdict.closest(".fb-toggle")?.querySelectorAll("[data-fb-verdict]").forEach((btn) => {
-        btn.classList.toggle("is-on", btn === verdict);
-      });
-      return;
-    }
-    const saveFb = ev.target.closest("[data-save-feedback]");
-    if (saveFb) {
-      saveFeedback(saveFb.closest("#decide-feedback-root, #file-feedback"));
-      return;
-    }
-    const jump = ev.target.closest("[data-case-jump]");
-    if (!jump) return;
-    const where = jump.dataset.caseJump;
-    if (where === "closeout") {
-      showReport();
-      return;
-    }
-    if (where === "action") {
-      $("action")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    if (where === "investigation" || where === "findings") {
-      $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    if (where === "evidence") {
-      state.evidenceOpen = true;
-      syncEvidenceBundle();
-      $("evidence")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    if (where === "procedure") {
-      state.procedureOpen = true;
-      syncProcedureBundle();
-      $("procedure")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      return;
-    }
-    $("investigation")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  });
-  $("findings-body").addEventListener("click", (ev) => {
-    const btn = ev.target.closest("[data-t]");
-    if (!btn) return;
-    pinTape(btn.dataset.t, { scroll: true, source: btn.dataset.pinId || null });
-  });
-  document.querySelector(".seg").addEventListener("click", (ev) => {
-    const btn = ev.target.closest("[data-window]");
-    if (!btn) return;
-    state.window = btn.dataset.window;
-    document.querySelectorAll(".seg button").forEach((b) => b.classList.toggle("is-on", b === btn));
-    renderCase();
-  });
-  $("assemble").addEventListener("click", assemble);
-  $("rerun-investigation")?.addEventListener("click", assemble);
-  $("file-incident").addEventListener("click", openFileSlip);
-  $("file-form").addEventListener("submit", fileIncident);
-  $("file-slip").addEventListener("click", (ev) => {
-    const verdict = ev.target.closest("[data-fb-verdict]");
-    if (verdict) {
-      verdict.closest(".fb-toggle")?.querySelectorAll("[data-fb-verdict]").forEach((btn) => {
-        btn.classList.toggle("is-on", btn === verdict);
-      });
-      return;
-    }
-    const saveFb = ev.target.closest("[data-save-feedback]");
-    if (saveFb) {
-      saveFeedback(saveFb.closest("#file-feedback"));
-    }
-  });
-  $("cancel-file").addEventListener("click", closeFileSlip);
-  $("file-slip").addEventListener("click", (ev) => {
-    if (ev.target.id === "file-slip") closeFileSlip();
-  });
-  const openCloseout = () => showReport();
-  $("open-closeout").addEventListener("click", openCloseout);
-  $("open-closeout-case").addEventListener("click", openCloseout);
-  $("open-proc").addEventListener("click", () => showProcedure());
+  bindCase();
   document.addEventListener("keydown", (ev) => {
-    if (ev.key !== "Escape") return;
-    if (!$("slip").hidden) {
-      closeSlip();
-      return;
-    }
-    if (!$("file-slip").hidden) {
-      closeFileSlip();
-    }
+    if (ev.key === "Escape" && !$("slip").hidden) closeSlip();
   });
 }
 
@@ -4754,9 +1906,6 @@ async function boot() {
     } catch (err) {
       /* craft keeps static orbit */
     }
-  }
-  if (state.view !== "trust") {
-    loadTrust().catch(() => {});
   }
 }
 
