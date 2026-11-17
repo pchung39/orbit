@@ -289,6 +289,7 @@ ul, ol { padding: 0; list-style: none; }
 .tag-derived { color: var(--derived); background: var(--derived-soft); }
 .tag-documented { color: var(--documented); background: var(--documented-soft); }
 .tag-hypothesis { color: var(--hypothesis); background: var(--hypothesis-soft); }
+.tag-simulated { color: var(--mute); background: transparent; box-shadow: inset 0 0 0 1px currentColor; border-radius: 2px; }
 
 code {
   font-family: var(--mono);
@@ -574,7 +575,7 @@ code {
 
 @media (min-width: 860px) {
   .steps {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0;
     border-top: 0;
   }
