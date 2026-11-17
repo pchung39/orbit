@@ -17,3 +17,7 @@ orbit.db
 .env.langsmith
 .env.braintrust
 .braintrust.json
+
+# Generated: dummy mission history and learned models
+runs/mission/
+runs/models/

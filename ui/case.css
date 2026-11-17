@@ -477,3 +477,27 @@ body.view-case .stage { background: var(--void); }
   #case-desk .hyp-top { grid-template-columns: minmax(0, 1fr) auto 16px; }
   #case-desk .hyp-score { display: none; }
 }
+
+/* ── Preview confidence (fit check) ──────────────────────────── */
+#case-desk .conf { --cc: var(--signal); margin: 0 0 14px; border: 1px solid color-mix(in srgb, var(--cc) 35%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--cc) 6%, var(--surface)); overflow: hidden; }
+#case-desk .conf[hidden] { display: none; }
+#case-desk .conf.lvl-medium { --cc: var(--warn); }
+#case-desk .conf.lvl-low { --cc: var(--crit); }
+#case-desk .conf.none { --cc: var(--text-3); }
+#case-desk .conf-row { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto; gap: 12px; align-items: center; width: 100%; padding: 12px 14px; font: inherit; text-align: left; color: inherit; background: transparent; border: 0; cursor: pointer; }
+#case-desk .conf.none .conf-row { grid-template-columns: 30px minmax(0, 1fr); cursor: default; }
+#case-desk .conf-ic { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; font-size: 14px; font-weight: 700; color: var(--cc); background: color-mix(in srgb, var(--cc) 14%, transparent); }
+#case-desk .conf-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+#case-desk .conf-text b { font-size: 14px; font-weight: 600; color: var(--text); }
+#case-desk .conf-text span { font-size: 13px; line-height: 1.45; color: var(--text-2); }
+#case-desk .conf-model { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-3); white-space: nowrap; }
+#case-desk .conf .chev { transition: transform 0.18s; }
+#case-desk .conf.is-open .chev { transform: rotate(180deg); }
+#case-desk .conf-body { padding: 4px 16px 14px 56px; border-top: 1px dashed color-mix(in srgb, var(--cc) 30%, var(--line)); background: var(--surface); }
+#case-desk .conf-body a { color: var(--signal); text-decoration: none; font-weight: 500; }
+#case-desk .conf-body .proof-legend { margin-top: 10px; }
+@media (max-width: 720px) {
+  #case-desk .conf-row { grid-template-columns: 30px minmax(0, 1fr); }
+  #case-desk .conf-model { display: none; }
+  #case-desk .conf-body { padding-left: 16px; }
+}

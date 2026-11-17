@@ -24,8 +24,8 @@ from agent.hypothesis import (
 from agent.tools import Tools
 from simulator.scenarios import format_clock
 from simulator.simulate import load_and_validate
-from simulator import replay as sim
-from storage.evidence import query_channel, read_sealed_meta
+from model import eps
+from storage.evidence import load_frame, query_channel, read_sealed_meta
 
 HEATER = "THM.heater_b_current"
 PAYLOAD = "PAY.payload_current"
@@ -430,6 +430,9 @@ def _option_note(family: str, option: str) -> str | None:
 
 def _option_text(option: str, o: dict[str, Any], channel: str, unit: str, meta: dict[str, Any]) -> str:
     name = SHORT.get(channel, channel)
+    if o.get("borderline"):
+        return (f"{name} forecast {o['first_value']:g} {unit} at the next sample and {o['value_10min']:g} {unit} "
+                f"ten minutes later, too close to the {meta['warn_limit']:g} {unit} warn to call either way.")
     if o.get("clears"):
         return f"{name} back to {o['first_value']:g} {unit} at the next sample and {o['value_10min']:g} {unit} ten minutes later."
     crit = meta.get("critical_limit")
@@ -447,64 +450,114 @@ def _option_text(option: str, o: dict[str, Any], channel: str, unit: str, meta: 
     return f"{name} only reaches {o['first_value']:g} {unit} and is {o['value_10min']:g} {unit} ten minutes later.{tail}"
 
 
+FIT_LABEL = {
+    "high": "The model reproduces what already happened in this case.",
+    "medium": "The model only roughly reproduces what already happened here.",
+    "low": "The model can't reproduce what already happened here.",
+}
+PREVIEW_CHANNELS = (BUS_V, BATT_V, PAYLOAD, HEATER)
+
+
 def _simulation(run_id: str, alarm: str, family: str, m: Measurements, spec: dict[str, Any], onsets: dict) -> dict | None:
-    """What-if replay, healthy reference, and a preview of each option. None if the tape has no recipe."""
-    if not sim.supports(run_id):
+    """Model replay, healthy reference, and a forecast of each option, from ORBIT's learned power model."""
+    df = load_frame(run_id)
+    if df is None or df.empty:
         return None
-    tape = sim.source_tape(run_id)
+    model = eps.current_model()
     meta = spec["channels"][alarm]
     unit = meta.get("unit") or ""
     limit, direction = meta["warn_limit"], meta["limit_direction"]
     t_warn = m.t_warn
     t_first = min((e["time_s"] for e in m.events), default=t_warn)
-    actual = sim.replay(tape)
-    t_end = float(actual["time_s"].max())
-    view0, view1 = max(t_first - 180.0, float(actual["time_s"].min())), min(t_warn + 600.0, t_end)
+    t_start, t_end = float(df["time_s"].min()), float(df["time_s"].max())
+    view0, view1 = max(t_first - 180.0, t_start), min(t_warn + 600.0, t_end)
+    t_dec = round((t_warn + 120.0) / 5.0) * 5.0
 
-    out: dict[str, Any] = {"tape": tape, "channel": alarm, "unit": unit, "warn": limit, "direction": direction,
-                           "critical": meta.get("critical_limit")}
+    fit = eps.fit_check(model, df, alarm, view0, t_dec)
+    level = fit["level"]
+    if model.status == "datasheet" and level == "high":
+        level = "medium"  # uncalibrated numbers can't earn full confidence
+    fit_minutes = round((t_dec - view0) / 60)
+    fit_unit = "V"
+    fit_text = (
+        f"{FIT_LABEL[level]} Rebuilt from the measured currents, the last {fit_minutes} min are off by "
+        f"{fit['rms']:.2f} {fit_unit} on average ({fit['worst']:.2f} {fit_unit} at worst)."
+    )
+    if level == "low":
+        fit_text += " Forecast bands are widened to match; treat them as rough."
+    if level == "low" and family == "battery":
+        fit_text += " That's a clue in itself: the pack is sagging far more than the healthy battery the model learned."
+    out: dict[str, Any] = {
+        "channel": alarm, "unit": unit, "warn": limit, "direction": direction, "critical": meta.get("critical_limit"),
+        "model": {
+            "status": model.status,
+            "calibrated_at": model.calibrated_at,
+            "label": "Learned from history" if model.status == "calibrated" else "Datasheet values, not yet learned from history",
+        },
+        "fit": {**fit, "level": level, "text": fit_text},
+    }
 
     if family in ("heater", "payload", "battery"):
-        healthy = sim.replay(tape, remove_fault=True)
-        wi = sim.outcome(healthy, alarm, view0, limit, direction, settle_s=0)
-        suspect = {"heater": "Heater B", "payload": "the payload", "battery": "the battery pack"}[family]
-        out["whatif"] = {
-            "removed": suspect,
-            "clears": wi["clears"],
-            "worst": wi["worst"],
-            "window": [view0, view1],
-            "actual": sim.series(actual, alarm, view0, view1),
-            "healthy": sim.series(healthy, alarm, view0, view1),
-            "caption": (
-                f"Replayed with a healthy {suspect.replace('the ', '')}, the worst reading is <b>{wi['worst']:g} {unit}</b>, "
-                + ("which never crosses the warn." if wi["clears"] else "which still crosses the warn.")
-            ),
-        }
+        wi = eps.whatif(model, df, alarm, family, view0, view1)
+        if wi:
+            wch = alarm if alarm in (BUS_V, BATT_V) else BUS_V
+            wmeta = spec["channels"][wch]
+            vals = [v for _, v in wi["healthy"]]
+            clears = all(v > wmeta["warn_limit"] for v in vals) if wmeta["limit_direction"] == "below" else all(v < wmeta["warn_limit"] for v in vals)
+            out["whatif"] = {
+                **wi,
+                "channel": wch,
+                "unit": wmeta.get("unit") or "",
+                "warn": wmeta["warn_limit"],
+                "critical": wmeta.get("critical_limit"),
+                "clears": clears,
+                "window": [view0, view1],
+                "caption": (
+                    f"Rebuilt with {wi['removed']} behaving like the healthy part ORBIT learned, the lowest reading is "
+                    f"<b>{wi['worst']:g} {wmeta.get('unit') or ''}</b>, "
+                    + ("which never crosses the warn." if clears else "which still crosses the warn.")
+                ),
+            }
         load_ch = {"heater": HEATER, "payload": PAYLOAD}.get(family)
         onset = onsets.get(family)
         if load_ch and onset:
-            h0, h1 = max(onset["t"] - 120.0, view0), min(onset["t"] + 360.0, t_end)
-            healthy_val = float(healthy[(healthy["time_s"] >= onset["t"] + 60) & (healthy["time_s"] <= onset["t"] + 240)][load_ch].mean())
-            today_val = float(actual[(actual["time_s"] >= onset["t"] + 60) & (actual["time_s"] <= onset["t"] + 240)][load_ch].mean())
+            h0, h1 = max(onset["t"] - 120.0, t_start), min(onset["t"] + 360.0, t_end)
+            seg = df[(df["time_s"] >= h0) & (df["time_s"] <= h1)][["time_s", load_ch, "PAY.mode"]].dropna()
+            p = model.params
+            if load_ch == HEATER:
+                healthy_vals = [p["heater_healthy_a"] if v > 0.3 else 0.0 for v in seg[load_ch]]
+                healthy_now = p["heater_healthy_a"]
+            else:
+                healthy_vals = [p["payload_science_a"] if md == "SCIENCE_MODE" else p["payload_standby_a"] for md in seg["PAY.mode"]]
+                healthy_now = p["payload_science_a"]
+            after = seg[seg["time_s"] >= onset["t"] + 60][load_ch]
+            today = float(after.mean()) if len(after) else float(seg[load_ch].iloc[-1])
             out["healthy"] = {
                 "channel": load_ch,
                 "window": [h0, h1],
                 "onset": onset,
-                "actual": sim.series(actual, load_ch, h0, h1),
-                "healthy": sim.series(healthy, load_ch, h0, h1),
+                "actual": [[float(t), round(float(v), 4)] for t, v in zip(seg["time_s"], seg[load_ch])],
+                "healthy": [[float(t), round(float(v), 4)] for t, v in zip(seg["time_s"], healthy_vals)],
                 "nominal": spec["channels"][load_ch]["nominal_range"],
                 "bar": 2 * spec["channels"][load_ch]["nominal_range"][1],
-                "caption": f"Same command, same moment. Healthy draw is <b>{healthy_val:.2f} A</b>; today it is <b>{today_val:.2f} A</b>.",
+                "caption": f"Healthy draw, learned from this spacecraft's history, is <b>{healthy_now:.2f} A</b>; today it is <b>{today:.2f} A</b>.",
             }
 
-    t_dec = round((t_warn + 120.0) / 5.0) * 5.0
+    if alarm not in PREVIEW_CHANNELS:
+        out["decision"] = None
+        out["no_preview"] = f"{alarm} isn't covered by ORBIT's power model yet, so options can't be previewed."
+        return out
     recommended = RECOMMENDED_OPTION.get(family, "hold")
+    p0 = max(t_warn - 120.0, t_start)
+    before = df[(df["time_s"] >= p0) & (df["time_s"] <= t_dec)][["time_s", alarm]].dropna()
     options = []
-    p0 = max(t_warn - 120.0, float(actual["time_s"].min()))
-    for opt, cmd in sim.OPTION_COMMANDS.items():
-        df = sim.replay(tape, extra=((t_dec, cmd),) if cmd else (), end_s=t_dec + sim.PREVIEW_HORIZON_S)
-        o = sim.outcome(df, alarm, t_dec, limit, direction)
-        result = "clears" if o["clears"] else ("stays" if opt == "hold" else "fails")
+    for opt in ("heater_off", "payload_safe", "hold"):
+        pv = eps.preview(model, df, alarm, t_dec, opt, fit_rms=fit["rms"] if level != "high" else 0.0)
+        o = eps.outcome(pv["series"], t_dec, limit, direction, band=pv["band"])
+        if o["borderline"]:
+            result = "borderline"
+        else:
+            result = "clears" if o["clears"] else ("stays" if opt == "hold" else "fails")
         options.append({
             "id": opt,
             "label": OPTION_LABELS[opt],
@@ -513,13 +566,14 @@ def _simulation(run_id: str, alarm: str, family: str, m: Measurements, spec: dic
             "outcome": o,
             "text": _option_text(opt, o, alarm, unit, meta),
             "note": _option_note(family, opt),
-            "series": sim.series(df, alarm, t_dec - 5.0, t_dec + sim.PREVIEW_HORIZON_S),
+            "series": pv["series"],
+            "band": pv["band"],
         })
     out["decision"] = {
         "t": t_dec,
         "clock": format_clock(t_dec),
-        "before": sim.series(actual, alarm, p0, t_dec),
-        "window": [p0, t_dec + sim.PREVIEW_HORIZON_S],
+        "before": [[float(t), round(float(v), 4)] for t, v in zip(before["time_s"], before[alarm])],
+        "window": [p0, t_dec + eps.PREVIEW_HORIZON_S],
         "options": options,
     }
     return out
@@ -552,11 +606,12 @@ def _attach_proofs(hyps: list[dict], family: str, simulation: dict | None) -> No
 
 
 def build_brief(run_id: str, alarm: str) -> dict[str, Any]:
-    return _build_brief_cached(run_id, alarm)
+    # The model stamp is part of the key: re-learning the model invalidates every brief.
+    return _build_brief_cached(run_id, alarm, eps.current_model().stamp)
 
 
 @lru_cache(maxsize=64)
-def _build_brief_cached(run_id: str, alarm: str) -> dict[str, Any]:
+def _build_brief_cached(run_id: str, alarm: str, model_stamp: str) -> dict[str, Any]:
     spec = load_and_validate()
     tools = Tools(None, spec)  # tools read files; no DB needed
     m = measure(tools, spec, run_id, alarm)
@@ -599,15 +654,20 @@ def _build_brief_cached(run_id: str, alarm: str) -> dict[str, Any]:
                   "out": f"{label}", "tag": "DERIVED"})
     if simulation:
         unit = simulation["unit"]
+        fit = simulation["fit"]
+        trail.append({"tool": "fit_check", "args": f"power model ({simulation['model']['status']}) vs this window",
+                      "out": f"{fit['level']} · within {fit['rms']:.2f} V avg, {fit['worst']:.2f} V worst",
+                      "tag": "SIMULATED"})
         if "whatif" in simulation:
             wi = simulation["whatif"]
-            trail.append({"tool": "what_if", "args": f"replay {simulation['tape']} with {wi['removed']} healthy",
-                          "out": f"worst {wi['worst']:g} {unit} · {'no warn' if wi['clears'] else 'still warns'}",
+            trail.append({"tool": "what_if", "args": f"rebuild window with {wi['removed']} healthy",
+                          "out": f"lowest {wi['worst']:g} {wi['unit']} · {'no warn' if wi['clears'] else 'still warns'}",
                           "tag": "SIMULATED"})
         dec = simulation["decision"]
-        trail.append({"tool": "preview", "args": f"{len(dec['options'])} options from {dec['clock']}",
-                      "out": " · ".join(f"{o['label'].lower()} {o['outcome']['first_value']:g} {unit}" for o in dec["options"]),
-                      "tag": "SIMULATED"})
+        if dec:
+            trail.append({"tool": "preview", "args": f"{len(dec['options'])} options from {dec['clock']}",
+                          "out": " · ".join(f"{o['label'].lower()} {o['outcome']['first_value']:g} {unit}" for o in dec["options"]),
+                          "tag": "SIMULATED"})
 
     sealed = read_sealed_meta(run_id) if run_id.startswith("sealed_") else None
     return {

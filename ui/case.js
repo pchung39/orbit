@@ -476,8 +476,8 @@ function proofChartShell(kind) {
   const sim = caseSim();
   const cap = kind === "whatif" ? sim?.whatif?.caption : sim?.healthy?.caption;
   const legend = kind === "whatif"
-    ? `<span><i style="background:var(--ch-bus)"></i>what happened</span><span class="dash-l"><i></i>replay with ${escapeHtml(sim?.whatif?.removed || "")} healthy</span>`
-    : `<span><i style="background:var(--ch-heater)"></i>today</span><span class="dash-l"><i></i>healthy switch-on</span>`;
+    ? `<span><i style="background:var(--ch-bus)"></i>what happened</span><span class="dash-l"><i></i>model rebuild with ${escapeHtml(sim?.whatif?.removed || "")} healthy</span>`
+    : `<span><i style="background:var(--ch-heater)"></i>today</span><span class="dash-l"><i></i>healthy draw learned from history</span>`;
   return `<div class="proof-legend">${legend}</div><svg class="chart" viewBox="0 0 1000 230"></svg>
     <p class="viz-cap">${cap || ""} ${tagChip("DERIVED")} ${tagChip("SIMULATED")}</p>`;
 }
@@ -491,9 +491,9 @@ function drawProof(kind, svg) {
     const ev = (caseBrief()?.events || []).map((e) => ({ t: e.t, label: e.detail.replace("HEATER_B_ENABLE", "heater on").replace("SCIENCE_MODE", "science mode") }));
     lineChart(svg, {
       x: wi.window,
-      y: niceDomain(vals, [sim.warn, sim.critical]),
-      unit: ` ${sim.unit}`,
-      limits: limitLines(sim),
+      y: niceDomain(vals, [wi.warn, wi.critical]),
+      unit: ` ${wi.unit}`,
+      limits: limitLines({ warn: wi.warn, critical: wi.critical, unit: wi.unit }),
       events: ev,
       series: [
         { pts: wi.actual, color: "--ch-bus", w: 2 },
@@ -554,6 +554,11 @@ function lineChart(svg, o) {
     svgEl("rect", { x: P.l, width: W - P.l - P.r, y: y(band.hi), height: Math.max(1, y(band.lo) - y(band.hi)), style: `fill:${cssVar(band.color)};opacity:.1` }, svg);
     svgEl("text", { x: W - P.r - 4, y: y(band.hi) - 4, "text-anchor": "end", style: `fill:${cssVar(band.color)}`, text: band.label }, svg);
   });
+  (o.areas || []).forEach((a) => {
+    const top = a.pts.map(([t, , hi]) => `${x(t).toFixed(1)},${y(Math.min(hi, o.y[1])).toFixed(1)}`);
+    const bot = a.pts.slice().reverse().map(([t, lo]) => `${x(t).toFixed(1)},${y(Math.max(lo, o.y[0])).toFixed(1)}`);
+    svgEl("polygon", { points: [...top, ...bot].join(" "), style: `fill:${cssVar(a.color)};opacity:.14` }, svg);
+  });
   (o.limits || []).forEach((l) => {
     if (l.v < o.y[0] || l.v > o.y[1]) return;
     svgEl("line", { x1: P.l, x2: W - P.r, y1: y(l.v), y2: y(l.v), class: "limit", style: `stroke:${cssVar(l.color)}` }, svg);
@@ -581,7 +586,54 @@ const RESULT_BADGE = {
   clears: { cls: "good", text: "✓ Clears warn" },
   fails: { cls: "bad", text: "✗ Doesn't clear" },
   stays: { cls: "meh", text: "△ Stays in warn" },
+  borderline: { cls: "meh", text: "◇ Too close to call" },
 };
+
+const CONF_COPY = {
+  high: { icon: "✓", title: "High confidence" },
+  medium: { icon: "◐", title: "Medium confidence" },
+  low: { icon: "⚠", title: "Low confidence" },
+};
+
+function renderConfidence() {
+  const el = $("conf");
+  const sim = caseSim();
+  if (!el) return;
+  if (!sim || !caseBrief()) { el.hidden = true; return; }
+  el.hidden = false;
+  if (!sim.decision) {
+    el.className = "conf none";
+    el.innerHTML = `<div class="conf-row"><span class="conf-ic">○</span><span class="conf-text"><b>No preview</b><span>${escapeHtml(sim.no_preview || "")}</span></span></div>`;
+    return;
+  }
+  const f = sim.fit;
+  const c = CONF_COPY[f.level] || CONF_COPY.medium;
+  const open = !!state.confOpen;
+  el.className = `conf lvl-${f.level}${open ? " is-open" : ""}`;
+  el.innerHTML = `
+    <button type="button" class="conf-row" id="conf-toggle" aria-expanded="${open}">
+      <span class="conf-ic">${c.icon}</span>
+      <span class="conf-text"><b>Preview confidence · ${c.title.split(" ")[0]}</b><span>${escapeHtml(f.text)}</span></span>
+      <span class="conf-model">${sim.model.status === "calibrated" ? "Model learned from history" : "Datasheet values · not learned yet"}<span class="chev">▾</span></span>
+    </button>
+    ${open ? `<div class="conf-body">
+      <div class="proof-legend"><span><i style="background:var(--ch-bus)"></i>what happened</span><span class="dash-l"><i></i>model replay from the measured currents</span></div>
+      <svg class="chart" id="chart-fit" viewBox="0 0 1000 200"></svg>
+      <p class="viz-cap">Before trusting its forecast, ORBIT rebuilds this case's last minutes from the currents it measured. The closer the two lines, the more the previews below can be trusted. ${sim.model.status === "calibrated" ? "" : "<b>Learn the model from history on the Sources page to tighten this.</b>"} <a href="/app/sources" data-go-sources>How the model was learned →</a></p>
+    </div>` : ""}`;
+  if (open) {
+    const vals = [...f.observed, ...f.model].map((p) => p[1]);
+    lineChart($("chart-fit"), {
+      x: f.window,
+      y: niceDomain(vals, []),
+      unit: " V",
+      series: [
+        { pts: f.observed, color: "--ch-bus", w: 2 },
+        { pts: f.model, color: "--signal", w: 2, dash: true },
+      ],
+    });
+  }
+}
 
 function renderDecide() {
   const b = caseBrief();
@@ -606,9 +658,9 @@ function renderDecide() {
     : decided
       ? "Decision recorded. You can change it until the case closes."
       : "Compare what happens next under each option.";
-  $("decide-lede").innerHTML = sim
-    ? `Each option was replayed from <b>${sim.decision.clock}</b>. ORBIT recommends; you decide. Nothing is sent to the spacecraft.`
-    : "No simulator recipe exists for this tape, so options can't be previewed. Nothing is sent to the spacecraft.";
+  $("decide-lede").innerHTML = sim?.decision
+    ? `Each option is forecast from <b>${sim.decision.clock}</b> by ORBIT's power model. The shaded band is its uncertainty. ORBIT recommends; you decide. Nothing is sent to the spacecraft.`
+    : "Options can't be previewed for this alarm. Nothing is sent to the spacecraft.";
   $("options").innerHTML = opts
     .map((o) => {
       const badge = RESULT_BADGE[o.result];
@@ -621,8 +673,9 @@ function renderDecide() {
         </button>`;
     })
     .join("");
-  $("viz-preview").hidden = !sim;
-  if (sim) drawPreview();
+  renderConfidence();
+  $("viz-preview").hidden = !sim?.decision;
+  if (sim?.decision) drawPreview();
   const form = $("decide-form");
   form.hidden = isClosed();
   const btn = $("approve");
@@ -634,9 +687,10 @@ function renderDecide() {
 function drawPreview() {
   const sim = caseSim();
   const d = sim.decision;
-  const vals = [...d.before, ...d.options.flatMap((o) => o.series)].map((p) => p[1]);
   const color = { heater_off: "--signal", payload_safe: "--ch-payload", hold: "--text-3" };
   const sel = state.caseOption;
+  const selBand = (d.options.find((o) => o.id === sel)?.band || []).flatMap(([, lo, hi]) => [lo, hi]);
+  const vals = [...d.before.map((p) => p[1]), ...d.options.flatMap((o) => o.series.map((p) => p[1])), ...selBand];
   lineChart($("chart-preview"), {
     x: d.window,
     y: niceDomain(vals, [sim.warn, sim.critical]),
@@ -644,6 +698,8 @@ function drawPreview() {
     limits: limitLines(sim),
     events: [{ t: d.t, label: `decision ${d.clock.slice(0, 5)}`, color: "--text-2" }],
     shade: [d.window[0], d.t],
+    bands: [],
+    areas: d.options.filter((o) => o.id === sel && o.band).map((o) => ({ pts: o.band, color: color[o.id] })),
     series: [
       { pts: d.before, color: "--ch-bus", w: 2 },
       ...d.options
@@ -697,9 +753,11 @@ function renderVerify() {
   $("verify-eyebrow").textContent = hold ? "Watch" : "Verify";
   $("verify-title").textContent = hold
     ? "Holding. ORBIT keeps watching."
-    : v.clears
-      ? "The fix worked in the replay."
-      : "The fix did not hold. Back to the evidence.";
+    : v.result === "borderline"
+      ? "Too close to call in the forecast."
+      : v.clears
+        ? "The forecast says the fix works."
+        : "The forecast says the fix won't hold. Back to the evidence.";
   const unit = v.unit || "";
   const checks = [];
   if (v.simulated) {
@@ -878,6 +936,16 @@ function bindCase() {
     if (opt && !opt.disabled) {
       state.caseOption = opt.dataset.option;
       renderDecide();
+      return;
+    }
+    if (ev.target.closest("#conf-toggle")) {
+      state.confOpen = !state.confOpen;
+      renderConfidence();
+      return;
+    }
+    if (ev.target.closest("[data-go-sources]")) {
+      ev.preventDefault();
+      goSources();
       return;
     }
     if (ev.target.closest("#approve")) return approveDecision();

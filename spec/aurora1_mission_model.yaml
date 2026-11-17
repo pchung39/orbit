@@ -22,6 +22,17 @@ constants:
   battery_internal_resistance_ohm_nominal: 0.08
   heater_b_nominal_resistance_ohm: 24.0
 
+# Datasheet starting point for ORBIT's power model, before it learns from history.
+# Deliberately not the spacecraft's true values: calibration should move away from these.
+model_prior:
+  bus_harness_ohm: 0.30
+  battery_ohm: 0.06
+  battery_v_per_ah: 0.35
+  heater_healthy_a: 1.0
+  payload_science_a: 0.80
+  payload_standby_a: 0.08
+  baseline_load_a: 1.40
+
 subsystems:
   EPS:
     name: Electrical Power System
