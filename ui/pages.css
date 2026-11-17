@@ -109,7 +109,23 @@ body.view-incidents .stage { background: var(--void); }
 .stage-dot.tone-signal { --tone: var(--signal); }
 .stage-dot.tone-mute { --tone: var(--text-3); }
 
-.side-recent { display: flex; flex-direction: column; gap: 1px; margin-top: 26px; min-height: 0; }
+/* Recent cases take whatever height is left and scroll inside it, so they never cover the footer. */
+.side-recent {
+  display: flex;
+  flex-direction: column;
+  flex: 0 1 auto;
+  gap: 1px;
+  margin-top: 22px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.side-recent .side-case { flex-shrink: 0; }
+.side-recent-label { position: sticky; top: 0; z-index: 1; background: var(--surface); }
+.sidebar > .brand,
+.sidebar > .side-cta,
+.side-nav { flex-shrink: 0; }
 .side-recent[hidden] { display: none; }
 .side-recent-label {
   margin: 0 0 6px;
@@ -158,6 +174,7 @@ body.view-incidents .stage { background: var(--void); }
 
 .side-foot {
   display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
